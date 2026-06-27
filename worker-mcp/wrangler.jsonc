@@ -11,7 +11,7 @@
 
   // The SAME D1 the Pages site uses. Paste the id from `wrangler d1 create` / `wrangler d1 list`.
   "d1_databases": [
-    { "binding": "DB", "database_name": "travel-planner-db", "database_id": "<D1_DB_ID>" }
+    { "binding": "DB", "database_name": "travel-planner-db", "database_id": "720b6ad7-11d2-47a1-9569-22142d13a1d6" }
   ],
 
   // Free in-Worker rate limit on /mcp, keyed by user email (period must be 10 or 60).

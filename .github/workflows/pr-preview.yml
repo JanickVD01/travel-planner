@@ -46,7 +46,9 @@ jobs:
           set -euo pipefail
           # Branch aliases can't contain "/"; sanitize for the --branch flag.
           SAFE_REF=$(echo "$HEAD_REF" | tr '/' '-' | tr -cd 'A-Za-z0-9-' | cut -c1-28)
-          OUT=$(npx --yes wrangler@4 pages deploy public \
+          # Output dir + bindings come from ./wrangler.jsonc; a non-main --branch selects the
+          # `preview` environment (NO D1 binding -> demo mode), so previews can't touch live data.
+          OUT=$(npx --yes wrangler@4 pages deploy \
                   --project-name=travel-planner \
                   --branch="$SAFE_REF" \
                   --commit-hash="$HEAD_SHA" 2>&1 | tee /dev/stderr)

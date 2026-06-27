@@ -49,4 +49,6 @@ jobs:
           fi
 
       - name: Deploy Pages (Direct Upload)
-        run: npx --yes wrangler@4 pages deploy public --project-name=travel-planner --branch=main
+        # Output dir + per-environment bindings come from ./wrangler.jsonc; --branch=main selects
+        # the `production` environment (which carries the D1 binding).
+        run: npx --yes wrangler@4 pages deploy --project-name=travel-planner --branch=main
