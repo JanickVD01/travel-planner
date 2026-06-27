@@ -1,0 +1,5 @@
+# Numbered run-once ALTERs go here as NNN_<name>.sql (e.g. 001_add_lodging_cost.sql).
+# Convention (see CLAUDE.md):
+#   - NEW tables/indexes/seed rows -> edit schema.sql (idempotent; CI re-applies on change).
+#   - ALTER an existing table -> a numbered file here; apply it to prod BEFORE merging the PR,
+#     and update schema.sql in the same PR so a fresh DB gets the final shape. Additive only.

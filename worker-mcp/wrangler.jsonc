@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "travel-planner-mcp",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-27",
+  "compatibility_flags": ["nodejs_compat"], // MCP SDK + jose use Node builtins
+
+  // MCP session state = SQLite-backed Durable Object -> FREE. class_name must match the export.
+  "durable_objects": { "bindings": [{ "name": "MCP_OBJECT", "class_name": "AppMCP" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AppMCP"] }], // NOT new_classes (paid)
+
+  // The SAME D1 the Pages site uses. Paste the id from `wrangler d1 create` / `wrangler d1 list`.
+  "d1_databases": [
+    { "binding": "DB", "database_name": "travel-planner-db", "database_id": "<D1_DB_ID>" }
+  ],
+
+  // Free in-Worker rate limit on /mcp, keyed by user email (period must be 10 or 60).
+  "ratelimits": [
+    { "name": "MCP_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }
+  ],
+
+  // Non-secret Cloudflare Access identifiers (this Worker's OWN Access app — its own AUD).
+  // Fill TEAM_DOMAIN + POLICY_AUD after creating the Access app on the Worker hostname, then redeploy.
+  "vars": { "TEAM_DOMAIN": "<TEAM_DOMAIN>", "POLICY_AUD": "<POLICY_AUD_MCP>" }
+}

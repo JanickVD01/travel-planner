@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# wrangler / cloudflare local state
+.wrangler/
+.dev.vars
+.dev.vars.*
+wrangler.local.jsonc
+
+# build / logs
+dist/
+*.log
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editor
+.vscode/
+.idea/
+
+# local secrets you might stage for `gh secret set` — never commit
+*.secret
+*.token
+.secrets/

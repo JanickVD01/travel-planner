@@ -1,0 +1,21 @@
+{
+  "name": "travel-planner-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev src/dev.js",
+    "deploy": "wrangler deploy",
+    "smoke": "node scripts/smoke.mjs",
+    "inspect": "npx @modelcontextprotocol/inspector"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "agents": "^0.17.0",
+    "jose": "^6.2.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "wrangler": "^4.105.0"
+  }
+}

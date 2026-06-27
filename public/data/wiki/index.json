@@ -1,0 +1,8 @@
+{
+  "topics": [
+    { "slug": "sign-in", "title": "Sign in", "icon": "🔑", "section": "Using the app", "file": "sign-in.md", "summary": "How to access the app via Cloudflare Access.", "lastUpdated": "2026-06-27" },
+    { "slug": "use-from-claude", "title": "Use it from Claude (MCP)", "icon": "🤖", "section": "Using the app", "file": "use-from-claude.md", "summary": "Operate the planner by talking to Claude.", "lastUpdated": "2026-06-27" },
+    { "slug": "how-its-built", "title": "How it's built", "icon": "🏗️", "section": "Under the hood", "file": "how-its-built.md", "summary": "The architecture in one screen.", "lastUpdated": "2026-06-27" },
+    { "slug": "how-changes-ship", "title": "How changes ship", "icon": "🚢", "section": "Under the hood", "file": "how-changes-ship.md", "summary": "Branch -> PR -> preview -> merge, and parallel sessions.", "lastUpdated": "2026-06-27" }
+  ]
+}

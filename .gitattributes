@@ -1,0 +1,4 @@
+# Keep shell scripts LF so they run under Git Bash (Windows) and Linux CI alike.
+*.sh text eol=lf
+# Normalize text; let Git handle EOL otherwise.
+* text=auto

@@ -1,0 +1,14 @@
+{
+  "releases": [
+    {
+      "version": "v0.1.0",
+      "title": "Project skeleton",
+      "date": "2026-06-27",
+      "notes": [
+        "Scaffolded the AI-first Cloudflare app: static SPA, /api Functions, shared domain core, D1 schema.",
+        "Included the remote MCP server (worker-mcp) so the app can be operated by talking to Claude.",
+        "Wired the GitHub parallel-session flow: branch -> PR -> gated demo preview -> deterministic merge."
+      ]
+    }
+  ]
+}

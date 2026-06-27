@@ -1,0 +1,32 @@
+name: deploy-worker
+# main + a change under worker-mcp/** or shared/** -> deploy the MCP Worker.
+# `wrangler deploy` auto-applies the Durable Object migration block in wrangler.jsonc.
+# Never rename/delete a DO class without a proper renamed_classes/deleted_classes migration entry.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker-mcp/**"
+      - "shared/**"
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker-mcp
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx wrangler deploy

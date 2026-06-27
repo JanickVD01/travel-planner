@@ -1,0 +1,52 @@
+name: deploy
+# main -> validate -> (re-apply schema only if schema.sql changed) -> deploy Pages.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/validate-data.mjs
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # so the schema diff (HEAD^..HEAD) works
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Re-apply D1 schema if it changed
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CHANGED=1
+          else
+            CHANGED=$(git diff --name-only HEAD^ HEAD | grep -cE '^schema\.sql$' || true)
+          fi
+          if [ "$CHANGED" != "0" ]; then
+            echo "schema.sql changed (or manual dispatch) -> applying to remote D1"
+            npx --yes wrangler@4 d1 execute travel-planner-db --remote --file=./schema.sql
+          else
+            echo "schema.sql unchanged -> skipping D1 apply"
+          fi
+
+      - name: Deploy Pages (Direct Upload)
+        run: npx --yes wrangler@4 pages deploy public --project-name=travel-planner --branch=main
