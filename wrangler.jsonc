@@ -17,7 +17,7 @@
       "d1_databases": [
         { "binding": "DB", "database_name": "travel-planner-db", "database_id": "720b6ad7-11d2-47a1-9569-22142d13a1d6" }
       ],
-      "vars": { "SUPER_ADMIN_EMAIL": "janick.vandamme@verity.global" }
+      "vars": { "SUPER_ADMIN_EMAIL": "janickvandamme@hotmail.com" }
     },
     "preview": {
       "d1_databases": [],
