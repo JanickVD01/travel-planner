@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "travel-planner": {
+      "type": "http",
+      "url": "https://travel-planner-mcp.janickvandamme.workers.dev/mcp"
+    }
+  }
+}

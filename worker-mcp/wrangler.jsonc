@@ -21,5 +21,5 @@
 
   // Non-secret Cloudflare Access identifiers (this Worker's OWN Access app — its own AUD).
   // Fill TEAM_DOMAIN + POLICY_AUD after creating the Access app on the Worker hostname, then redeploy.
-  "vars": { "TEAM_DOMAIN": "<TEAM_DOMAIN>", "POLICY_AUD": "<POLICY_AUD_MCP>" }
+  "vars": { "TEAM_DOMAIN": "https://jadam951753.cloudflareaccess.com", "POLICY_AUD": "1fc9ad4cd1c50a8717102758383f7127df20c19a6fdc62c3bbc265677e99a9c3" }
 }
