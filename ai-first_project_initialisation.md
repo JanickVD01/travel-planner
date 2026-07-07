@@ -774,26 +774,32 @@ are the **non‑secret** `TEAM_DOMAIN` and `POLICY_AUD`.
 
 > ### ⚠️ How this works on a bare `*.workers.dev` host — READ THIS BEFORE THE DASHBOARD (it cost us the most)
 >
-> You **cannot** put a classic network‑layer "Self‑hosted" Access app in front of a raw `*.workers.dev`
-> hostname — that model needs a **zone** (a custom domain), which a free workers.dev URL doesn't have. The
-> mechanism that *does* work at $0, with no custom domain and **no worker code change**, is Cloudflare
-> Access **Managed OAuth for MCP**: the worker returns **`401`** (not a network `302` redirect), and
-> Cloudflare's edge — which owns the `workers.dev` zone — serves the OAuth discovery metadata and drives the
-> browser email+PIN login. The worker's only job stays exactly as in §8.3: validate the injected
-> `Cf-Access-Jwt-Assertion`. So the *only* config change to go live is setting this app's `POLICY_AUD`.
+> **The verified path (what actually worked at $0, no custom domain, no worker code change):** create an
+> ordinary Cloudflare Access **Self‑hosted application** whose *domain is the Worker's `workers.dev` host*,
+> and **turn OAuth (Managed OAuth) ON in the creation wizard.** That OAuth toggle is the whole trick —
+> it flips Access from a *network‑layer* gate (which redirects a browser with a `302` and needs a **zone** /
+> custom domain a workers.dev URL doesn't have) into an *OAuth authorization server*: the worker now returns
+> a **`401`** challenge with OAuth discovery metadata, which is exactly what an MCP client (Claude) speaks.
+> Cloudflare's edge — which already owns the `workers.dev` zone — serves the discovery endpoints and drives
+> the browser email+PIN login. The worker's only job stays exactly as in §8.3: validate the injected
+> `Cf-Access-Jwt-Assertion`. So the *only* config change to go live is copying that app's **AUD** into the
+> worker's `POLICY_AUD`.
 >
-> **Two dashboard traps that look right but aren't:**
-> 1. **"Self‑hosted application" → domain = the worker host.** Fails on workers.dev (no zone). ❌
-> 2. **"MCP Server *Portal*"** (a screen offering an upstream *"Authentication type"* + a *"Cloudflare‑hosted
->    OAuth callback"* URL). This is a **different feature** that also needs a custom domain. ❌
+> **The distinction that matters (and the trap that doesn't work):**
+> - ✅ **Self‑hosted app + OAuth enabled** → OAuth server, `401` challenge → works on workers.dev, works for MCP.
+> - ❌ **Self‑hosted app *without* OAuth** → plain network login, `302` redirect → a browser can log in, but an
+>   MCP client can't complete it. Enabling OAuth is not optional for MCP.
+> - ❌ **"MCP Server *Portal*"** (a *different* screen offering an upstream *"Authentication type"* + a
+>   *"Cloudflare‑hosted OAuth callback"* URL) — needs a **custom domain**. Don't use it here.
 >
->    ✅ The right feature is **Zero Trust → Access controls → AI controls → MCP servers** (see §8.6 step 2).
+> (Some Zero Trust dashboards also expose a newer **Access controls → AI controls → MCP servers** shortcut
+> that creates the same Self‑hosted+OAuth app for you; either route lands in the same place.)
 >
 > **How to *know* it's set up correctly (live probe, no auth):**
 > `GET https://<worker>.workers.dev/mcp` → **`401`** with a `WWW-Authenticate: Bearer … resource_metadata=…`
 > header (and **no** `302`); and `GET …/.well-known/oauth-protected-resource` +
-> `…/.well-known/oauth-authorization-server` both return **`200`**. If you get a `302` to
-> `*.cloudflareaccess.com`, you built the network‑proxy variant — back out and use the MCP‑servers tab.
+> `…/.well-known/oauth-authorization-server` both return **`200`**. If you instead get a `302` to
+> `*.cloudflareaccess.com`, OAuth isn't enabled on the app — go back and turn it on.
 
 **Session state** lives in a **SQLite‑backed Durable Object** (free), declared via `new_sqlite_classes`. The
 app data lives in the **same D1** as the Pages site (binding `DB`).
@@ -938,15 +944,18 @@ export default AppMCP.serve("/mcp");
 ### 8.6 Deploy + protect + connect `[You]`
 1. `[Claude]` `cd worker-mcp && npm install`. `[You]` deploy: `npx --yes wrangler@4 deploy` (or let
    `deploy-worker.yml` do it on merge). Note the Worker URL: `https://<WORKER_NAME>.<your-subdomain>.workers.dev`.
-2. `[You]` **Access app for the Worker — via Managed OAuth for MCP** (see the ⚠️ callout above; do **not** use
-   the plain "Self‑hosted" or "MCP Portal" flows on a workers.dev host):
-   - Zero Trust → **Access controls → AI controls → MCP servers** tab → **Add an MCP server**.
-     - **Name:** `<APP_NAME> MCP`
-     - **HTTP URL:** `https://<WORKER_NAME>.<your-subdomain>.workers.dev/mcp`
-     - **Access policy:** Include → **Emails** → your `<ALLOWLIST_EMAILS>`; login method **One‑time PIN**.
-     - **Save and connect server** (this auto‑creates the backing Access application).
-   - Then Zero Trust → **Access controls → Applications** → open the new app → **Advanced settings** → confirm
-     **Managed OAuth is ON** → Save → copy its **Application Audience (AUD)** tag.
+2. `[You]` **Access app for the Worker — a Self‑hosted app with OAuth enabled** (this is the verified path;
+   see the ⚠️ callout above — the OAuth toggle is what makes it work on a bare workers.dev host):
+   - Zero Trust → **Access → Applications → Add an application → Self‑hosted**.
+     - **Application name:** `<APP_NAME> MCP`
+     - **Application domain:** the Worker host `<WORKER_NAME>.<your-subdomain>.workers.dev`
+       (`workers.dev` may not be in the domain dropdown → **"Switch to custom input"** and type it).
+     - **Turn OAuth (Managed OAuth) ON in the creation wizard.** This is the switch that makes Access act as
+       an OAuth server (worker gets a `401` challenge, not a `302` redirect) — **don't skip it**; a plain
+       self‑hosted app can't be completed by an MCP client.
+     - **Add a policy:** Include → **Emails** → your `<ALLOWLIST_EMAILS>`; login method **One‑time PIN**;
+       attach it to the app and **Save**.
+   - Open the created app → copy its **Application Audience (AUD)** tag.
    - Put that AUD in `worker-mcp/wrangler.jsonc` `vars` as **`POLICY_AUD`** (`TEAM_DOMAIN` is the same as the
      Pages app), then **redeploy** (`npx --yes wrangler@4 deploy`, or let `deploy-worker.yml` do it on merge)
      so the var takes effect. **Verify with the live probe** from the ⚠️ callout (401 + `WWW-Authenticate`;
