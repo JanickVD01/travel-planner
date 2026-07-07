@@ -766,11 +766,34 @@ didn't intend to change, prefer `main`. Then `node scripts/validate-data.mjs`, c
 > becomes the read/secondary‑edit surface. It's a separate Worker so a project *can* omit it, but the
 > recommended default is to include it.
 
-**Auth model (no OAuth provider, no KV, no long‑lived secret):** a Cloudflare Access self‑hosted application
-sits in front of the Worker's hostname (reusing the same allow‑list). Access injects a signed
+**Auth model (no OAuth provider, no KV, no long‑lived secret):** a Cloudflare Access application sits in
+front of the Worker's hostname (reusing the same allow‑list). Access injects a signed
 `Cf-Access-Jwt-Assertion`; the Worker verifies it offline against the team JWKS (`issuer` = `TEAM_DOMAIN`,
 `audience` = `POLICY_AUD`) using `jose`, and uses the email inside as the audit actor. The only config values
 are the **non‑secret** `TEAM_DOMAIN` and `POLICY_AUD`.
+
+> ### ⚠️ How this works on a bare `*.workers.dev` host — READ THIS BEFORE THE DASHBOARD (it cost us the most)
+>
+> You **cannot** put a classic network‑layer "Self‑hosted" Access app in front of a raw `*.workers.dev`
+> hostname — that model needs a **zone** (a custom domain), which a free workers.dev URL doesn't have. The
+> mechanism that *does* work at $0, with no custom domain and **no worker code change**, is Cloudflare
+> Access **Managed OAuth for MCP**: the worker returns **`401`** (not a network `302` redirect), and
+> Cloudflare's edge — which owns the `workers.dev` zone — serves the OAuth discovery metadata and drives the
+> browser email+PIN login. The worker's only job stays exactly as in §8.3: validate the injected
+> `Cf-Access-Jwt-Assertion`. So the *only* config change to go live is setting this app's `POLICY_AUD`.
+>
+> **Two dashboard traps that look right but aren't:**
+> 1. **"Self‑hosted application" → domain = the worker host.** Fails on workers.dev (no zone). ❌
+> 2. **"MCP Server *Portal*"** (a screen offering an upstream *"Authentication type"* + a *"Cloudflare‑hosted
+>    OAuth callback"* URL). This is a **different feature** that also needs a custom domain. ❌
+>
+>    ✅ The right feature is **Zero Trust → Access controls → AI controls → MCP servers** (see §8.6 step 2).
+>
+> **How to *know* it's set up correctly (live probe, no auth):**
+> `GET https://<worker>.workers.dev/mcp` → **`401`** with a `WWW-Authenticate: Bearer … resource_metadata=…`
+> header (and **no** `302`); and `GET …/.well-known/oauth-protected-resource` +
+> `…/.well-known/oauth-authorization-server` both return **`200`**. If you get a `302` to
+> `*.cloudflareaccess.com`, you built the network‑proxy variant — back out and use the MCP‑servers tab.
 
 **Session state** lives in a **SQLite‑backed Durable Object** (free), declared via `new_sqlite_classes`. The
 app data lives in the **same D1** as the Pages site (binding `DB`).
@@ -785,15 +808,19 @@ app data lives in the **same D1** as the Pages site (binding `DB`).
   "scripts": { "dev": "wrangler dev src/dev.js", "deploy": "wrangler deploy", "inspect": "npx @modelcontextprotocol/inspector" },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "agents": "^0.14.5",
+    "agents": "^0.17.0",
     "jose": "^6.2.3",
     "zod": "^4.4.3"
   },
-  "devDependencies": { "wrangler": "^4.98.0" }
+  "devDependencies": { "wrangler": "^4.105.0" }
 }
 ```
 > Before installing, **check the current versions** of `agents` (Cloudflare Agents SDK) and
 > `@modelcontextprotocol/sdk` and the `McpAgent` API — they move. Pin what you actually install.
+> (Versions above are what actually shipped & verified in mid‑2026; `agents` in particular jumped
+> from `0.14` → `0.17` between the source app and the next build.) On `@modelcontextprotocol/sdk@1.29`,
+> register tools with **`server.registerTool(name, {description, inputSchema}, handler)`** — the older
+> positional `server.tool(name, desc, schema, handler)` is **deprecated** (see §8.4).
 
 ### 8.2 `worker-mcp/wrangler.jsonc`
 ```jsonc
@@ -882,16 +909,20 @@ export class AppMCP extends McpAgent {
   }
   async init() {
     const env = this.env, self = this;
-    this.server.tool("list_entries", "List rows in a list.",
-      { space: SPACE, list: LIST }, (a) => self.run(() => listEntries(env, a, self.actor)));
-    this.server.tool("add_entry", "Add a row to a list.",
-      { space: SPACE, list: LIST, title: z.string(), note: z.string().optional(), status: STATUS.optional(), due: z.string().optional().describe("ISO YYYY-MM-DD") },
+    // registerTool(name, { description, inputSchema }, handler) — the current @modelcontextprotocol/sdk
+    // API (v1.29+). The older positional server.tool(name, desc, schema, handler) is DEPRECATED.
+    this.server.registerTool("list_entries",
+      { description: "List rows in a list.", inputSchema: { space: SPACE, list: LIST } },
+      (a) => self.run(() => listEntries(env, a, self.actor)));
+    this.server.registerTool("add_entry",
+      { description: "Add a row to a list.", inputSchema: { space: SPACE, list: LIST, title: z.string(), note: z.string().optional(), status: STATUS.optional(), due: z.string().optional().describe("ISO YYYY-MM-DD") } },
       (a) => self.run(() => createEntry(env, a, self.actor)));
-    this.server.tool("edit_entry", "Edit a row by id.",
-      { space: SPACE, list: LIST, id: z.string(), title: z.string().optional(), note: z.string().optional(), status: STATUS.optional(), due: z.string().optional() },
+    this.server.registerTool("edit_entry",
+      { description: "Edit a row by id.", inputSchema: { space: SPACE, list: LIST, id: z.string(), title: z.string().optional(), note: z.string().optional(), status: STATUS.optional(), due: z.string().optional() } },
       (a) => self.run(() => patchEntry(env, a, self.actor)));
-    this.server.tool("delete_entry", "Delete a row by id.",
-      { space: SPACE, list: LIST, id: z.string() }, (a) => self.run(() => deleteEntry(env, a, self.actor)));
+    this.server.registerTool("delete_entry",
+      { description: "Delete a row by id.", inputSchema: { space: SPACE, list: LIST, id: z.string() } },
+      (a) => self.run(() => deleteEntry(env, a, self.actor)));
   }
 }
 ```
@@ -907,17 +938,37 @@ export default AppMCP.serve("/mcp");
 ### 8.6 Deploy + protect + connect `[You]`
 1. `[Claude]` `cd worker-mcp && npm install`. `[You]` deploy: `npx --yes wrangler@4 deploy` (or let
    `deploy-worker.yml` do it on merge). Note the Worker URL: `https://<WORKER_NAME>.<your-subdomain>.workers.dev`.
-2. `[You]` **Access app for the Worker**: Zero Trust → Access → Applications → Add → **Self‑hosted**, domain =
-   the Worker hostname; attach the **same** `Allowed people` policy; Save. Capture this app's **AUD** as
-   **`POLICY_AUD_MCP`** and put it in `wrangler.jsonc` `vars` (then redeploy so the var takes effect).
-   `TEAM_DOMAIN` is the same as the Pages app.
-3. `[You]` **Connect Claude** to `https://<WORKER_NAME>.<your-subdomain>.workers.dev/mcp` as a **custom/remote
-   MCP server** (claude.ai → Settings → Connectors, the Desktop app, or `claude mcp add --transport http …` in
-   the CLI). The first connect goes through the Cloudflare Access sign‑in (email + PIN); after that, Claude can
-   call the tools.
-4. `[You]`/`[Claude]` **smoke test**: `worker-mcp/scripts/smoke.mjs` connects over the MCP protocol and does a
-   read → write → delete round‑trip (self‑cleaning). Or just ask Claude to "list entries in home/groceries",
-   add one, and confirm it appears in the browser.
+2. `[You]` **Access app for the Worker — via Managed OAuth for MCP** (see the ⚠️ callout above; do **not** use
+   the plain "Self‑hosted" or "MCP Portal" flows on a workers.dev host):
+   - Zero Trust → **Access controls → AI controls → MCP servers** tab → **Add an MCP server**.
+     - **Name:** `<APP_NAME> MCP`
+     - **HTTP URL:** `https://<WORKER_NAME>.<your-subdomain>.workers.dev/mcp`
+     - **Access policy:** Include → **Emails** → your `<ALLOWLIST_EMAILS>`; login method **One‑time PIN**.
+     - **Save and connect server** (this auto‑creates the backing Access application).
+   - Then Zero Trust → **Access controls → Applications** → open the new app → **Advanced settings** → confirm
+     **Managed OAuth is ON** → Save → copy its **Application Audience (AUD)** tag.
+   - Put that AUD in `worker-mcp/wrangler.jsonc` `vars` as **`POLICY_AUD`** (`TEAM_DOMAIN` is the same as the
+     Pages app), then **redeploy** (`npx --yes wrangler@4 deploy`, or let `deploy-worker.yml` do it on merge)
+     so the var takes effect. **Verify with the live probe** from the ⚠️ callout (401 + `WWW-Authenticate`;
+     `/.well-known/oauth-*` = 200) before moving on.
+3. `[You]` **Connect Claude — use the Claude Code CLI** (claude.ai/Desktop connectors are commonly
+   org‑managed and blocked; the CLI is the reliable path):
+   ```bash
+   claude mcp add --transport http --scope user <APP_SLUG> https://<WORKER_NAME>.<your-subdomain>.workers.dev/mcp
+   ```
+   (`--scope user` makes it available in every session.) Then inside a Claude Code session: **`/mcp` →
+   `<APP_SLUG>` → Authenticate** → a browser opens the Access sign‑in → your email + one‑time PIN. No
+   `--header` flag and no secret in `.mcp.json` — auth is the interactive OAuth/PKCE dance; Claude Code stores
+   the token in its own credential store. Confirm with `claude mcp list` (shows **connected**) and `/mcp`
+   (lists the 4 tools).
+4. `[You]`/`[Claude]` **smoke test — against the live D1, through the connected MCP tools** (not `smoke.mjs`):
+   ask Claude to `add_entry` a row to e.g. `home/groceries`, `list_entries` to confirm it, then `delete_entry`
+   it. Prove it persisted with the real identity as actor:
+   `npx --yes wrangler@4 d1 execute <D1_DB_NAME> --remote --command "SELECT * FROM entries_audit ORDER BY at DESC LIMIT 5"`
+   — the `actor` column shows your Access email.
+   > **Caveat:** `worker-mcp/scripts/smoke.mjs` targets the **local, no‑auth dev server** (`npm run dev` →
+   > `src/dev.js`), **not** the OAuth‑gated prod endpoint — so it can't exercise the live auth path. Use the
+   > connected MCP tools + the audit query above for the real end‑to‑end check.
 
 ---
 
@@ -993,8 +1044,12 @@ Collect these before Step 1. Nothing here except the API token is a secret.
 - [ ] **Preview is demo‑only**: open a PR → the sticky comment's preview link loads, shows the "demo data" note,
       and edits there don't appear in production.
 - [ ] **CI gate works**: a PR that breaks a `public/data/*.json` fails `validate` and can't merge.
-- [ ] **(If MCP) Claude operates the app**: connect Claude to `…/mcp`, run "list/add/edit/delete" tools →
-      changes show in the browser; `scripts/smoke.mjs` passes.
+- [ ] **(If MCP) unauth probe is fail‑closed**: `GET …/mcp` → `401` (+ `WWW-Authenticate`, no `302`) and
+      `…/.well-known/oauth-*` → `200` (confirms Managed OAuth for MCP; see §8 ⚠️ callout).
+- [ ] **(If MCP) Claude operates the app**: `claude mcp add --transport http --scope user … …/mcp` →
+      `/mcp → Authenticate` (browser PIN) → `claude mcp list` shows **connected**; run add/list/delete via the
+      tools; the `entries_audit` query shows your Access email as `actor`. (`scripts/smoke.mjs` only covers the
+      local no‑auth dev server, not this live path.)
 - [ ] **$0 confirmed**: no payment method on the Cloudflare account; the MCP rate‑limit is active; a usage alert
       is set; Access is on the Free plan.
 
@@ -1005,4 +1060,4 @@ Collect these before Step 1. Nothing here except the API token is a secret.
 This blueprint generalizes a production Cloudflare app (a "Command Center" dashboard). Where this document and
 the live Cloudflare/Anthropic SDK docs disagree, **trust the current official docs** — the moving parts
 (Agents SDK / `McpAgent`, the Access‑in‑front‑of‑MCP pattern, Wrangler flags, dashboard layouts) evolve. The
-*shapes* here are correct against `agents@0.14`, `@modelcontextprotocol/sdk@1.29`, and `wrangler@4`.
+*shapes* here are correct against `agents@0.17`, `@modelcontextprotocol/sdk@1.29`, and `wrangler@4`.
