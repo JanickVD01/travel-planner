@@ -24,3 +24,7 @@ desktop.ini
 *.secret
 *.token
 .secrets/
+
+# local-only working notes (reverse-engineering / reference docs about other projects;
+# not part of this repo, and this repo is public)
+command-center-mcp-security-recipe.md
