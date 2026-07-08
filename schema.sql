@@ -87,6 +87,33 @@ CREATE TABLE IF NOT EXISTS steps_audit (
   op TEXT NOT NULL, detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
 );
 
+-- activities: things to do, hung off a step. space=<slug>, list='activities'; step_id = parent step
+-- id (free-text, not an FK); sort_order orders within a step. needs_advance = yes|no.
+CREATE TABLE IF NOT EXISTS activities (
+  space TEXT NOT NULL, list TEXT NOT NULL, activity_id TEXT NOT NULL,
+  step_id        TEXT NOT NULL DEFAULT '',       -- parent step id (free-text, not an FK)
+  title          TEXT NOT NULL DEFAULT '',
+  location       TEXT,
+  map_url        TEXT,
+  lat            TEXT, lng TEXT,                   -- one coordinate (link-out to maps)
+  day            TEXT,                             -- ISO date or NULL
+  needs_advance  TEXT NOT NULL DEFAULT 'no',       -- yes | no (book/reserve ahead?)
+  cost_est       TEXT, cost_actual TEXT,
+  cost_ccy       TEXT NOT NULL DEFAULT 'THB',      -- governs both est & actual
+  booking_status TEXT NOT NULL DEFAULT 'Idea',     -- Idea|Planned|Booked|Confirmed
+  booking_url    TEXT,
+  note           TEXT,
+  deleted        TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT,
+  PRIMARY KEY (space, list, activity_id)
+);
+CREATE INDEX IF NOT EXISTS idx_activities_step ON activities (space, list, step_id, sort_order);
+CREATE TABLE IF NOT EXISTS activities_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, space TEXT NOT NULL, list TEXT NOT NULL, activity_id TEXT,
+  op TEXT NOT NULL, detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
+);
+
 -- OPTIONAL roles layer: who may edit, plus an audit. Super-admin comes from env (SUPER_ADMIN_EMAIL).
 CREATE TABLE IF NOT EXISTS role_members (
   role_key TEXT NOT NULL, email TEXT NOT NULL, added_by TEXT, added_at TEXT,

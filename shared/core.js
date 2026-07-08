@@ -55,6 +55,7 @@ export function cleanCcy(v)     { return CCYS.indexOf(String(v)) >= 0 ? String(v
 export function cleanHomeCcy(v) { return CCYS.indexOf(String(v)) >= 0 ? String(v) : "EUR"; }       // trip home ccy, default EUR
 export function cleanTime(v) { return /^\d{2}:\d{2}$/.test(String(v)) ? String(v) : null; }        // HH:MM or null
 export function cleanSlug(v) { const s = String(v == null ? "" : v).trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, ""); return s || null; }
+export function cleanYesNo(v) { return (v === "yes" || v === true) ? "yes" : "no"; }   // needs_advance flag, default no
 
 // -- the generic flat-list engine: one implementation, many lists -----------
 const FLAT_SPECS = {
@@ -98,6 +99,27 @@ const FLAT_SPECS = {
       { name: "accom_name", nullable: true },
       { name: "transport", clean: cleanTransport, nullable: true },
       { name: "carrier", nullable: true },
+      { name: "cost_est", clean: cleanMoney, nullable: true },
+      { name: "cost_actual", clean: cleanMoney, nullable: true },
+      { name: "cost_ccy", clean: cleanCcy },
+      { name: "booking_status", clean: cleanBooking },
+      { name: "booking_url", nullable: true },
+      { name: "note", nullable: true }
+    ]
+  },
+  // activities: things to do, hung off a step (space=<slug>, list='activities'). step_id is the
+  // parent step id (free-text, not an FK). sort_order orders within a step.
+  activities: {
+    table: "activities", audit: "activities_audit", idCol: "activity_id", prefix: "ac", soft: true,
+    cols: [
+      { name: "step_id" },
+      { name: "title" },
+      { name: "location", nullable: true },
+      { name: "map_url", nullable: true },
+      { name: "lat", clean: cleanLat, nullable: true },
+      { name: "lng", clean: cleanLng, nullable: true },
+      { name: "day", clean: cleanDate, nullable: true },
+      { name: "needs_advance", clean: cleanYesNo },
       { name: "cost_est", clean: cleanMoney, nullable: true },
       { name: "cost_actual", clean: cleanMoney, nullable: true },
       { name: "cost_ccy", clean: cleanCcy },
@@ -257,6 +279,15 @@ export const restoreStep   = (env, a, who) => flatRestore(env, FLAT_SPECS.steps,
 export const purgeStep     = (env, a, who) => flatPurge(env, FLAT_SPECS.steps, a, who);
 export const seedSteps     = (env, a, who) => flatSeed(env, FLAT_SPECS.steps, a, who);
 
+// activities (things to do, hung off a step).
+export const listActivities    = (env, a, who) => flatList(env, FLAT_SPECS.activities, a, who);
+export const createActivity    = (env, a, who) => flatCreate(env, FLAT_SPECS.activities, a, who);
+export const patchActivity     = (env, a, who) => flatPatch(env, FLAT_SPECS.activities, a, who);
+export const deleteActivity    = (env, a, who) => flatDelete(env, FLAT_SPECS.activities, a, who);
+export const restoreActivity   = (env, a, who) => flatRestore(env, FLAT_SPECS.activities, a, who);
+export const purgeActivity     = (env, a, who) => flatPurge(env, FLAT_SPECS.activities, a, who);
+export const seedActivities    = (env, a, who) => flatSeed(env, FLAT_SPECS.activities, a, who);
+
 // Resolve a trip by slug -> its config row (registry lives at space='app', list='trips').
 export async function tripBySlug(env, slug) {
   const { rows } = await flatList(env, FLAT_SPECS.trips, { space: "app", list: "trips" }, null);
@@ -278,4 +309,52 @@ export function addTravel(env, a, who) {
   return createStep(env, Object.assign({}, a, {
     kind: "travel", title: a.title || route, location: a.location || route, transport: a.transport || a.mode || null
   }), who);
+}
+
+// -- pure composites (only DB reads; no writes) -----------------------------
+// Convert a stored amount to EUR. null/'' -> null; already-EUR passes through; else divide by rate.
+export function toEur(amt, ccy, rate) {
+  if (amt == null || amt === "") return null;
+  return ccy === "EUR" ? Number(amt) : Number(amt) / Number(rate);
+}
+// Build an "open in maps" link from lat/lng (OSM), else fall back to the row's map_url. Mirrors public/app.js.
+function rowMapsUrl(row) {
+  if (row.lat != null && row.lat !== "" && row.lng != null && row.lng !== "")
+    return "https://www.openstreetmap.org/?mlat=" + encodeURIComponent(row.lat) + "&mlon=" + encodeURIComponent(row.lng) + "#map=12/" + encodeURIComponent(row.lat) + "/" + encodeURIComponent(row.lng);
+  return row.map_url || null;
+}
+// Read-only trip snapshot: the trip config, its steps (timeline order), activities grouped by
+// step_id, and an "unassigned" bucket for activities whose step_id matches no live step. Each step
+// and activity gains a `maps_url` (lat/lng -> OSM, else map_url) and an `eur` value (actual||est,
+// converted via the trip's thb_per_eur rate).
+export async function tripOverview(env, { space }, actor) {
+  const trip = await tripBySlug(env, space);
+  const rate = trip ? trip.thb_per_eur : null;
+  const { rows: steps } = await listSteps(env, { space, list: "flow" }, actor);
+  const { rows: acts } = await listActivities(env, { space, list: "activities" }, actor);
+  const decorate = (r) => {
+    const amt = (r.cost_actual != null && r.cost_actual !== "") ? r.cost_actual : r.cost_est;
+    return Object.assign({}, r, { maps_url: rowMapsUrl(r), eur: toEur(amt, r.cost_ccy, rate) });
+  };
+  const liveIds = new Set(steps.map(s => s.id));
+  const activitiesByStep = {}, unassigned = [];
+  acts.forEach(a => {
+    const d = decorate(a);
+    if (liveIds.has(a.step_id)) { (activitiesByStep[a.step_id] = activitiesByStep[a.step_id] || []).push(d); }
+    else unassigned.push(d);
+  });
+  return { trip, steps: steps.map(decorate), activitiesByStep, unassigned };
+}
+// Coordinate/booking routers: `target` picks the step vs activity spec. Thin over flatPatch so the
+// UI and MCP share one code path. setCoordinate always sets both lat+lng.
+export function setCoordinate(env, { target, space, list, id, lat, lng }, actor) {
+  const spec = target === "step" ? FLAT_SPECS.steps : FLAT_SPECS.activities;
+  return flatPatch(env, spec, { space, list, id, lat, lng }, actor);
+}
+export function setBooking(env, { target, space, list, id, booking_status, booking_url }, actor) {
+  const spec = target === "step" ? FLAT_SPECS.steps : FLAT_SPECS.activities;
+  const p = { space, list, id };
+  if (booking_status !== undefined) p.booking_status = booking_status;
+  if (booking_url !== undefined) p.booking_url = booking_url;
+  return flatPatch(env, spec, p, actor);
 }
