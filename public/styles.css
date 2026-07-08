@@ -225,3 +225,57 @@ a.card:hover { border-color: var(--accent); text-decoration: none; }
 .acts-loose::before { display: none; }
 .acts-loose .activity { padding-left: 0; }
 .acts-loose .sub-marker { display: none; }
+
+/* the activity title is now a link to its detail view (status/cost controls stay outside it) */
+a.act-title { color: var(--ink-0); display: inline-flex; align-items: center; min-height: 32px; }
+a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---- activity detail (M6): a bottom-sheet-style view with an editable notes block ---- */
+.sheet { max-width: 720px; margin: 0 auto; }
+.sheet-head {
+  position: sticky; top: 56px; z-index: 20; margin: 0 0 var(--space-3);
+  padding: 6px 0;
+  background: color-mix(in srgb, var(--paper-0) 90%, transparent);
+  backdrop-filter: saturate(1.2) blur(8px); -webkit-backdrop-filter: saturate(1.2) blur(8px);
+}
+.sheet-head .back {
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 44px; padding: 0 8px 0 2px;
+  font-size: var(--text-sm); font-weight: 600; color: var(--ink-1);
+}
+.sheet-head .back:hover { color: var(--accent-ink); text-decoration: none; }
+.sheet-head .chev { font-size: 1.4em; line-height: 1; }
+
+.detail .detail-title { margin: 2px 0 4px; }
+.detail-context { font-size: var(--text-sm); margin-bottom: var(--space-4); }
+
+.detail-meta { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--space-5); }
+.detail-meta .mrow {
+  display: flex; align-items: center; gap: var(--space-3);
+  min-height: 44px; padding: 2px 0; border-bottom: 1px solid var(--line-hair);
+}
+.detail-meta .mlabel { flex: 0 0 96px; color: var(--ink-2); font-size: var(--text-sm); }
+.detail-meta .mval { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: var(--space-3); }
+.detail-actions .maplink { min-height: 44px; }
+
+/* notes block */
+.notes h2 { font-size: var(--text-lg); margin: 0 0 var(--space-2); }
+.notes-body .editable {
+  display: block; width: 100%; align-items: flex-start;
+  min-height: 44px; padding: 10px 12px;
+  border: 1px dashed color-mix(in srgb, var(--ink-3) 70%, transparent);
+  border-radius: var(--radius-sm); line-height: 1.5;
+}
+.notes-body .note-text { white-space: pre-wrap; color: var(--ink-1); }
+.notes-body .note-empty { font-size: var(--text-base); }
+.edit-textarea {
+  font-family: var(--f-body); font-size: 16px;        /* >=16px so iOS won't zoom */
+  width: 100%; min-height: 120px; line-height: 1.5; resize: vertical;
+}
+
+@media (max-width: 720px) {
+  .sheet { max-width: 100%; }
+  .sheet-head { top: 0; }
+  .detail-meta .mlabel { flex-basis: 84px; }
+}

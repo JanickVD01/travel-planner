@@ -74,6 +74,8 @@ function mapsUrl(row) {
 }
 function fmtDate(d) { if (!d) return ""; const p = String(d).split("-"); if (p.length !== 3) return String(d);
   const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return (+p[2]) + " " + (m[(+p[1]) - 1] || p[1]); }
+// A stable, CSS-ident-safe view-transition-name for an activity (shared by the timeline title + detail h1).
+function vtName(id) { return "act-" + String(id == null ? "" : id).replace(/[^A-Za-z0-9_-]/g, "-"); }
 
 // ---- self-contained markdown renderer (escapes raw HTML; no external lib) --
 function renderMarkdown(src) {
@@ -179,6 +181,9 @@ function openEditor(btn) {
       op.value = o; op.textContent = o; if (o === cur) op.selected = true;
       ctrl.appendChild(op);
     });
+  } else if (d.input === "textarea") {                 // multiline (e.g. notes)
+    ctrl = document.createElement("textarea");
+    ctrl.className = "edit-input edit-textarea"; ctrl.rows = 5; ctrl.value = cur;
   } else {
     ctrl = document.createElement("input");
     ctrl.type = "text"; ctrl.inputMode = "decimal";   // NEVER type=number (iOS)
@@ -201,7 +206,7 @@ function openEditor(btn) {
     if (settled) return;
     const val = d.input === "select" ? ctrl.value : ctrl.value.trim();
     if (val === cur) { revert(); return; }                              // no change
-    if (d.input !== "select" && val !== "" && !isFinite(Number(val))) { revert("Not a number"); return; }
+    if (d.input === "decimal" && val !== "" && !isFinite(Number(val))) { revert("Not a number"); return; }
     settled = true; ctrl.disabled = true;                              // lock during write
     try {
       await api(d.entity + "/" + encodeURIComponent(slug) + "/" + d.list + "/" + encodeURIComponent(d.id),
@@ -214,15 +219,16 @@ function openEditor(btn) {
   };
   const cancel = () => revert();
   ctrl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); commit(); }
+    // textarea: Enter inserts a newline (never commits); Escape still cancels.
+    if (e.key === "Enter" && d.input !== "textarea") { e.preventDefault(); commit(); }
     else if (e.key === "Escape") { e.preventDefault(); cancel(); }
   });
   if (d.input === "select") { ctrl.addEventListener("change", commit); ctrl.addEventListener("blur", cancel); }
-  else { ctrl.addEventListener("blur", commit); }
+  else { ctrl.addEventListener("blur", commit); }                     // input + textarea commit on blur
 
   btn.replaceWith(ctrl);
   ctrl.focus();
-  if (d.input !== "select" && ctrl.select) ctrl.select();
+  if (d.input === "decimal" && ctrl.select) ctrl.select();            // pre-select numeric value for quick replace
 }
 let _editableBound = false;
 function bindEditable() {                                // attach the ONE delegated listener once
@@ -267,7 +273,7 @@ async function viewHome() {
 
 // A compact activity sub-card nested under its parent stay. cost_actual + booking_status are
 // inline-editable (entity/list = activities); everything is esc'd; reuses money/eurEquiv/mapsUrl.
-function activityCardHTML(a, rate) {
+function activityCardHTML(a, rate, slug) {
   const st = a.booking_status || "Idea";
   const chip = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
     { entity: "activities", list: "activities", id: a.id, field: "booking_status", input: "select", value: st, options: "Idea|Planned|Booked|Confirmed" });
@@ -282,15 +288,19 @@ function activityCardHTML(a, rate) {
   const flag = a.needs_advance === "yes" ? '<span class="flag">' + icon("link") + "book ahead</span>" : "";
   const mu = mapsUrl(a);
   const maplink = mu ? '<a class="maplink" href="' + esc(mu) + '" target="_blank" rel="noopener">' + icon("pin") + "Map</a>" : "";
+  // The TITLE (only) is a link to the activity detail view; status/cost stay inline-editable outside the link.
+  const href = "#/trip/" + encodeURIComponent(slug || "") + "/activity/" + encodeURIComponent(a.id);
+  const titleHTML = '<a class="act-title" href="' + esc(href) + '" style="view-transition-name:' + esc(vtName(a.id)) + '">' +
+    esc(a.title || a.location) + "</a>";
   return '<li class="activity">' +
     '<span class="sub-marker" aria-hidden="true"></span>' +
     '<div class="act-card">' +
-      '<div class="act-head"><span class="act-title">' + esc(a.title || a.location) + "</span>" + chip + flag + "</div>" +
+      '<div class="act-head">' + titleHTML + chip + flag + "</div>" +
       '<div class="act-meta">' + estHTML + actHTML + maplink + "</div>" +
     "</div></li>";
 }
 
-function stepCardHTML(s, rate, acts) {
+function stepCardHTML(s, rate, acts, slug) {
   const st = s.booking_status || "Idea";
   const chip = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
     { entity: "steps", list: "flow", id: s.id, field: "booking_status", input: "select", value: st, options: "Idea|Planned|Booked|Confirmed" });
@@ -323,7 +333,7 @@ function stepCardHTML(s, rate, acts) {
   }
   const nights = (s.arrive && s.depart) ? '<span class="muted mono">' + esc(fmtDate(s.arrive)) + " → " + esc(fmtDate(s.depart)) + "</span>" : "";
   const actsHTML = (acts && acts.length)
-    ? '<ul class="acts">' + acts.map(a => activityCardHTML(a, rate)).join("") + "</ul>" : "";
+    ? '<ul class="acts">' + acts.map(a => activityCardHTML(a, rate, slug)).join("") + "</ul>" : "";
   return '<li class="step stay">' +
     '<span class="marker stay" aria-hidden="true"></span>' +
     '<div class="step-card">' +
@@ -344,12 +354,12 @@ async function viewTimeline(slug) {
   const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
   const hint = '<p class="tl-hint muted">Tap a cost or status to edit it inline. To add or reorder steps, ask Claude.</p>';
   const body = steps.length
-    ? '<ol class="tl">' + steps.map(s => stepCardHTML(s, rate, byStep[s.id])).join("") + "</ol>"
+    ? '<ol class="tl">' + steps.map(s => stepCardHTML(s, rate, byStep[s.id], slug)).join("") + "</ol>"
     : '<p class="muted">No steps yet. Ask Claude to add a stay or a travel leg.</p>';
   // Activities whose parent step no longer exists get their own group so they're never dropped.
   const unassignedHTML = (unassigned && unassigned.length)
     ? '<section class="unassigned"><h2 class="unassigned-title">Unassigned</h2>' +
-      '<ul class="acts acts-loose">' + unassigned.map(a => activityCardHTML(a, rate)).join("") + "</ul></section>"
+      '<ul class="acts acts-loose">' + unassigned.map(a => activityCardHTML(a, rate, slug)).join("") + "</ul></section>"
     : "";
   view().innerHTML =
     '<div class="trip-hero"><a class="back" href="#/">' + icon("pin") + "All trips</a>" +
@@ -358,6 +368,71 @@ async function viewTimeline(slug) {
     '<div class="panel tl-panel">' + hint + body + unassignedHTML + "</div>";
   // signature entrance: stagger the markers in (reduced-motion + no-anime safe).
   motion(a => a.animate(".tl .step", { opacity: [0, 1], translateY: [8, 0], delay: a.stagger(45), duration: 380, ease: "out(3)" }));
+}
+
+// Activity detail: a bottom-sheet-style view with an editable NOTES section. All values esc'd;
+// editable() controls reuse the shared inline-edit plumbing (entity="activities").
+async function viewActivity(slug, id) {
+  markActive(null);
+  view().innerHTML = '<div class="panel"><p class="muted">Loading…</p></div>';
+  const { trip, steps, activities } = await loadTrip(slug);
+  const back = "#/trip/" + encodeURIComponent(slug);
+  const tripTitle = (trip && (trip.title || trip.slug)) || slug;
+  const head = '<div class="sheet-head"><a class="back" href="' + esc(back) + '">' +
+    '<span class="chev" aria-hidden="true">‹</span> ' + esc(tripTitle) + "</a></div>";
+  const a = (activities || []).find(x => String(x.id) === String(id));
+  if (!a) {
+    view().innerHTML = '<div class="sheet">' + head +
+      '<div class="panel detail"><h1>Activity not found</h1>' +
+      '<p class="muted"><a href="' + esc(back) + '">← Back to ' + esc(tripTitle) + "</a></p></div></div>";
+    return;
+  }
+  const rate = trip && trip.thb_per_eur;
+  const parent = steps.find(s => String(s.id) === String(a.step_id));
+  const parentTitle = parent ? (parent.title || parent.location || "Stay") : "Unassigned";
+
+  const st = a.booking_status || "Idea";
+  const statusCtrl = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
+    { entity: "activities", list: "activities", id: a.id, field: "booking_status", input: "select", value: st, options: "Idea|Planned|Booked|Confirmed" });
+  const estHTML = (a.cost_est != null && a.cost_est !== "")
+    ? '<span class="cost mono est muted">' + esc(money(a.cost_est, a.cost_ccy)) + "</span>"
+    : '<span class="muted">—</span>';
+  const act = a.cost_actual;
+  const actDisplay = (act != null && act !== "")
+    ? '<span class="cost mono">' + esc(money(act, a.cost_ccy)) +
+      (eurEquiv(act, a.cost_ccy, rate) ? ' <span class="muted">' + esc(eurEquiv(act, a.cost_ccy, rate)) + "</span>" : "") + "</span>"
+    : '<span class="add-actual">+ actual</span>';
+  const actCtrl = editable(actDisplay, { entity: "activities", list: "activities", id: a.id, field: "cost_actual", input: "decimal", value: act });
+  const dayHTML = (a.day != null && a.day !== "") ? esc(String(a.day)) : "—";
+
+  const flag = a.needs_advance === "yes" ? '<span class="flag">' + icon("link") + "book ahead</span>" : "";
+  const mu = mapsUrl(a);
+  const maplink = mu ? '<a class="maplink" href="' + esc(mu) + '" target="_blank" rel="noopener">' + icon("pin") + "Map</a>" : "";
+  const bl = safeUrl(a.booking_url);
+  const booklink = bl ? '<a class="maplink" href="' + esc(bl) + '" target="_blank" rel="noopener">' + icon("link") + "Booking</a>" : "";
+  const actionsHTML = (flag || maplink || booklink) ? '<div class="detail-actions">' + flag + maplink + booklink + "</div>" : "";
+
+  const meta = '<div class="detail-meta">' +
+    '<div class="mrow"><span class="mlabel">Day</span><span class="mval">' + dayHTML + "</span></div>" +
+    '<div class="mrow"><span class="mlabel">Status</span><span class="mval">' + statusCtrl + "</span></div>" +
+    '<div class="mrow"><span class="mlabel">Estimated</span><span class="mval">' + estHTML + "</span></div>" +
+    '<div class="mrow"><span class="mlabel">Actual</span><span class="mval">' + actCtrl + "</span></div>" +
+    actionsHTML + "</div>";
+
+  const noteVal = a.note;
+  const noteDisplay = (noteVal != null && String(noteVal).trim() !== "")
+    ? '<span class="note-text">' + esc(noteVal).replace(/\n/g, "<br>") + "</span>"
+    : '<span class="note-empty muted">Add notes…</span>';
+  const noteCtrl = editable(noteDisplay, { entity: "activities", list: "activities", id: a.id, field: "note", input: "textarea", value: noteVal });
+  const notes = '<section class="notes"><h2>Notes</h2><div class="notes-body">' + noteCtrl + "</div></section>";
+
+  view().innerHTML = '<div class="sheet">' + head +
+    '<div class="panel detail">' +
+      '<h1 class="detail-title" style="view-transition-name:' + esc(vtName(a.id)) + '">' + esc(a.title || a.location) + "</h1>" +
+      '<div class="detail-context muted">in ' + esc(parentTitle) + "</div>" +
+      meta + notes +
+    "</div></div>";
+  motion(an => an.animate(".detail-meta, .notes", { opacity: [0, 1], translateY: [8, 0], delay: an.stagger(60), duration: 340, ease: "out(3)" }));
 }
 
 async function viewWhatsNew() {
@@ -380,7 +455,10 @@ function route() {
   const parts = hash.split("/").filter(Boolean);   // "/" -> [], "/trip/x" -> ["trip","x"]
   if (parts.length === 0) return viewHome();
   if (parts[0] === "whats-new") return viewWhatsNew();
-  if (parts[0] === "trip" && parts[1]) return viewTimeline(parts[1]);
+  if (parts[0] === "trip" && parts[1]) {
+    if (parts[2] === "activity" && parts[3]) return viewActivity(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
+    return viewTimeline(parts[1]);
+  }
   return viewHome();
 }
 
