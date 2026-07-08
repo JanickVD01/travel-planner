@@ -137,6 +137,94 @@ async function loadTrip(slug) {
 }
 function invalidateTrip(slug) { delete state.trip[slug]; }
 
+// ---- inline edit (field-driven; whitelist grows in later milestones) -------
+// Render a tappable control that swaps to an <input>/<select> on click. `displayHTML`
+// is ALREADY-escaped display markup; `o.value` is the raw current value (esc'd into an attr).
+function editable(displayHTML, o) {
+  o = o || {};
+  return '<button type="button" class="editable"' +
+    ' data-entity="' + esc(o.entity) + '"' +
+    ' data-list="'   + esc(o.list)   + '"' +
+    ' data-id="'     + esc(o.id)     + '"' +
+    ' data-field="'  + esc(o.field)  + '"' +
+    ' data-input="'  + esc(o.input)  + '"' +
+    ' data-value="'  + esc(o.value == null ? "" : o.value) + '"' +
+    (o.options ? ' data-options="' + esc(Array.isArray(o.options) ? o.options.join("|") : o.options) + '"' : "") +
+    ' aria-label="Edit ' + esc(o.field || "value") + '">' + displayHTML + "</button>";
+}
+function tripSlugFromHash() {
+  const parts = (location.hash.replace(/^#/, "") || "/").split("/").filter(Boolean);
+  return (parts[0] === "trip" && parts[1]) ? decodeURIComponent(parts[1]) : "";
+}
+function openEditor(btn) {
+  if (document.querySelector(".edit-input, .edit-select")) return;   // one editor at a time
+  const slug = tripSlugFromHash();
+  if (!slug) return;
+  const d = btn.dataset, field = d.field, cur = d.value || "";
+  let ctrl;
+  if (d.input === "select") {
+    ctrl = document.createElement("select");
+    ctrl.className = "edit-select";
+    (d.options || "").split("|").filter(Boolean).forEach(o => {
+      const op = document.createElement("option");
+      op.value = o; op.textContent = o; if (o === cur) op.selected = true;
+      ctrl.appendChild(op);
+    });
+  } else {
+    ctrl = document.createElement("input");
+    ctrl.type = "text"; ctrl.inputMode = "decimal";   // NEVER type=number (iOS)
+    ctrl.className = "edit-input"; ctrl.value = cur;
+  }
+  ctrl.setAttribute("aria-label", btn.getAttribute("aria-label") || ("Edit " + field));
+
+  let settled = false;                                  // guards blur/change/Enter double-fire
+  const revert = (msg) => {
+    if (settled) return; settled = true;
+    ctrl.replaceWith(btn);
+    if (msg) {
+      const m = document.createElement("span");
+      m.className = "edit-err"; m.setAttribute("role", "alert"); m.textContent = msg;
+      btn.insertAdjacentElement("afterend", m);
+      setTimeout(() => m.remove(), 4000);
+    }
+  };
+  const commit = async () => {
+    if (settled) return;
+    const val = d.input === "select" ? ctrl.value : ctrl.value.trim();
+    if (val === cur) { revert(); return; }                              // no change
+    if (d.input !== "select" && val !== "" && !isFinite(Number(val))) { revert("Not a number"); return; }
+    settled = true; ctrl.disabled = true;                              // lock during write
+    try {
+      await api(d.entity + "/" + encodeURIComponent(slug) + "/" + d.list + "/" + encodeURIComponent(d.id),
+        { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ [field]: val }) });
+      invalidateTrip(slug);
+      vt(route);                                                       // full re-render with new value
+    } catch {
+      settled = false; revert("Couldn’t save");                       // never crash — revert + inline msg
+    }
+  };
+  const cancel = () => revert();
+  ctrl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); commit(); }
+    else if (e.key === "Escape") { e.preventDefault(); cancel(); }
+  });
+  if (d.input === "select") { ctrl.addEventListener("change", commit); ctrl.addEventListener("blur", cancel); }
+  else { ctrl.addEventListener("blur", commit); }
+
+  btn.replaceWith(ctrl);
+  ctrl.focus();
+  if (d.input !== "select" && ctrl.select) ctrl.select();
+}
+let _editableBound = false;
+function bindEditable() {                                // attach the ONE delegated listener once
+  if (_editableBound) return; _editableBound = true;
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".editable");
+    if (!btn || document.querySelector(".edit-input, .edit-select")) return;
+    openEditor(btn);
+  });
+}
+
 // ---- nav -------------------------------------------------------------------
 function buildNav() {
   $("#nav").innerHTML =
@@ -169,12 +257,19 @@ async function viewHome() {
 }
 
 function stepCardHTML(s, rate) {
-  const chip = '<span class="chip status-' + esc(s.booking_status || "Idea") + '">' + esc(s.booking_status || "Idea") + "</span>";
-  const cost = s.cost_actual != null && s.cost_actual !== "" ? s.cost_actual : s.cost_est;
-  const costHTML = cost != null && cost !== ""
-    ? '<span class="cost mono">' + esc(money(cost, s.cost_ccy)) +
-      (eurEquiv(cost, s.cost_ccy, rate) ? ' <span class="muted">' + esc(eurEquiv(cost, s.cost_ccy, rate)) + "</span>" : "") + "</span>"
-    : "";
+  const st = s.booking_status || "Idea";
+  const chip = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
+    { entity: "steps", list: "flow", id: s.id, field: "booking_status", input: "select", value: st, options: "Idea|Planned|Booked|Confirmed" });
+  // Estimate is read-only; ACTUAL cost is editable (null -> a subtle "+ actual" affordance).
+  const estHTML = (s.cost_est != null && s.cost_est !== "")
+    ? '<span class="cost mono est muted">est ' + esc(money(s.cost_est, s.cost_ccy)) + "</span>" : "";
+  const act = s.cost_actual;
+  const actDisplay = (act != null && act !== "")
+    ? '<span class="cost mono">' + esc(money(act, s.cost_ccy)) +
+      (eurEquiv(act, s.cost_ccy, rate) ? ' <span class="muted">' + esc(eurEquiv(act, s.cost_ccy, rate)) + "</span>" : "") + "</span>"
+    : '<span class="add-actual">+ actual</span>';
+  const actHTML = editable(actDisplay, { entity: "steps", list: "flow", id: s.id, field: "cost_actual", input: "decimal", value: act });
+  const costHTML = estHTML + actHTML;
   const mu = mapsUrl(s);
   const maplink = mu ? '<a class="maplink" href="' + esc(mu) + '" target="_blank" rel="noopener">' + icon("pin") + "Map</a>" : "";
   const bl = safeUrl(s.booking_url);
@@ -210,7 +305,7 @@ async function viewTimeline(slug) {
   const rate = trip.thb_per_eur;
   const title = trip.title || slug;
   const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
-  const hint = '<p class="tl-hint muted">Read-only timeline. To add, edit, or reorder steps, ask Claude.</p>';
+  const hint = '<p class="tl-hint muted">Tap a cost or status to edit it inline. To add or reorder steps, ask Claude.</p>';
   const body = steps.length
     ? '<ol class="tl">' + steps.map(s => stepCardHTML(s, rate)).join("") + "</ol>"
     : '<p class="muted">No steps yet. Ask Claude to add a stay or a travel leg.</p>';
@@ -259,5 +354,6 @@ window.addEventListener("hashchange", () => vt(route));
   document.title = $("#brand-title").textContent;
   await loadMe();
   buildNav();
+  bindEditable();
   route();
 })();
