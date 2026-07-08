@@ -1,6 +1,7 @@
 // In-memory, per-isolate demo store for previews / DB-less local dev. Mirrors the wire shapes of
 // the real adapters; self-seeds a realistic Thailand trip so previews aren't empty. Edits evaporate.
 // IMPORTANT: when you add an /api/* route, add a branch here too, or it 404s in previews.
+import { computeBudget } from "../../shared/core.js";
 const S = { entries: [], trips: [], steps: [], activities: [] };
 function j(o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json; charset=utf-8" } }); }
 
@@ -57,6 +58,14 @@ function mockOverview() {
   });
   return { trip, steps: steps.map(decorate), activitiesByStep, unassigned };
 }
+// Run the SHARED computeBudget over the demo trip so previews prove the exact production math.
+function mockBudget() {
+  const trip = S.trips[0] || {};
+  return Object.assign(
+    computeBudget(trip.thb_per_eur, trip.budget_target_eur, S.steps, S.activities),
+    { home_ccy: trip.home_ccy }
+  );
+}
 
 export async function handleMock(request, env) {
   const url = new URL(request.url), parts = url.pathname.replace(/^\/api\//, "").split("/").filter(Boolean);
@@ -67,5 +76,6 @@ export async function handleMock(request, env) {
   if (parts[0] === "steps")   { if (request.method === "GET") return j({ rows: isTrash ? [] : S.steps }); return j({ ok: true, demo: true }); }
   if (parts[0] === "activities") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.activities }); return j({ ok: true, demo: true }); }
   if (parts[0] === "overview") { if (request.method === "GET") return j(mockOverview()); return j({ ok: true, demo: true }); }
+  if (parts[0] === "budget") { if (request.method === "GET") return j(mockBudget()); return j({ ok: true, demo: true }); }
   return j({ ok: true, demo: true });     // unknown route degrades to ok, never 500
 }

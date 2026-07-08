@@ -358,3 +358,56 @@ export function setBooking(env, { target, space, list, id, booking_status, booki
   if (booking_url !== undefined) p.booking_url = booking_url;
   return flatPatch(env, spec, p, actor);
 }
+
+// -- budget (M7): the single source of truth for all money math -------------
+// PURE. Given the trip's FX rate + target and the step/activity rows, compute every euro figure the
+// UI shows. The UI must NEVER recompute money — it renders these numbers verbatim. All amounts are
+// stored full-precision (cost_est/cost_actual as TEXT in cost_ccy); we convert to EUR via toEur and
+// round ONLY at the very end so intermediate sums don't accumulate rounding error.
+export function computeBudget(rate, target, steps, activities) {
+  const r = Number(rate);
+  if (!isFinite(r) || r <= 0) throw new ServiceError(422, "no FX rate set", "no_rate");   // before any division
+  const stepRows = Array.isArray(steps) ? steps : [];
+  const actRows = Array.isArray(activities) ? activities : [];
+  let totalEst = 0, totalActual = 0, estOfUnspent = 0;      // running EUR sums (non-null only)
+  let accommodation = 0, transport = 0, activitiesCat = 0;  // estimated EUR by category
+  const acc = (row, isStep) => {
+    const est = toEur(row.cost_est, row.cost_ccy, r);        // null when the source amount is null/''
+    const act = toEur(row.cost_actual, row.cost_ccy, r);
+    if (est != null) totalEst += est;
+    if (act != null) totalActual += act;
+    if (est != null && act == null) estOfUnspent += est;     // still-to-spend, valued at estimate
+    if (isStep) {
+      if (row.kind === "stay" && est != null) accommodation += est;
+      if (row.kind === "travel" && est != null) transport += est;
+    } else if (est != null) { activitiesCat += est; }
+  };
+  stepRows.forEach(row => acc(row, true));
+  actRows.forEach(row => acc(row, false));
+  const t = (target == null || target === "") ? null : Number(target);
+  const projectedSpend = totalActual + estOfUnspent;         // spent so far + estimate of what's left
+  const remaining = t == null ? null : t - totalActual;      // target minus what's actually spent
+  const projected = t == null ? null : t - totalActual - estOfUnspent;   // target minus projected spend
+  const pct = t ? Math.round(projectedSpend / t * 100) : null;
+  const over = t != null && projectedSpend > t;
+  const r2 = (x) => (x == null ? null : Math.round(x * 100) / 100);   // round to 2dp at the end
+  return {
+    rate: r, target: r2(t), home_ccy: null,
+    totalEst: r2(totalEst), totalActual: r2(totalActual), estOfUnspent: r2(estOfUnspent),
+    projectedSpend: r2(projectedSpend), remaining: r2(remaining), projected: r2(projected),
+    pct, over,
+    byCategory: { accommodation: r2(accommodation), transport: r2(transport), activities: r2(activitiesCat) }
+  };
+}
+// DB-backed budget for a trip: resolve the trip config, read its steps + activities, run the pure
+// computeBudget, then stamp the trip's home_ccy onto the result.
+export async function getBudget(env, { space }, actor) {
+  const trip = await tripBySlug(env, space);
+  if (!trip) throw new ServiceError(404, "trip not found: " + space);
+  const { rows: steps } = await listSteps(env, { space, list: "flow" }, actor);
+  const { rows: activities } = await listActivities(env, { space, list: "activities" }, actor);
+  return Object.assign(
+    computeBudget(trip.thb_per_eur, trip.budget_target_eur, steps, activities),
+    { home_ccy: trip.home_ccy }
+  );
+}

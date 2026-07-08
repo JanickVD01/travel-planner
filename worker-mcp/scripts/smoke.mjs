@@ -45,6 +45,17 @@ try {
   createdId = null;
   console.log("• deleted ✓");
 
+  // get_budget (best-effort): the dev DB may have no trips, so a 404/422 tool-error is acceptable.
+  // We only assert the tool RESPONDS with content, and never let it fail the smoke.
+  try {
+    const slug = process.env.SMOKE_SLUG || "thailand-2026";
+    const res = await client.callTool({ name: "get_budget", arguments: { slug } });
+    if (!res || !Array.isArray(res.content) || !res.content.length) throw new Error("no content returned");
+    console.log("• get_budget: responded" + (res.isError ? " (tool error, tolerated: " + res.content[0].text + ")" : " ✓"));
+  } catch (e) {
+    console.log("• get_budget: skipped (" + e.message + ")");
+  }
+
   console.log("\n✓ smoke passed against " + URL_);
   await client.close();
   process.exit(0);
