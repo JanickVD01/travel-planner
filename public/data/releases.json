@@ -8,6 +8,7 @@
         "A warm new look — light theme by default, a polished dark mode, and self-hosted typography.",
         "Home lists your trips; open one to see it as a vertical timeline of travel legs and stays.",
         "Each stay now shows its activities nested underneath, with 'book ahead' flags and map links.",
+        "Tap any activity to open its details and jot notes — a scratchpad per activity, with its own map link.",
         "Tap a step's or activity's actual cost or booking status to edit it inline; costs show in the entry currency with a euro equivalent."
       ]
     },
