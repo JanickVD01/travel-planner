@@ -1,0 +1,96 @@
+/* tokens.css — the design-token contract (see DESIGN.md). Linked BEFORE styles.css.
+   Two tiers: a warm base palette (Direction C "Transit Line") + a spacing/type scale.
+   Components read ONLY these custom properties — never raw hex. Light-primary; dark is a
+   fully-styled alternate via [data-theme="dark"] and the prefers-color-scheme fallback. */
+
+:root {
+  /* — warm paper ramp (surfaces) — */
+  --paper-0: #FCFCFA;   /* page / map ground */
+  --paper-1: #F6F4EE;   /* raised card */
+  --paper-2: #EFEBE1;   /* deeper tint / hover */
+  --paper-3: #E7E1D3;   /* strong fill */
+  --line-hair: #DED7C7; /* hairline warm border */
+
+  /* — warm ink ramp (text) — */
+  --ink-0: #1B1813;     /* warm near-black — primary text */
+  --ink-1: #3A342B;     /* strong secondary */
+  --ink-2: #6A6152;     /* warm gray — secondary text */
+  --ink-3: #928871;     /* muted warm gray */
+
+  /* — transit mode colors (functional, used sparingly) — */
+  --rail: #2A4B8D;      /* ink-blue */
+  --flight: #D9583F;    /* coral */
+  --ferry: #178079;     /* teal */
+  --road: #B9760F;      /* amber */
+
+  /* — one warm signature accent (brand + primary action + one highlight) — */
+  --accent: #C8542F;
+  --accent-ink: #9C3E20;      /* accent text on paper (AA) */
+  --accent-wash: #F7E7DE;     /* tinted accent surface */
+  --accent-contrast: #FFFFFF; /* text on a filled accent */
+
+  /* — booking-status hues (tinted bg + stronger fg), harmonized but distinct — */
+  --st-idea: #7E7466;   --st-idea-bg: #EEEAE0;
+  --st-plan: #4B6A9B;   --st-plan-bg: #E6ECF5;
+  --st-book: #B9760F;   --st-book-bg: #F6ECD8;
+  --st-conf: #2E7D52;   --st-conf-bg: #E1F0E5;
+
+  /* — semantic states — */
+  --ok: #2E7D52;
+  --danger: #C23B26;
+  --danger-bg: #F7E3DE;
+
+  /* — shape & elevation — */
+  --radius: 14px;
+  --radius-sm: 9px;
+  --radius-pill: 999px;
+  --shadow-float: 0 6px 22px -10px rgba(40, 30, 15, .35); /* reserved for floating chrome only */
+
+  /* — spacing scale (4px base) — */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 40px;
+
+  /* — type scale (~1.2 modular) — */
+  --text-xs: .75rem;   --text-sm: .875rem; --text-base: 1rem;
+  --text-lg: 1.15rem;  --text-xl: 1.4rem;  --text-2xl: 1.75rem; --text-3xl: 2.15rem;
+
+  /* — layout — */
+  --maxw: 960px;
+  --rail-x: 34px;       /* x-position of the timeline transit line */
+
+  /* — type families (self-hosted variable woff2, see public/fonts/) — */
+  --f-disp: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono: 'Spline Sans Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+:root[data-theme="dark"] {
+  --paper-0: #0E0F12; --paper-1: #16181D; --paper-2: #1E2128; --paper-3: #2A2E37;
+  --line-hair: #2C303A;
+  --ink-0: #F2EEE6; --ink-1: #DAD4C8; --ink-2: #A7A090; --ink-3: #847C6C;
+  --rail: #7DA2E6; --flight: #F5836B; --ferry: #3FB6AC; --road: #E0A542;
+  --accent: #F0805A; --accent-ink: #F7A183; --accent-wash: #33231C; --accent-contrast: #1A120C;
+  --st-idea: #B4AB9B; --st-idea-bg: #24272E;
+  --st-plan: #9CB8E8; --st-plan-bg: #1B2534;
+  --st-book: #E0A542; --st-book-bg: #2E2717;
+  --st-conf: #63C48D; --st-conf-bg: #152A20;
+  --ok: #63C48D; --danger: #F0705A; --danger-bg: #331C18;
+  --shadow-float: 0 8px 26px -12px rgba(0, 0, 0, .7);
+}
+
+/* System-dark when the user hasn't explicitly chosen light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper-0: #0E0F12; --paper-1: #16181D; --paper-2: #1E2128; --paper-3: #2A2E37;
+    --line-hair: #2C303A;
+    --ink-0: #F2EEE6; --ink-1: #DAD4C8; --ink-2: #A7A090; --ink-3: #847C6C;
+    --rail: #7DA2E6; --flight: #F5836B; --ferry: #3FB6AC; --road: #E0A542;
+    --accent: #F0805A; --accent-ink: #F7A183; --accent-wash: #33231C; --accent-contrast: #1A120C;
+    --st-idea: #B4AB9B; --st-idea-bg: #24272E;
+    --st-plan: #9CB8E8; --st-plan-bg: #1B2534;
+    --st-book: #E0A542; --st-book-bg: #2E2717;
+    --st-conf: #63C48D; --st-conf-bg: #152A20;
+    --ok: #63C48D; --danger: #F0705A; --danger-bg: #331C18;
+    --shadow-float: 0 8px 26px -12px rgba(0, 0, 0, .7);
+  }
+}
