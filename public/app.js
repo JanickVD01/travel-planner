@@ -132,7 +132,16 @@ async function loadTrip(slug) {
   const trip = trips.find(t => t.slug === slug) || null;
   let steps = [];
   try { const d = await api("steps/" + encodeURIComponent(slug) + "/flow"); steps = (d && d.rows) || []; } catch {}
-  state.trip[slug] = { trip, steps };
+  let activities = [];
+  try { const d = await api("activities/" + encodeURIComponent(slug) + "/activities"); activities = (d && d.rows) || []; } catch {}
+  // Group live activities under their parent step; anything whose step_id matches no live step is "unassigned".
+  const liveStepIds = new Set(steps.filter(s => !s.deleted).map(s => s.id));
+  const byStep = {}, unassigned = [];
+  activities.filter(a => !a.deleted).forEach(a => {
+    if (liveStepIds.has(a.step_id)) (byStep[a.step_id] = byStep[a.step_id] || []).push(a);
+    else unassigned.push(a);
+  });
+  state.trip[slug] = { trip, steps, activities, byStep, unassigned };
   return state.trip[slug];
 }
 function invalidateTrip(slug) { delete state.trip[slug]; }
@@ -256,7 +265,32 @@ async function viewHome() {
   view().innerHTML = '<div class="panel"><h1>' + esc(title) + "</h1>" + body + "</div>";
 }
 
-function stepCardHTML(s, rate) {
+// A compact activity sub-card nested under its parent stay. cost_actual + booking_status are
+// inline-editable (entity/list = activities); everything is esc'd; reuses money/eurEquiv/mapsUrl.
+function activityCardHTML(a, rate) {
+  const st = a.booking_status || "Idea";
+  const chip = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
+    { entity: "activities", list: "activities", id: a.id, field: "booking_status", input: "select", value: st, options: "Idea|Planned|Booked|Confirmed" });
+  const estHTML = (a.cost_est != null && a.cost_est !== "")
+    ? '<span class="cost mono est muted">est ' + esc(money(a.cost_est, a.cost_ccy)) + "</span>" : "";
+  const act = a.cost_actual;
+  const actDisplay = (act != null && act !== "")
+    ? '<span class="cost mono">' + esc(money(act, a.cost_ccy)) +
+      (eurEquiv(act, a.cost_ccy, rate) ? ' <span class="muted">' + esc(eurEquiv(act, a.cost_ccy, rate)) + "</span>" : "") + "</span>"
+    : '<span class="add-actual">+ actual</span>';
+  const actHTML = editable(actDisplay, { entity: "activities", list: "activities", id: a.id, field: "cost_actual", input: "decimal", value: act });
+  const flag = a.needs_advance === "yes" ? '<span class="flag">' + icon("link") + "book ahead</span>" : "";
+  const mu = mapsUrl(a);
+  const maplink = mu ? '<a class="maplink" href="' + esc(mu) + '" target="_blank" rel="noopener">' + icon("pin") + "Map</a>" : "";
+  return '<li class="activity">' +
+    '<span class="sub-marker" aria-hidden="true"></span>' +
+    '<div class="act-card">' +
+      '<div class="act-head"><span class="act-title">' + esc(a.title || a.location) + "</span>" + chip + flag + "</div>" +
+      '<div class="act-meta">' + estHTML + actHTML + maplink + "</div>" +
+    "</div></li>";
+}
+
+function stepCardHTML(s, rate, acts) {
   const st = s.booking_status || "Idea";
   const chip = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
     { entity: "steps", list: "flow", id: s.id, field: "booking_status", input: "select", value: st, options: "Idea|Planned|Booked|Confirmed" });
@@ -288,32 +322,40 @@ function stepCardHTML(s, rate) {
       "</div></li>";
   }
   const nights = (s.arrive && s.depart) ? '<span class="muted mono">' + esc(fmtDate(s.arrive)) + " → " + esc(fmtDate(s.depart)) + "</span>" : "";
+  const actsHTML = (acts && acts.length)
+    ? '<ul class="acts">' + acts.map(a => activityCardHTML(a, rate)).join("") + "</ul>" : "";
   return '<li class="step stay">' +
     '<span class="marker stay" aria-hidden="true"></span>' +
     '<div class="step-card">' +
       '<div class="step-head">' + icon("stay", "step-kind") + '<span class="step-title">' + esc(s.title || s.location) + "</span>" + chip + "</div>" +
       '<div class="step-sub">' + nights + (s.accom_name ? ' <span>· ' + esc(s.accom_name) + "</span>" : "") + "</div>" +
       '<div class="step-meta">' + costHTML + maplink + booklink + "</div>" +
+      actsHTML +
     "</div></li>";
 }
 
 async function viewTimeline(slug) {
   markActive(null);
   view().innerHTML = '<div class="panel"><p class="muted">Loading trip…</p></div>';
-  const { trip, steps } = await loadTrip(slug);
+  const { trip, steps, byStep, unassigned } = await loadTrip(slug);
   if (!trip) { view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
   const rate = trip.thb_per_eur;
   const title = trip.title || slug;
   const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
   const hint = '<p class="tl-hint muted">Tap a cost or status to edit it inline. To add or reorder steps, ask Claude.</p>';
   const body = steps.length
-    ? '<ol class="tl">' + steps.map(s => stepCardHTML(s, rate)).join("") + "</ol>"
+    ? '<ol class="tl">' + steps.map(s => stepCardHTML(s, rate, byStep[s.id])).join("") + "</ol>"
     : '<p class="muted">No steps yet. Ask Claude to add a stay or a travel leg.</p>';
+  // Activities whose parent step no longer exists get their own group so they're never dropped.
+  const unassignedHTML = (unassigned && unassigned.length)
+    ? '<section class="unassigned"><h2 class="unassigned-title">Unassigned</h2>' +
+      '<ul class="acts acts-loose">' + unassigned.map(a => activityCardHTML(a, rate)).join("") + "</ul></section>"
+    : "";
   view().innerHTML =
     '<div class="trip-hero"><a class="back" href="#/">' + icon("pin") + "All trips</a>" +
       "<h1>" + esc(title) + "</h1>" + (range ? '<div class="muted mono">' + esc(range) + "</div>" : "") +
       (trip && trip.note ? '<div class="muted">' + esc(trip.note) + "</div>" : "") + "</div>" +
-    '<div class="panel tl-panel">' + hint + body + "</div>";
+    '<div class="panel tl-panel">' + hint + body + unassignedHTML + "</div>";
   // signature entrance: stagger the markers in (reduced-motion + no-anime safe).
   motion(a => a.animate(".tl .step", { opacity: [0, 1], translateY: [8, 0], delay: a.stagger(45), duration: 380, ease: "out(3)" }));
 }

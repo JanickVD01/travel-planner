@@ -7,7 +7,9 @@ import { z } from "zod";
 import {
   ServiceError, listEntries, createEntry, patchEntry, deleteEntry,
   listTrips, createTrip, patchTrip, tripBySlug,
-  listSteps, createStep, patchStep, deleteStep, restoreStep, addStay, addTravel
+  listSteps, createStep, patchStep, deleteStep, restoreStep, addStay, addTravel,
+  listActivities, createActivity, patchActivity, deleteActivity, restoreActivity,
+  setCoordinate, setBooking, tripOverview
 } from "../../shared/core.js";
 
 const SPACE = z.string().default("home").describe("Which trip/space, e.g. 'tokyo-2026'");
@@ -25,6 +27,16 @@ const STEP_FIELDS = {
   arrive: z.string().optional().describe("ISO YYYY-MM-DD"), arrive_time: z.string().optional().describe("HH:MM"),
   depart: z.string().optional().describe("ISO YYYY-MM-DD"), depart_time: z.string().optional().describe("HH:MM"),
   accom_name: z.string().optional(), transport: TRANSPORT.optional(), carrier: z.string().optional(),
+  cost_est: z.number().optional(), cost_actual: z.number().optional(), cost_ccy: CCY.optional(),
+  booking_status: BOOKING.optional(), booking_url: z.string().optional(), note: z.string().optional()
+};
+const TARGET = z.enum(["step", "activity"]).describe("Which entity: a timeline 'step' or an 'activity'");
+// Reusable optional activity fields (used by add_activity / edit_activity).
+const ACTIVITY_FIELDS = {
+  location: z.string().optional(), map_url: z.string().optional(),
+  lat: z.number().optional(), lng: z.number().optional(),
+  day: z.string().optional().describe("ISO YYYY-MM-DD"),
+  needs_advance: z.enum(["yes", "no"]).optional().describe("Book/reserve ahead?"),
   cost_est: z.number().optional(), cost_actual: z.number().optional(), cost_ccy: CCY.optional(),
   booking_status: BOOKING.optional(), booking_url: z.string().optional(), note: z.string().optional()
 };
@@ -101,5 +113,39 @@ export class AppMCP extends McpAgent {
     this.server.registerTool("restore_step",
       { description: "Restore a soft-deleted step by id.", inputSchema: { slug: SLUG, id: z.string() } },
       (a) => self.run(() => restoreStep(env, { space: a.slug, list: "flow", id: a.id }, self.actor)));
+
+    // ---- activities (things to do, hung off a step) ----
+    this.server.registerTool("list_activities",
+      { description: "List a trip's activities, optionally only those for one step.", inputSchema: { slug: SLUG, step_id: z.string().optional().describe("Filter to this parent step id") } },
+      (a) => self.run(async () => {
+        const r = await listActivities(env, { space: a.slug, list: "activities" }, self.actor);
+        return a.step_id ? { rows: r.rows.filter(x => x.step_id === a.step_id) } : r;
+      }));
+    this.server.registerTool("add_activity",
+      { description: "Add an activity under a step (by step_id) on a trip.", inputSchema: Object.assign({ slug: SLUG, step_id: z.string(), title: z.string() }, ACTIVITY_FIELDS) },
+      (a) => self.run(() => createActivity(env, Object.assign({}, a, { space: a.slug, list: "activities" }), self.actor)));
+    this.server.registerTool("edit_activity",
+      { description: "Edit an activity by id (any field, incl. step_id to re-parent and sort_order to reorder).", inputSchema: Object.assign({ slug: SLUG, id: z.string(), step_id: z.string().optional(), title: z.string().optional(), sort_order: z.number().optional() }, ACTIVITY_FIELDS) },
+      (a) => self.run(() => patchActivity(env, Object.assign({}, a, { space: a.slug, list: "activities" }), self.actor)));
+    this.server.registerTool("delete_activity",
+      { description: "Delete an activity by id (soft-delete; recoverable via restore_activity).", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => deleteActivity(env, { space: a.slug, list: "activities", id: a.id }, self.actor)));
+    this.server.registerTool("restore_activity",
+      { description: "Restore a soft-deleted activity by id.", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => restoreActivity(env, { space: a.slug, list: "activities", id: a.id }, self.actor)));
+    this.server.registerTool("list_deleted_activities",
+      { description: "List a trip's soft-deleted (trashed) activities.", inputSchema: { slug: SLUG } },
+      (a) => self.run(() => listActivities(env, { space: a.slug, list: "activities", trash: true }, self.actor)));
+
+    // ---- cross-entity routers + overview ----
+    this.server.registerTool("set_coordinate",
+      { description: "Set the lat/lng of a step or an activity by id.", inputSchema: { slug: SLUG, target: TARGET, id: z.string(), lat: z.number(), lng: z.number() } },
+      (a) => self.run(() => setCoordinate(env, { target: a.target, space: a.slug, list: a.target === "step" ? "flow" : "activities", id: a.id, lat: a.lat, lng: a.lng }, self.actor)));
+    this.server.registerTool("set_booking",
+      { description: "Set the booking status (and optional URL) of a step or an activity by id.", inputSchema: { slug: SLUG, target: TARGET, id: z.string(), booking_status: BOOKING, booking_url: z.string().optional() } },
+      (a) => self.run(() => setBooking(env, { target: a.target, space: a.slug, list: a.target === "step" ? "flow" : "activities", id: a.id, booking_status: a.booking_status, booking_url: a.booking_url }, self.actor)));
+    this.server.registerTool("get_trip_overview",
+      { description: "Read-only trip snapshot: config, steps in order, activities grouped by step, and unassigned activities. Each row carries maps_url + eur.", inputSchema: { slug: SLUG } },
+      (a) => self.run(() => tripOverview(env, { space: a.slug }, self.actor)));
   }
 }
