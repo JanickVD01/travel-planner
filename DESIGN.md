@@ -287,14 +287,26 @@ system font, emoji brand mark — all addressed by Phases 1–4.
 
 ## 12. Decision log
 
-Records the locked inputs now; the **final visual decision** is appended in Phase 2 after the phone
-review of the three directions.
+Records the locked brand inputs and the final visual decision.
 
 - **2026-07-08 — Brand inputs locked (Phase 0 interview).** Adjectives: *Crisp & precise* + *Warm &
   editorial*. Reference apps: *Airbnb* + *Polarsteps*. Density: *Balanced*. Theme: *Light-primary*
   (flips the scaffold's dark default). Mobile-first (Android Chrome + iOS Safari). Font shortlist +
   guardrails + token thesis established via a verified research sweep.
-- **_(Phase 2 — pending)_ Chosen direction/synthesis, final font pairing, pinned accent hue + full
-  palette, and explicit rejects** to be recorded here after the mockup review. `public/design/**`
-  mockups are throwaway and never merge to `main`; this log + `tokens.css` are the durable record.
+- **2026-07-08 — Direction chosen (Phase 1 phone review).** Of the three throwaway mockups (PR #6),
+  **Direction C "Transit Line"** won — the metro/route-schematic look. Feedback: the mockups were
+  *too busy at first glance*, so the real product adopts **progressive disclosure** (compact cards,
+  detail-on-tap). **Pinned type:** display **Space Grotesk**, body/UI **Instrument Sans**, data/mono
+  **Spline Sans Mono** (all Fontsource variable, OFL). **Pinned palette:** warm light-primary — warm
+  near-white ground (~`#FCFCFA`), warm near-black ink, ONE warm coral signature accent (~`#DE5C43`,
+  OKLCH-ramped, finalized during the `tokens.css` build), transit mode-hues (rail/flight/ferry/road)
+  used sparingly + functionally, status hues green/amber/slate/grey, warm-charcoal dark alternate
+  (~`#0E0F12`). **Rejected:** A "Gate & Stub", B "Field Notes". `public/design/**` mockups are
+  throwaway (never merged); this log + `tokens.css` are the durable record.
+- **2026-07-08 — Feature scope for the build.** Separate pages (Timeline/Budget/Packing/Activity/Trash)
+  via same-document View Transitions; a packing list (shared/individual items + owner filter) replaces
+  the to-do checklist; one map coordinate per step + per activity (link-out); multiple captioned
+  screenshots per step/activity (Workers KV); booking-status chips on steps + activities (no separate
+  to-book view); soft-delete + trash. Full plan & milestones:
+  [`docs/implementations/0003-feature-expansion.md`](docs/implementations/0003-feature-expansion.md).
 

@@ -19,6 +19,7 @@ MCP server, all fronted by Cloudflare Access and shipped through a hardened GitH
 | Demo-mode switch (mock only when `!DB && DEMO_API=1`) | `functions/api/_middleware.js`, `functions/api/_mock.js` |
 | SPA shell / router / markdown wiki | `public/index.html`, `public/app.js`, `public/styles.css` |
 | Design language / taste contract (brand, fonts, palette, tokens thesis) — **read before any UI change** | `DESIGN.md` |
+| Implementation history — one numbered record per effort (plan · decisions · outcome) | `docs/implementations/` |
 | App metadata, releases, wiki content | `public/data/**` |
 | D1 schema (idempotent) | `schema.sql` |
 | One-off ALTERs | `migrations/NNN_*.sql` |
