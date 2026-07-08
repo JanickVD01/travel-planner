@@ -25,6 +25,19 @@ async function api(path, opts) {                 // live — for /api/* (never c
   return body;
 }
 
+// ---- motion / view-transition helpers --------------------------------------
+function prefersReducedMotion() { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } }
+// Wrap a DOM-updating render in a View Transition when supported + motion allowed; else render directly.
+function vt(render) {
+  if (typeof document.startViewTransition !== "function" || prefersReducedMotion()) return render();
+  try { return document.startViewTransition(render); } catch { return render(); }
+}
+// Run an anime.js-driven animation only when the lib is present and motion is allowed; no-op otherwise.
+function motion(run) {
+  if (prefersReducedMotion() || !window.anime) return;
+  try { run(window.anime); } catch {}
+}
+
 // ---- self-contained markdown renderer (escapes raw HTML; no external lib) --
 function renderMarkdown(src) {
   const lines = String(src || "").replace(/\r\n?/g, "\n").split("\n");
@@ -176,7 +189,7 @@ function route() {
 function setTheme(t) { document.documentElement.setAttribute("data-theme", t); try { localStorage.setItem("app-theme", t); } catch {} }
 $("#theme-toggle").addEventListener("click", () => setTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light"));
 $("#menu-toggle").addEventListener("click", () => $("#side").classList.toggle("collapsed"));
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => vt(route));
 
 (async function boot() {
   try { state.app = await fetchJSON("data/app.json"); } catch { state.app = { title: "Travel Planner", lists: [] }; }

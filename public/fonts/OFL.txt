@@ -1,0 +1,6 @@
+Fonts self-hosted for the app UI (no CDN). All licensed under the SIL Open Font License 1.1
+(OFL-1.1), sourced from Fontsource npm variable packages (latin, weight axis):
+
+- Space Grotesk 5.2.10   — @fontsource-variable/space-grotesk    (display / headings)
+- Instrument Sans 5.2.8  — @fontsource-variable/instrument-sans   (body / UI)
+- Spline Sans Mono 5.2.8 — @fontsource-variable/spline-sans-mono  (data / times / costs)
