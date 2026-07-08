@@ -197,8 +197,9 @@ async function flatRestore(env, spec, args, actor) {
 // Hard delete forever (from trash). Snapshots the row; deletes KV bytes for kv-backed specs.
 async function flatPurge(env, spec, args, actor) {
   const { space, list, id } = args, now = new Date().toISOString();
-  const row = await env.DB.prepare("SELECT * FROM " + spec.table + " WHERE space=? AND list=? AND " + spec.idCol + "=?").bind(space, list, id).first();
-  if (!row) throw new ServiceError(404, "not found");
+  const cond = spec.soft ? " AND deleted IS NOT NULL" : "";   // purge only from trash for soft specs
+  const row = await env.DB.prepare("SELECT * FROM " + spec.table + " WHERE space=? AND list=? AND " + spec.idCol + "=?" + cond).bind(space, list, id).first();
+  if (!row) throw new ServiceError(404, spec.soft ? "not found in trash" : "not found");
   await env.DB.batch([
     env.DB.prepare("DELETE FROM " + spec.table + " WHERE space=? AND list=? AND " + spec.idCol + "=?").bind(space, list, id),
     auditStmt(env, spec, space, list, id, "purge", mapRow(spec, row), actor, now)
@@ -234,8 +235,14 @@ export const seedEntries   = (env, a, who) => flatSeed(env, FLAT_SPECS.entries, 
 
 // trips (registry + config).
 export const listTrips     = (env, a, who) => flatList(env, FLAT_SPECS.trips, a, who);
-export const createTrip    = (env, a, who) => flatCreate(env, FLAT_SPECS.trips, a, who);
-export const patchTrip     = (env, a, who) => flatPatch(env, FLAT_SPECS.trips, a, who);
+// createTrip enforces slug uniqueness (slug is the space key of a trip's child rows).
+export async function createTrip(env, a, who) {
+  const slug = cleanSlug(a.slug != null && a.slug !== "" ? a.slug : a.title);
+  if (slug && await tripBySlug(env, slug)) throw new ServiceError(409, "a trip with slug '" + slug + "' already exists", "conflict");
+  return flatCreate(env, FLAT_SPECS.trips, Object.assign({}, a, { slug }), who);
+}
+// slug is immutable after create (renaming would orphan child rows scoped by the old slug).
+export const patchTrip     = (env, a, who) => { const { slug, ...rest } = a; return flatPatch(env, FLAT_SPECS.trips, rest, who); };
 export const deleteTrip    = (env, a, who) => flatDelete(env, FLAT_SPECS.trips, a, who);
 export const restoreTrip   = (env, a, who) => flatRestore(env, FLAT_SPECS.trips, a, who);
 export const purgeTrip     = (env, a, who) => flatPurge(env, FLAT_SPECS.trips, a, who);
@@ -260,8 +267,8 @@ export function addStay(env, a, who) {
   const place = a.place || a.location || a.title || "Stay";
   let depart = a.depart || null;
   if (!depart && a.arrive && Number.isFinite(Number(a.nights))) {
-    const d = new Date(a.arrive + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + Number(a.nights));
-    depart = d.toISOString().slice(0, 10);
+    const d = new Date(a.arrive + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + Math.trunc(Number(a.nights)));
+    if (!isNaN(d.getTime())) depart = d.toISOString().slice(0, 10);   // bad arrive -> leave depart null, don't throw
   }
   return createStep(env, Object.assign({}, a, { kind: "stay", title: a.title || place, location: place, depart }), who);
 }

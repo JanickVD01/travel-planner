@@ -7,7 +7,7 @@ import { z } from "zod";
 import {
   ServiceError, listEntries, createEntry, patchEntry, deleteEntry,
   listTrips, createTrip, patchTrip, tripBySlug,
-  listSteps, createStep, patchStep, deleteStep, addStay, addTravel
+  listSteps, createStep, patchStep, deleteStep, restoreStep, addStay, addTravel
 } from "../../shared/core.js";
 
 const SPACE = z.string().default("home").describe("Which trip/space, e.g. 'tokyo-2026'");
@@ -93,7 +93,13 @@ export class AppMCP extends McpAgent {
       { description: "Edit a step by id (any field, incl. sort_order to reorder).", inputSchema: Object.assign({ slug: SLUG, id: z.string(), kind: KIND.optional(), title: z.string().optional(), sort_order: z.number().optional() }, STEP_FIELDS) },
       (a) => self.run(() => patchStep(env, Object.assign({}, a, { space: a.slug, list: "flow" }), self.actor)));
     this.server.registerTool("delete_step",
-      { description: "Delete a step by id (soft-delete; recoverable).", inputSchema: { slug: SLUG, id: z.string() } },
+      { description: "Delete a step by id (soft-delete; recoverable via restore_step).", inputSchema: { slug: SLUG, id: z.string() } },
       (a) => self.run(() => deleteStep(env, { space: a.slug, list: "flow", id: a.id }, self.actor)));
+    this.server.registerTool("list_deleted_steps",
+      { description: "List a trip's soft-deleted (trashed) steps.", inputSchema: { slug: SLUG } },
+      (a) => self.run(() => listSteps(env, { space: a.slug, list: "flow", trash: true }, self.actor)));
+    this.server.registerTool("restore_step",
+      { description: "Restore a soft-deleted step by id.", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => restoreStep(env, { space: a.slug, list: "flow", id: a.id }, self.actor)));
   }
 }

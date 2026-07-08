@@ -45,7 +45,8 @@ const ICONS = {
   bus:   '<rect x="4" y="5" width="16" height="11.5" rx="3"/><path d="M4 11.5h16M7.5 20.5v-2M16.5 20.5v-2"/><circle cx="8" cy="14" r="1"/><circle cx="16" cy="14" r="1"/>',
   car:   '<path d="M5 13.5 6.4 9A2 2 0 0 1 8.3 7.6h7.4A2 2 0 0 1 17.6 9L19 13.5V18h-2.5M5 18v-4.5M5 18h2.5"/><circle cx="8" cy="17.5" r="1.6"/><circle cx="16" cy="17.5" r="1.6"/>',
   stay:  '<path d="M3.5 20.5V9L12 4l8.5 5v11.5M3.5 20.5h17M9.5 20.5v-5h5v5"/>',
-  pin:   '<path d="M12 21.5s6.5-6 6.5-10.5a6.5 6.5 0 0 0-13 0C5.5 15.5 12 21.5 12 21.5z"/><circle cx="12" cy="11" r="2.3"/>'
+  pin:   '<path d="M12 21.5s6.5-6 6.5-10.5a6.5 6.5 0 0 0-13 0C5.5 15.5 12 21.5 12 21.5z"/><circle cx="12" cy="11" r="2.3"/>',
+  link:  '<path d="M9 15l6-6M10.5 6.5 12 5a4 4 0 0 1 6 6l-2 2M13.5 17.5 12 19a4 4 0 0 1-6-6l2-2"/>'
 };
 function icon(name, cls) {
   const p = ICONS[name] || ICONS.pin;
@@ -59,13 +60,17 @@ function money(amt, ccy) {
   return ccy === "EUR" ? ("€" + n.toFixed(2)) : ("฿" + Math.round(n).toLocaleString("en-US"));
 }
 function eurEquiv(amt, ccy, rate) {
-  if (amt == null || amt === "" || ccy === "EUR" || !rate) return ""; const n = Number(amt); if (!isFinite(n)) return "";
-  return "≈ €" + (n / Number(rate)).toFixed(2);
+  const r = Number(rate);
+  if (amt == null || amt === "" || ccy === "EUR" || !isFinite(r) || r <= 0) return "";
+  const n = Number(amt); if (!isFinite(n)) return "";
+  return "≈ €" + (n / r).toFixed(2);
 }
+// Only http(s) URLs may be rendered into an href (esc() does NOT neutralize a javascript:/data: scheme).
+function safeUrl(u) { return /^https?:\/\//i.test(String(u == null ? "" : u)) ? String(u) : ""; }
 function mapsUrl(row) {
   if (row.lat != null && row.lat !== "" && row.lng != null && row.lng !== "")
     return "https://www.openstreetmap.org/?mlat=" + encodeURIComponent(row.lat) + "&mlon=" + encodeURIComponent(row.lng) + "#map=12/" + encodeURIComponent(row.lat) + "/" + encodeURIComponent(row.lng);
-  return row.map_url || "";
+  return safeUrl(row.map_url);
 }
 function fmtDate(d) { if (!d) return ""; const p = String(d).split("-"); if (p.length !== 3) return String(d);
   const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return (+p[2]) + " " + (m[(+p[1]) - 1] || p[1]); }
@@ -153,7 +158,7 @@ async function viewHome() {
     body = '<p class="muted">No trips yet. Ask Claude to create one — e.g. <em>"Start a Thailand trip, 21 days, €2000, 39 baht to the euro."</em></p>';
   } else {
     body = '<div class="cards">' + trips.map(t => {
-      const range = (t.start_date || t.end_date) ? (fmtDate(t.start_date) + " – " + fmtDate(t.end_date)) : "";
+      const range = [fmtDate(t.start_date), fmtDate(t.end_date)].filter(Boolean).join(" – ");
       return '<a class="card trip-card" href="#/trip/' + esc(t.slug) + '">' +
         '<div class="row-title">' + esc(t.title || t.slug) + "</div>" +
         (range ? '<div class="row-note mono">' + esc(range) + "</div>" : "") +
@@ -172,6 +177,8 @@ function stepCardHTML(s, rate) {
     : "";
   const mu = mapsUrl(s);
   const maplink = mu ? '<a class="maplink" href="' + esc(mu) + '" target="_blank" rel="noopener">' + icon("pin") + "Map</a>" : "";
+  const bl = safeUrl(s.booking_url);
+  const booklink = bl ? '<a class="maplink" href="' + esc(bl) + '" target="_blank" rel="noopener">' + icon("link") + "Booking</a>" : "";
 
   if (s.kind === "travel") {
     const mode = MODE_ICON[s.transport] || "plane";
@@ -182,7 +189,7 @@ function stepCardHTML(s, rate) {
         '<div class="leg-top"><span class="leg-title">' + esc(s.title || s.location) + "</span>" + chip + "</div>" +
         '<div class="leg-sub">' + (s.carrier ? '<span class="mono">' + esc(s.carrier) + "</span>" : "") +
           (when ? ' <span class="muted mono">' + when + "</span>" : "") + "</div>" +
-        '<div class="step-meta">' + costHTML + maplink + "</div>" +
+        '<div class="step-meta">' + costHTML + maplink + booklink + "</div>" +
       "</div></li>";
   }
   const nights = (s.arrive && s.depart) ? '<span class="muted mono">' + esc(fmtDate(s.arrive)) + " → " + esc(fmtDate(s.depart)) + "</span>" : "";
@@ -191,7 +198,7 @@ function stepCardHTML(s, rate) {
     '<div class="step-card">' +
       '<div class="step-head">' + icon("stay", "step-kind") + '<span class="step-title">' + esc(s.title || s.location) + "</span>" + chip + "</div>" +
       '<div class="step-sub">' + nights + (s.accom_name ? ' <span>· ' + esc(s.accom_name) + "</span>" : "") + "</div>" +
-      '<div class="step-meta">' + costHTML + maplink + "</div>" +
+      '<div class="step-meta">' + costHTML + maplink + booklink + "</div>" +
     "</div></li>";
 }
 
@@ -199,11 +206,11 @@ async function viewTimeline(slug) {
   markActive(null);
   view().innerHTML = '<div class="panel"><p class="muted">Loading trip…</p></div>';
   const { trip, steps } = await loadTrip(slug);
-  if (!trip && !steps.length) { view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
-  const rate = trip && trip.thb_per_eur;
-  const title = (trip && trip.title) || slug;
-  const range = trip && (trip.start_date || trip.end_date) ? (fmtDate(trip.start_date) + " – " + fmtDate(trip.end_date)) : "";
-  const hint = '<p class="tl-hint muted">Tap a value to edit. To add or reorder steps, ask Claude.</p>';
+  if (!trip) { view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
+  const rate = trip.thb_per_eur;
+  const title = trip.title || slug;
+  const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
+  const hint = '<p class="tl-hint muted">Read-only timeline. To add, edit, or reorder steps, ask Claude.</p>';
   const body = steps.length
     ? '<ol class="tl">' + steps.map(s => stepCardHTML(s, rate)).join("") + "</ol>"
     : '<p class="muted">No steps yet. Ask Claude to add a stay or a travel leg.</p>';
