@@ -1,0 +1,8 @@
+Fonts vendored for the Phase-1 design mockups (public/design/ — THROWAWAY, not shipped to main).
+All faces licensed under the SIL Open Font License 1.1 (OFL-1.1). Sourced from Fontsource npm tarballs.
+
+- Fraunces 5.2.9            — @fontsource-variable/fraunces           (latin, wght+opsz)
+- Instrument Sans 5.2.8     — @fontsource-variable/instrument-sans    (latin, wght)
+- Bricolage Grotesque 5.2.10 — @fontsource-variable/bricolage-grotesque (latin, wght)
+- Space Grotesk 5.2.10      — @fontsource-variable/space-grotesk      (latin, wght)
+- Spline Sans Mono 5.2.8    — @fontsource-variable/spline-sans-mono   (latin, wght)

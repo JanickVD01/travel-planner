@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Travel Planner — Design Directions</title>
+<meta name="theme-color" content="#faf7f1" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#17130e" media="(prefers-color-scheme: dark)" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="fonts/fraunces.woff2" />
+<style>
+  @font-face{font-family:'Fraunces';font-weight:100 900;font-style:normal;font-display:swap;src:url('fonts/fraunces.woff2') format('woff2')}
+  @font-face{font-family:'Instrument Sans';font-weight:100 900;font-style:normal;font-display:swap;src:url('fonts/instrument-sans.woff2') format('woff2')}
+  @font-face{font-family:'Spline Sans Mono';font-weight:300 700;font-style:normal;font-display:swap;src:url('fonts/spline-sans-mono.woff2') format('woff2')}
+
+  :root{
+    --paper:#faf7f1; --card:#fffdf9; --ink:#231d16; --ink-2:#6b6154; --ink-3:#938779;
+    --border:#e7ded0; --border-2:#d8ccb8; --accent:#c25a34; --accent-ink:#fff;
+    --shadow:0 1px 2px rgba(60,42,20,.05), 0 12px 30px -18px rgba(60,42,20,.28);
+    --r:18px; --r-sm:11px;
+    --font-display:'Fraunces',Georgia,serif;
+    --font-text:'Instrument Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --font-mono:'Spline Sans Mono',ui-monospace,Menlo,Consolas,monospace;
+  }
+  :root[data-theme="dark"]{
+    --paper:#17130e; --card:#211b14; --ink:#f2ebe0; --ink-2:#b7ab9a; --ink-3:#8b8072;
+    --border:#332a20; --border-2:#3f3527; --accent:#e8794f; --accent-ink:#1a120c;
+    --shadow:none;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#17130e; --card:#211b14; --ink:#f2ebe0; --ink-2:#b7ab9a; --ink-3:#8b8072;
+      --border:#332a20; --border-2:#3f3527; --accent:#e8794f; --accent-ink:#1a120c; --shadow:none;
+    }
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:var(--font-text); font-optical-sizing:auto; line-height:1.5;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    padding:max(20px,env(safe-area-inset-top)) clamp(16px,5vw,28px) 48px;
+  }
+  .wrap{max-width:760px;margin:0 auto}
+
+  header{display:flex;align-items:flex-start;gap:14px;padding:14px 0 8px}
+  .mark{
+    flex:0 0 auto;width:46px;height:46px;border-radius:13px;display:grid;place-items:center;
+    background:var(--accent);color:var(--accent-ink);
+  }
+  .mark svg{width:24px;height:24px}
+  h1{
+    font-family:var(--font-display); font-optical-sizing:auto;
+    font-weight:560; font-size:clamp(1.9rem,7vw,2.9rem); line-height:1.05;
+    letter-spacing:-.015em; margin:.1em 0 .1em;
+  }
+  h1 em{font-style:italic;color:var(--accent);font-weight:500}
+  .sub{color:var(--ink-2);font-size:1rem;max-width:52ch;margin:0}
+  .kicker{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 2px}
+
+  .note{
+    margin:20px 0 26px; padding:12px 14px; border:1px solid var(--border);
+    border-left:3px solid var(--accent); border-radius:var(--r-sm);
+    background:color-mix(in oklab,var(--accent) 6%, var(--card));
+    color:var(--ink-2); font-size:.9rem;
+  }
+  .note strong{color:var(--ink)}
+
+  .grid{display:grid;gap:16px}
+  a.card{
+    display:block; text-decoration:none; color:inherit;
+    background:var(--card); border:1px solid var(--border); border-radius:var(--r);
+    padding:20px; box-shadow:var(--shadow);
+    transition:transform .18s ease, border-color .18s ease;
+  }
+  a.card:focus-visible{outline:2.5px solid var(--accent);outline-offset:3px}
+  .card .top{display:flex;align-items:center;gap:13px;margin-bottom:12px}
+  .badge{
+    flex:0 0 auto;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+    font-family:var(--font-display);font-weight:600;font-size:1.35rem;
+    background:var(--paper);border:1px solid var(--border-2);color:var(--accent);
+  }
+  .name{font-family:var(--font-display);font-optical-sizing:auto;font-weight:560;font-size:1.4rem;letter-spacing:-.01em;line-height:1.1}
+  .vern{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.04em;color:var(--ink-3);margin-top:3px}
+  .thesis{margin:0 0 14px;color:var(--ink-2);font-size:.96rem}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .tag{font-size:.74rem;padding:4px 10px;border-radius:999px;border:1px solid var(--border-2);color:var(--ink-2);white-space:nowrap}
+  .go{margin-left:auto;display:inline-flex;align-items:center;gap:6px;color:var(--accent);font-weight:600;font-size:.92rem;min-height:44px}
+  .go svg{width:16px;height:16px}
+
+  footer{margin-top:32px;color:var(--ink-3);font-size:.82rem;text-align:center;font-family:var(--font-mono);letter-spacing:.02em}
+
+  .themetoggle{
+    position:fixed;top:max(12px,env(safe-area-inset-top));right:14px;
+    width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
+    background:var(--card);border:1px solid var(--border);color:var(--ink);cursor:pointer;
+  }
+  .themetoggle:focus-visible{outline:2.5px solid var(--accent);outline-offset:2px}
+  .themetoggle svg{width:20px;height:20px}
+
+  @media (prefers-reduced-motion: no-preference){
+    a.card:hover{transform:translateY(-2px);border-color:var(--border-2)}
+    .grid a.card{opacity:0;transform:translateY(10px);animation:rise .5s cubic-bezier(.2,.7,.2,1) forwards}
+    .grid a.card:nth-child(1){animation-delay:.05s}
+    .grid a.card:nth-child(2){animation-delay:.13s}
+    .grid a.card:nth-child(3){animation-delay:.21s}
+    @keyframes rise{to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+  <button class="themetoggle" id="tt" aria-label="Toggle light/dark theme" title="Toggle theme">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+  </button>
+
+  <div class="wrap">
+    <header>
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/><circle cx="12" cy="12" r="10"/></svg>
+      </span>
+      <div>
+        <p class="kicker">Travel Planner · Phase 1</p>
+        <h1>Three design <em>directions</em></h1>
+      </div>
+    </header>
+    <p class="sub">The same Thailand trip, drawn three ways. Open each on your phone, then tell me which to keep — or which pieces to mix.</p>
+
+    <div class="note">
+      <strong>How to review:</strong> these are throwaway mockups with fake demo content and no live data — they exist only to choose a visual direction. All three render an identical 21-day itinerary so it is a fair comparison. Not shipped to production.
+    </div>
+
+    <nav class="grid" aria-label="Design directions">
+      <a class="card" href="a.html">
+        <div class="top">
+          <span class="badge" aria-hidden="true">A</span>
+          <div><div class="name">Gate &amp; Stub</div><div class="vern">boarding-pass · ticket-stub</div></div>
+        </div>
+        <p class="thesis">Every step is a beautifully typeset travel document — a wallet of tickets, precise as a boarding pass, warm as a confirmation email.</p>
+        <div class="meta">
+          <span class="tag">~60% crisp</span><span class="tag">leans Airbnb</span>
+          <span class="go">View direction
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </span>
+        </div>
+      </a>
+
+      <a class="card" href="b.html">
+        <div class="top">
+          <span class="badge" aria-hidden="true">B</span>
+          <div><div class="name">Field Notes</div><div class="vern">field-notebook · travel journal</div></div>
+        </div>
+        <p class="thesis">The plan reads like a typeset travel journal — warm paper, an editorial serif, and a ruled structure make planning feel like stamping a notebook.</p>
+        <div class="meta">
+          <span class="tag">~70% warm</span><span class="tag">leans Polarsteps</span>
+          <span class="go">View direction
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </span>
+        </div>
+      </a>
+
+      <a class="card" href="c.html">
+        <div class="top">
+          <span class="badge" aria-hidden="true">C</span>
+          <div><div class="name">Transit Line</div><div class="vern">transit-map · route schematic</div></div>
+        </div>
+        <p class="thesis">The itinerary is a metro diagram read top-to-bottom — one continuous mode-coded line, precise and legend-driven, warmed by editorial station names.</p>
+        <div class="meta">
+          <span class="tag">~75% crisp</span><span class="tag">leans Polarsteps</span>
+          <span class="go">View direction
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </span>
+        </div>
+      </a>
+    </nav>
+
+    <footer>fonts self-hosted · fraunces · instrument sans · spline sans mono</footer>
+  </div>
+
+  <script>
+    (function(){
+      var tt=document.getElementById('tt');
+      try{var s=localStorage.getItem('design-theme'); if(s==='light'||s==='dark') document.documentElement.setAttribute('data-theme',s);}catch(e){}
+      tt.addEventListener('click',function(){
+        var cur=document.documentElement.getAttribute('data-theme');
+        if(!cur) cur=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+        var next=cur==='dark'?'light':'dark';
+        document.documentElement.setAttribute('data-theme',next);
+        try{localStorage.setItem('design-theme',next);}catch(e){}
+      });
+    })();
+  </script>
+</body>
+</html>
