@@ -9,7 +9,7 @@ import {
   listTrips, createTrip, patchTrip, tripBySlug,
   listSteps, createStep, patchStep, deleteStep, restoreStep, addStay, addTravel,
   listActivities, createActivity, patchActivity, deleteActivity, restoreActivity,
-  setCoordinate, setBooking, tripOverview
+  setCoordinate, setBooking, tripOverview, getBudget
 } from "../../shared/core.js";
 
 const SPACE = z.string().default("home").describe("Which trip/space, e.g. 'tokyo-2026'");
@@ -147,5 +147,8 @@ export class AppMCP extends McpAgent {
     this.server.registerTool("get_trip_overview",
       { description: "Read-only trip snapshot: config, steps in order, activities grouped by step, and unassigned activities. Each row carries maps_url + eur.", inputSchema: { slug: SLUG } },
       (a) => self.run(() => tripOverview(env, { space: a.slug }, self.actor)));
+    this.server.registerTool("get_budget",
+      { description: "Computed budget snapshot for a trip (all figures in EUR): totals, projected spend vs target, remaining/projected, pct, over-budget flag, and estimated by-category breakdown. 422 no_rate if the trip has no FX rate.", inputSchema: { slug: SLUG } },
+      (a) => self.run(() => getBudget(env, { space: a.slug }, self.actor)));
   }
 }

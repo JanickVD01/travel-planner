@@ -20,7 +20,11 @@ async function fetchJSON(path) {                 // cached — for static data/*
 async function api(path, opts) {                 // live — for /api/* (never cached)
   const r = await fetch("api/" + path, opts);
   let body = null; try { body = await r.json(); } catch {}
-  if (!r.ok) throw new Error((body && body.error) || (path + " -> " + r.status));
+  if (!r.ok) {
+    const e = new Error((body && body.error) || (path + " -> " + r.status));
+    e.status = r.status; e.code = body && body.code;   // surface HTTP status + app error code (e.g. no_rate)
+    throw e;
+  }
   return body;
 }
 
@@ -156,6 +160,7 @@ function editable(displayHTML, o) {
   return '<button type="button" class="editable"' +
     ' data-entity="' + esc(o.entity) + '"' +
     ' data-list="'   + esc(o.list)   + '"' +
+    (o.space ? ' data-space="' + esc(o.space) + '"' : "") +  // override the URL space (trips live at space='app', not the slug)
     ' data-id="'     + esc(o.id)     + '"' +
     ' data-field="'  + esc(o.field)  + '"' +
     ' data-input="'  + esc(o.input)  + '"' +
@@ -172,6 +177,7 @@ function openEditor(btn) {
   const slug = tripSlugFromHash();
   if (!slug) return;
   const d = btn.dataset, field = d.field, cur = d.value || "";
+  const pathSpace = d.space || slug;                  // trip-level fields patch under space='app'; child rows use the slug
   let ctrl;
   if (d.input === "select") {
     ctrl = document.createElement("select");
@@ -209,7 +215,7 @@ function openEditor(btn) {
     if (d.input === "decimal" && val !== "" && !isFinite(Number(val))) { revert("Not a number"); return; }
     settled = true; ctrl.disabled = true;                              // lock during write
     try {
-      await api(d.entity + "/" + encodeURIComponent(slug) + "/" + d.list + "/" + encodeURIComponent(d.id),
+      await api(d.entity + "/" + encodeURIComponent(pathSpace) + "/" + d.list + "/" + encodeURIComponent(d.id),
         { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ [field]: val }) });
       invalidateTrip(slug);
       vt(route);                                                       // full re-render with new value
@@ -344,6 +350,20 @@ function stepCardHTML(s, rate, acts, slug) {
     "</div></li>";
 }
 
+// Shared per-trip sub-nav: a sticky, horizontally-scrollable chip-tab row. Adding a tab (e.g. Packing
+// in M8) is a one-line push to `tabs`. `active` is the tab key; it gets aria-current="page".
+function renderSubnav(slug, active) {
+  const s = encodeURIComponent(slug);
+  const tabs = [
+    { key: "timeline", label: "Timeline", href: "#/trip/" + s },
+    { key: "budget",   label: "Budget",   href: "#/trip/" + s + "/budget" }
+    // M8: { key: "packing", label: "Packing", href: "#/trip/" + s + "/packing" }
+  ];
+  return '<nav class="subnav" aria-label="Trip sections">' +
+    tabs.map(t => '<a href="' + t.href + '"' + (t.key === active ? ' aria-current="page"' : "") +
+      ">" + esc(t.label) + "</a>").join("") + "</nav>";
+}
+
 async function viewTimeline(slug) {
   markActive(null);
   view().innerHTML = '<div class="panel"><p class="muted">Loading trip…</p></div>';
@@ -365,9 +385,120 @@ async function viewTimeline(slug) {
     '<div class="trip-hero"><a class="back" href="#/">' + icon("pin") + "All trips</a>" +
       "<h1>" + esc(title) + "</h1>" + (range ? '<div class="muted mono">' + esc(range) + "</div>" : "") +
       (trip && trip.note ? '<div class="muted">' + esc(trip.note) + "</div>" : "") + "</div>" +
+    renderSubnav(slug, "timeline") +
     '<div class="panel tl-panel">' + hint + body + unassignedHTML + "</div>";
   // signature entrance: stagger the markers in (reduced-motion + no-anime safe).
   motion(a => a.animate(".tl .step", { opacity: [0, 1], translateY: [8, 0], delay: a.stagger(45), duration: 380, ease: "out(3)" }));
+}
+
+// Budget view: authoritative EUR totals + a projected-vs-target meter + a category breakdown.
+// Every money value from /api/budget is already EUR, 2dp — render verbatim (money() just adds the €).
+async function viewBudget(slug) {
+  markActive(null);
+  view().innerHTML = '<div class="panel"><p class="muted">Loading budget…</p></div>';
+  const { trip } = await loadTrip(slug);
+  if (!trip) { view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
+
+  const title = trip.title || slug;
+  const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
+  const hero = '<div class="trip-hero"><a class="back" href="#/">' + icon("pin") + "All trips</a>" +
+    "<h1>" + esc(title) + "</h1>" + (range ? '<div class="muted mono">' + esc(range) + "</div>" : "") +
+    (trip.note ? '<div class="muted">' + esc(trip.note) + "</div>" : "") + "</div>";
+  const shell = hero + renderSubnav(slug, "budget");
+
+  // Trip-level inline edits — trips live at space='app', so pass space:"app" (see openEditor).
+  const rateV = trip.thb_per_eur;
+  const rateEd = editable((rateV != null && rateV !== "") ? esc(String(rateV)) : '<span class="add-actual">+ set rate</span>',
+    { entity: "trips", list: "trips", space: "app", id: trip.id, field: "thb_per_eur", input: "decimal", value: rateV });
+  const tgtV = trip.budget_target_eur;
+  const tgtEd = editable((tgtV != null && tgtV !== "") ? esc(money(tgtV, "EUR")) : '<span class="add-actual">+ set target</span>',
+    { entity: "trips", list: "trips", space: "app", id: trip.id, field: "budget_target_eur", input: "decimal", value: tgtV });
+
+  // Fetch authoritative totals. A trip with no FX rate returns 422 no_rate — show a friendly prompt.
+  let b = null, failCode = "", failMsg = "";
+  try { b = await api("budget/" + encodeURIComponent(slug)); }
+  catch (e) { failCode = e.code || ""; failMsg = e.message || ""; }
+
+  if (!b) {
+    const isNoRate = failCode === "no_rate" || /rate/i.test(failMsg);
+    const panel = isNoRate
+      ? '<div class="panel budget-norate">' +
+          "<h2>Set your exchange rate to see the budget</h2>" +
+          '<p class="muted">Estimates are stored in Thai baht. Enter how many baht equal one euro and the budget appears.</p>' +
+          '<div class="cfg-row"><span class="cfg-label">Exchange rate</span>' +
+            '<span class="cfg-val">' + rateEd + ' <span class="muted">฿ per €</span></span></div>' +
+        "</div>"
+      : '<div class="panel"><h2>Budget unavailable</h2><p class="muted">' + esc(failMsg || "Couldn’t load the budget.") + "</p></div>";
+    view().innerHTML = shell + panel;
+    return;
+  }
+
+  const homeC = b.home_ccy || "EUR";
+  const hasTarget = b.target != null && Number(b.target) > 0;
+
+  // ---- totals ----
+  const tile = (label, val, cls) => '<div class="stat' + (cls ? " " + cls : "") + '">' +
+    '<div class="stat-label">' + esc(label) + "</div><div class=\"stat-val mono\">" + esc(val) + "</div></div>";
+  const totals = '<div class="stats">' +
+    tile("Estimated", money(b.totalEst, homeC)) +
+    tile("Actual", money(b.totalActual, homeC)) +
+    (hasTarget ? tile("Remaining", money(b.remaining, homeC), Number(b.remaining) < 0 ? "neg" : "") : "") +
+    (hasTarget ? tile("Projected", money(b.projectedSpend, homeC), b.over ? "neg" : "") : "") +
+    "</div>";
+
+  // ---- projected-vs-target meter (fill width set in JS after insert; no inline style attr) ----
+  let meter = "";
+  if (hasTarget) {
+    const pct = b.pct == null ? 0 : b.pct;
+    const vtext = "Projected spend " + money(b.projectedSpend, homeC) + " of " + money(b.target, homeC) + " target (" + pct + "%)";
+    const cap = b.over
+      ? '<div class="meter-cap over">Over by ' + esc(money(Number(b.projectedSpend) - Number(b.target), homeC)) + "</div>"
+      : '<div class="meter-cap">' + esc(money(b.projected, homeC)) + " under target</div>";
+    meter = '<div class="meter-block">' +
+      '<div class="meter-top"><span class="meter-legend">Projected ' + esc(money(b.projectedSpend, homeC)) +
+        " / " + esc(money(b.target, homeC)) + '</span><span class="meter-pct' + (b.over ? " over" : "") + '">' +
+        esc(String(pct)) + "%</span></div>" +
+      '<div class="meter' + (b.over ? " over" : "") + '" role="meter" aria-valuemin="0" aria-valuemax="' +
+        esc(String(b.target)) + '" aria-valuenow="' + esc(String(b.projectedSpend)) + '" aria-valuetext="' + esc(vtext) + '">' +
+        '<div class="meter-fill" id="budget-meter-fill" data-pct="' + esc(String(Math.min(100, pct))) + '"></div>' +
+        '<div class="meter-mark" aria-hidden="true"></div>' +
+      "</div>" + cap + "</div>";
+  }
+
+  // ---- category breakdown (estimated EUR); bar widths set in JS after insert ----
+  const bc = b.byCategory || {};
+  const cats = [["Accommodation", Number(bc.accommodation) || 0], ["Transport", Number(bc.transport) || 0], ["Activities", Number(bc.activities) || 0]];
+  const maxCat = Math.max.apply(null, cats.map(c => c[1]).concat([0])) || 1;
+  const denom = Number(b.totalEst) || cats.reduce((s, c) => s + c[1], 0) || 1;
+  const catbars = '<div class="catbars">' + cats.map(c => {
+    const w = Math.round(c[1] / maxCat * 100), share = Math.round(c[1] / denom * 100);
+    return '<div class="catbar"><div class="catbar-label">' + esc(c[0]) + "</div>" +
+      '<div class="catbar-track"><div class="catbar-fill" data-w="' + esc(String(w)) + '"></div></div>' +
+      '<div class="catbar-val mono">' + esc(money(c[1], homeC)) + ' <span class="muted">' + esc(String(share)) + "%</span></div></div>";
+  }).join("") + "</div>";
+
+  const config = '<div class="budget-config">' +
+    '<div class="cfg-row"><span class="cfg-label">Exchange rate</span>' +
+      '<span class="cfg-val">' + rateEd + ' <span class="muted">฿ per €</span></span></div>' +
+    '<div class="cfg-row"><span class="cfg-label">Budget target</span>' +
+      '<span class="cfg-val">' + tgtEd + "</span></div></div>";
+
+  view().innerHTML = shell +
+    '<div class="panel budget">' +
+      totals + meter +
+      '<h2 class="cat-h">Where it goes <span class="muted">(estimated)</span></h2>' + catbars +
+      config +
+    "</div>";
+
+  // Set base widths synchronously (must hold even with reduced motion / no anime), then animate.
+  const mf = document.getElementById("budget-meter-fill");
+  if (mf) { const w = Number(mf.dataset.pct) || 0; mf.style.width = w + "%"; }
+  const fills = Array.prototype.slice.call(document.querySelectorAll(".catbar-fill"));
+  fills.forEach(el => { el.style.width = (Number(el.dataset.w) || 0) + "%"; });
+  motion(an => {
+    if (mf) an.animate(mf, { width: ["0%", (Number(mf.dataset.pct) || 0) + "%"], duration: 640, ease: "out(3)" });
+    fills.forEach((el, i) => an.animate(el, { width: ["0%", (Number(el.dataset.w) || 0) + "%"], duration: 560, delay: 80 + i * 70, ease: "out(3)" }));
+  });
 }
 
 // Activity detail: a bottom-sheet-style view with an editable NOTES section. All values esc'd;
@@ -457,6 +588,7 @@ function route() {
   if (parts[0] === "whats-new") return viewWhatsNew();
   if (parts[0] === "trip" && parts[1]) {
     if (parts[2] === "activity" && parts[3]) return viewActivity(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
+    if (parts[2] === "budget") return viewBudget(decodeURIComponent(parts[1]));
     return viewTimeline(parts[1]);
   }
   return viewHome();

@@ -9,7 +9,8 @@
         "Home lists your trips; open one to see it as a vertical timeline of travel legs and stays.",
         "Each stay now shows its activities nested underneath, with 'book ahead' flags and map links.",
         "Tap any activity to open its details and jot notes — a scratchpad per activity, with its own map link.",
-        "Tap a step's or activity's actual cost or booking status to edit it inline; costs show in the entry currency with a euro equivalent."
+        "Tap a step's or activity's actual cost or booking status to edit it inline; costs show in the entry currency with a euro equivalent.",
+        "A Budget page totals everything in euros — estimated, actual, and projected vs your target — with a bar that turns red if you're heading over."
       ]
     },
     {
