@@ -34,6 +34,59 @@ CREATE TABLE IF NOT EXISTS entries_audit (
   at       TEXT NOT NULL
 );
 
+-- ===== Travel-planner entities (docs/implementations/0003). New tables => no migration;
+-- every content table carries `deleted` (ISO ts, NULL = live) so soft-delete needs no ALTER. =====
+
+-- trips: registry + trip-wide config. space='app', list='trips'; `slug` becomes the space of child rows.
+CREATE TABLE IF NOT EXISTS trips (
+  space TEXT NOT NULL, list TEXT NOT NULL, trip_id TEXT NOT NULL,
+  title             TEXT NOT NULL DEFAULT '',
+  slug              TEXT,
+  home_ccy          TEXT NOT NULL DEFAULT 'EUR',
+  thb_per_eur       TEXT,                        -- 1 EUR = N THB (~39); EUR = thb / rate
+  budget_target_eur TEXT,
+  start_date        TEXT, end_date TEXT,
+  note              TEXT,
+  deleted           TEXT,                         -- ISO timestamp; NULL = live
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT,
+  PRIMARY KEY (space, list, trip_id)
+);
+CREATE INDEX IF NOT EXISTS idx_trips ON trips (space, list, sort_order);
+CREATE TABLE IF NOT EXISTS trips_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, space TEXT NOT NULL, list TEXT NOT NULL, trip_id TEXT,
+  op TEXT NOT NULL,                               -- create|update|delete|restore|purge|seed
+  detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
+);
+
+-- steps: the vertical timeline. space=<slug>, list='flow'; kind = travel|stay; sort_order IS the order.
+CREATE TABLE IF NOT EXISTS steps (
+  space TEXT NOT NULL, list TEXT NOT NULL, step_id TEXT NOT NULL,
+  kind           TEXT NOT NULL DEFAULT 'stay',    -- travel | stay
+  title          TEXT NOT NULL DEFAULT '',
+  location       TEXT NOT NULL DEFAULT '',
+  map_url        TEXT,
+  lat            TEXT, lng TEXT,                   -- one central coordinate (link-out to maps)
+  arrive         TEXT, arrive_time TEXT,
+  depart         TEXT, depart_time TEXT,
+  accom_name     TEXT,
+  transport      TEXT, carrier TEXT,
+  cost_est       TEXT, cost_actual TEXT,
+  cost_ccy       TEXT NOT NULL DEFAULT 'THB',      -- governs both est & actual
+  booking_status TEXT NOT NULL DEFAULT 'Idea',     -- Idea|Planned|Booked|Confirmed
+  booking_url    TEXT,
+  note           TEXT,
+  deleted        TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT,
+  PRIMARY KEY (space, list, step_id)
+);
+CREATE INDEX IF NOT EXISTS idx_steps ON steps (space, list, sort_order);
+CREATE TABLE IF NOT EXISTS steps_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, space TEXT NOT NULL, list TEXT NOT NULL, step_id TEXT,
+  op TEXT NOT NULL, detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
+);
+
 -- OPTIONAL roles layer: who may edit, plus an audit. Super-admin comes from env (SUPER_ADMIN_EMAIL).
 CREATE TABLE IF NOT EXISTS role_members (
   role_key TEXT NOT NULL, email TEXT NOT NULL, added_by TEXT, added_at TEXT,

@@ -138,7 +138,7 @@ description (`what/why` · `What's New? y/n` · `migration none` · `worker rede
 |---|---|---|---|---|
 | **M1** | `content/plan-of-record` | Create **`docs/implementations/`** (README index + records `0001`/`0002` retrospectives + `0003` = this full plan) + commit the untracked spec docs; DESIGN.md **decision log** records Direction C + pinned fonts/palette + feature decisions; `CLAUDE.md` data map points to the folder | — | n |
 | **M2** | `code/design-foundation` | `public/tokens.css` (two-tier OKLCH, **light-primary** warm C palette), vendor fonts→`public/fonts/` + `public/vendor/anime.min.js`, restyle shell to the C skin, add `vt()`/`motion()` helpers, flip theme-boot default to light, home-screen meta | M1 | n |
-| **M3** | `code/trips-steps-timeline` | cleaners + **soft-delete engine** + `trips`/`steps` specs+wrappers + schema tables + routes + `_mock` Thailand seed + MCP (`get/set_trip`, `list/add/edit_step`, `add_stay`/`add_travel`) + Home cards + **read-only metro Timeline** (compact) | M2 | **y** |
+| **M3** | `code/trips-steps-timeline` | cleaners + **soft-delete engine** + `trips`/`steps` specs+wrappers + schema tables + routes + `_mock` Thailand seed + MCP (`get/set_trip`, `list/add/edit_step`, `add_stay`/`add_travel`) + Home cards + **read-only metro Timeline** (compact) + **drop the wiki feature** (nav/route/`viewWiki`/`public/data/wiki/`; keep What's New) | M2 | **y** |
 | **M4** | `code/inline-edit` | `editable()` + one delegated PATCH listener + `vt()` route nav; wire `cost_actual` → **the Phase-1 "done" criterion** | M3 | n |
 | **M5** | `code/activities` | `activities` spec (+coords) + `tripOverview` + `/api/overview` + `_mock` + MCP (activities CRUD, `reorder/move_step`, `set_booking`, `set_coordinate`, `get_trip_overview`) + nested activity sub-cards (progressive disclosure) | M4 | **y** |
 | **M6** | `code/activity-detail` | Activity detail view (`#/trip/<slug>/activity/<id>`, bottom-sheet on mobile) — editable **notes**, own map link, status; extend `editable()` whitelist | M5 | n |
@@ -200,7 +200,7 @@ M3–M10; Phase 6 (hardening) = M11–M12.
 ## Client architecture (`public/app.js`)
 
 **Routes** (introduce an explicit `trip` prefix; retire the placeholder `parts.length>=2 → viewList`):
-`#/` (Home cards), `#/whats-new`, `#/wiki/<slug>` (keep), `#/trip/<slug>` (Timeline, default),
+`#/` (Home cards), `#/whats-new` (keep; **wiki removed in M3**), `#/trip/<slug>` (Timeline, default),
 `#/trip/<slug>/budget`, `#/trip/<slug>/packing`, `#/trip/<slug>/activity/<id>`, `#/trip/<slug>/trash`.
 
 - **View Transitions:** `route()` resolves a view fn, renders through `vt(render)` =

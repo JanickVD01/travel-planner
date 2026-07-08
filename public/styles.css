@@ -132,3 +132,49 @@ a.card:hover { border-color: var(--accent); text-decoration: none; }
   .nav { position: static; flex-flow: row wrap; }
   .nav .section { width: 100%; }
 }
+
+/* ---- icons ---- */
+.ico { display: inline-block; vertical-align: -2px; flex: 0 0 auto; }
+
+/* ---- Home trip cards ---- */
+.trip-card { border-left: 3px solid var(--accent); }
+.trip-card .row-title { font-family: var(--f-disp); font-size: var(--text-lg); letter-spacing: -.01em; }
+
+/* ---- booking-status chips (product statuses) ---- */
+.chip.status-Idea      { color: var(--st-idea); background: var(--st-idea-bg); }
+.chip.status-Planned   { color: var(--st-plan); background: var(--st-plan-bg); }
+.chip.status-Booked    { color: var(--st-book); background: var(--st-book-bg); }
+.chip.status-Confirmed { color: var(--st-conf); background: var(--st-conf-bg); }
+
+/* ---- trip hero + timeline (Direction C "Transit Line") ---- */
+.trip-hero { margin: 0 0 var(--space-4); }
+.trip-hero .back { display: inline-flex; align-items: center; gap: 5px; min-height: 40px; font-size: var(--text-sm); color: var(--ink-2); }
+.trip-hero .back:hover { color: var(--accent-ink); text-decoration: none; }
+.trip-hero h1 { margin: 6px 0 2px; }
+
+.tl-panel { background: transparent; border: none; padding: 0; margin: 0; }
+.tl-hint { font-size: var(--text-sm); margin: 0 0 var(--space-4); }
+
+.tl { list-style: none; margin: 0; padding: 0; position: relative; }
+.tl::before { content: ""; position: absolute; left: var(--rail-x); top: 14px; bottom: 14px; width: 2px; background: var(--line-hair); }
+.step { position: relative; padding: 8px 0 8px calc(var(--rail-x) + 22px); }
+.marker { position: absolute; border-radius: 50%; background: var(--paper-0); box-shadow: 0 0 0 5px var(--paper-0); display: grid; place-items: center; }
+.marker.stay   { width: 15px; height: 15px; left: calc(var(--rail-x) - 6.5px); top: 17px; background: var(--accent); }
+.marker.travel { width: 26px; height: 26px; left: calc(var(--rail-x) - 13px); top: 11px; border: 2px solid var(--line-hair); color: var(--ink-2); }
+.marker.travel .ico { width: 14px; height: 14px; }
+
+.step-card { background: var(--paper-1); border: 1px solid var(--line-hair); border-radius: var(--radius); padding: 11px 14px; }
+.step-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.step-kind { color: var(--ink-2); }
+.step-title { font-family: var(--f-disp); font-weight: 600; font-size: var(--text-lg); letter-spacing: -.01em; }
+.step-sub { color: var(--ink-2); font-size: var(--text-sm); margin-top: 3px; }
+.step-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 8px; }
+
+.leg { padding: 3px 0; }
+.leg-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.leg-title { font-weight: 600; }
+.leg-sub { font-size: var(--text-sm); margin-top: 1px; color: var(--ink-2); }
+
+.cost { font-weight: 600; }
+.maplink { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; color: var(--accent-ink); font-size: var(--text-sm); }
+.maplink:hover { text-decoration: none; color: var(--accent); }
