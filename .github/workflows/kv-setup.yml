@@ -1,0 +1,33 @@
+name: kv-setup
+# THROWAWAY, one-shot. Creates (or finds) the IMAGES_KV namespace and prints its id so it can be
+# pasted into wrangler.jsonc. Never merged to main. Runs only on the kv-setup branch.
+on:
+  push:
+    branches: [kv-setup]
+  workflow_dispatch: {}
+
+jobs:
+  kv:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: List existing KV namespaces (id + title)
+        run: |
+          echo "=== existing namespaces ==="
+          npx --yes wrangler@4 kv namespace list || true
+
+      - name: Create IMAGES_KV (ok if it already exists)
+        run: |
+          echo "=== create IMAGES_KV ==="
+          npx --yes wrangler@4 kv namespace create IMAGES_KV || echo "(create failed or already exists — see list below)"
+
+      - name: List again so the id is easy to copy
+        run: |
+          echo "=== namespaces after create ==="
+          npx --yes wrangler@4 kv namespace list
