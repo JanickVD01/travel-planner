@@ -526,3 +526,59 @@ a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-u
 /* inline status / error line (503 not-configured, 413 too-large, 415 wrong-type, …) */
 .photo-msg { margin-top: var(--space-2); font-size: var(--text-sm); color: var(--danger); }
 .photos.compact .photo-msg { font-size: var(--text-xs); }
+
+/* ---- trash view (M10): restore / delete-forever for soft-deleted rows ---- */
+/* the quiet "Trash" affordance in the timeline hero — sits opposite the "All trips" back link */
+.hero-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.trash-link {
+  display: inline-flex; align-items: center; gap: 5px;
+  min-height: 40px; font-size: var(--text-sm); color: var(--ink-2);
+}
+.trash-link:hover { color: var(--accent-ink); text-decoration: none; }
+.trash-link .ico { width: 15px; height: 15px; }
+
+.trash-title-ico { display: inline-flex; vertical-align: -3px; margin-right: 7px; color: var(--ink-2); }
+.trash-title-ico .ico { width: 22px; height: 22px; }
+
+.trash-section { margin-bottom: var(--space-6); }
+.trash-section:last-child { margin-bottom: 0; }
+.trash-h {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: var(--text-sm); text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-2); font-family: var(--f-body); font-weight: 700;
+  margin: 0 0 var(--space-2); padding-bottom: 6px; border-bottom: 1px solid var(--line-hair);
+}
+.trash-count { font-size: var(--text-xs); opacity: .8; font-weight: 600; }
+.trash-empty { margin: var(--space-2) 0 0; }
+
+.trash-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.trash-item {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  padding: var(--space-2) 2px; border-bottom: 1px solid var(--line-hair);
+}
+.trash-item:last-child { border-bottom: none; }
+.trash-item-main { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.trash-item-title { font-weight: 600; color: var(--ink-1); word-break: break-word; }
+.trash-when { font-size: var(--text-xs); }
+
+.trash-actions { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-2); }
+.trash-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  min-height: 44px; padding: 0 14px; cursor: pointer;
+  font: inherit; font-size: var(--text-sm); font-weight: 600;
+  border-radius: var(--radius-sm); border: 1px solid var(--line-hair);
+}
+.trash-btn .ico { width: 15px; height: 15px; flex: 0 0 auto; }
+.trash-btn:disabled { opacity: .5; cursor: default; }
+.trash-btn.restore { color: var(--accent-ink); background: var(--paper-1); }
+.trash-btn.restore:hover { border-color: var(--accent); background: var(--paper-2); }
+.trash-btn.purge { color: var(--danger); background: var(--paper-1); }
+.trash-btn.purge:hover { border-color: var(--danger); background: var(--danger-bg); }
+
+.trash-allempty { padding: var(--space-4) 0; }
+.trash-allempty p { margin: 0 0 var(--space-2); }
+
+@media (max-width: 720px) {
+  .trash-actions { flex: 1 1 100%; }
+  .trash-btn { flex: 1 1 auto; justify-content: center; }
+}

@@ -52,7 +52,9 @@ const ICONS = {
   pin:   '<path d="M12 21.5s6.5-6 6.5-10.5a6.5 6.5 0 0 0-13 0C5.5 15.5 12 21.5 12 21.5z"/><circle cx="12" cy="11" r="2.3"/>',
   link:  '<path d="M9 15l6-6M10.5 6.5 12 5a4 4 0 0 1 6 6l-2 2M13.5 17.5 12 19a4 4 0 0 1-6-6l2-2"/>',
   check: '<path d="M5 12.5 10 17.5 19 6.5"/>',
-  image: '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="8.8" cy="10" r="1.5"/><path d="M4 17l4.3-4.3a1.8 1.8 0 0 1 2.5 0L15 17M13.5 14.2l1.6-1.6a1.8 1.8 0 0 1 2.5 0L20.5 14.2"/>'
+  image: '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="8.8" cy="10" r="1.5"/><path d="M4 17l4.3-4.3a1.8 1.8 0 0 1 2.5 0L15 17M13.5 14.2l1.6-1.6a1.8 1.8 0 0 1 2.5 0L20.5 14.2"/>',
+  trash: '<path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M6.5 7l.9 12.1a2 2 0 0 0 2 1.9h5.2a2 2 0 0 0 2-1.9L19.5 7M10 11v6M14 11v6"/>',
+  undo:  '<path d="M9 7 4.5 11.5 9 16M4.5 11.5H14a5 5 0 0 1 0 10h-2.5"/>'
 };
 function icon(name, cls) {
   const p = ICONS[name] || ICONS.pin;
@@ -82,6 +84,14 @@ function fmtDate(d) { if (!d) return ""; const p = String(d).split("-"); if (p.l
   const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return (+p[2]) + " " + (m[(+p[1]) - 1] || p[1]); }
 // A stable, CSS-ident-safe view-transition-name for an activity (shared by the timeline title + detail h1).
 function vtName(id) { return "act-" + String(id == null ? "" : id).replace(/[^A-Za-z0-9_-]/g, "-"); }
+// Format an ISO tombstone timestamp (the `deleted` column) into a short, human "9 Jul 2026, 14:05".
+function fmtDeleted(iso) {
+  if (!iso) return "";
+  const d = new Date(iso); if (isNaN(d.getTime())) return String(iso);
+  const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const pad = n => (n < 10 ? "0" + n : String(n));
+  return d.getDate() + " " + (m[d.getMonth()] || "") + " " + d.getFullYear() + ", " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
 
 // ---- self-contained markdown renderer (escapes raw HTML; no external lib) --
 function renderMarkdown(src) {
@@ -519,7 +529,10 @@ async function viewTimeline(slug) {
       '<ul class="acts acts-loose">' + unassigned.map(a => activityCardHTML(a, rate, slug)).join("") + "</ul></section>"
     : "";
   view().innerHTML =
-    '<div class="trip-hero"><a class="back" href="#/">' + icon("pin") + "All trips</a>" +
+    '<div class="trip-hero"><div class="hero-top">' +
+        '<a class="back" href="#/">' + icon("pin") + "All trips</a>" +
+        '<a class="trash-link" href="#/trip/' + encodeURIComponent(slug) + '/trash">' + icon("trash") + "Trash</a>" +
+      "</div>" +
       "<h1>" + esc(title) + "</h1>" + (range ? '<div class="muted mono">' + esc(range) + "</div>" : "") +
       (trip && trip.note ? '<div class="muted">' + esc(trip.note) + "</div>" : "") + "</div>" +
     renderSubnav(slug, "timeline") +
@@ -866,6 +879,100 @@ async function viewPacking(slug) {
   });
 }
 
+// ---- trash (M10): restore or permanently delete soft-deleted steps / activities / packing ----
+// Each group hits its own `/trash` list (rows carry a populated `deleted` timestamp). Restore un-deletes
+// a row; "Delete forever" hard-purges it (steps cascade to their activities + photos — extra confirm).
+// All mutations invalidate the trip cache so the timeline reflects a restore. Everything esc'd.
+const TRASH_GROUPS = [
+  { key: "steps",      label: "Steps",      entity: "steps",      list: "flow" },
+  { key: "activities", label: "Activities", entity: "activities", list: "activities" },
+  { key: "packing",    label: "Packing",    entity: "packing",    list: "packing" }
+];
+async function viewTrash(slug) {
+  markActive(null);
+  view().innerHTML = '<div class="panel"><p class="muted">Loading trash…</p></div>';
+  const { trip } = await loadTrip(slug);
+  if (!trip) { view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
+  const tripHref = "#/trip/" + encodeURIComponent(slug);
+  const title = trip.title || slug;
+  const hero = '<div class="trip-hero"><a class="back" href="' + esc(tripHref) + '">' +
+      '<span class="chev" aria-hidden="true">‹</span> Back to ' + esc(title) + "</a>" +
+      '<h1><span class="trash-title-ico">' + icon("trash") + "</span>Trash</h1>" +
+      '<div class="muted">Restore an item, or delete it forever.</div></div>';
+
+  // Fetch all three trash lists in parallel; a failed list degrades to empty (never blocks the others).
+  const groups = TRASH_GROUPS.map(g => Object.assign({}, g, { rows: [] }));
+  const results = await Promise.all(groups.map(async g => {
+    try { const d = await api(g.entity + "/" + encodeURIComponent(slug) + "/" + g.list + "/trash"); return (d && d.rows) || []; }
+    catch { return []; }
+  }));
+  groups.forEach((g, i) => { g.rows = results[i]; });
+
+  const itemHTML = (g, r) => {
+    const when = fmtDeleted(r.deleted);
+    return '<li class="trash-item" data-id="' + esc(r.id) + '">' +
+      '<div class="trash-item-main">' +
+        '<span class="trash-item-title">' + esc(r.title || r.location || "(untitled)") + "</span>" +
+        (when ? '<span class="trash-when muted mono">deleted ' + esc(when) + "</span>" : "") +
+      "</div>" +
+      '<div class="trash-actions">' +
+        '<button type="button" class="trash-btn restore" data-act="restore" data-group="' + esc(g.key) + '" data-id="' + esc(r.id) + '">' +
+          icon("undo") + "Restore</button>" +
+        '<button type="button" class="trash-btn purge" data-act="purge" data-group="' + esc(g.key) + '" data-id="' + esc(r.id) + '">' +
+          icon("trash") + "Delete forever</button>" +
+      "</div></li>";
+  };
+  const sectionHTML = (g) => '<section class="trash-section"><h2 class="trash-h">' + esc(g.label) +
+      '<span class="trash-count mono">' + esc(String(g.rows.length)) + "</span></h2>" +
+      (g.rows.length
+        ? '<ul class="trash-list">' + g.rows.map(r => itemHTML(g, r)).join("") + "</ul>"
+        : '<p class="muted trash-empty">Nothing here.</p>') +
+    "</section>";
+
+  function paint() {
+    const total = groups.reduce((s, g) => s + g.rows.length, 0);
+    const body = total === 0
+      ? '<div class="trash-allempty"><p class="muted">Trash is empty.</p>' +
+          '<p class="muted"><a href="' + esc(tripHref) + '">← Back to ' + esc(title) + "</a></p></div>"
+      : groups.map(sectionHTML).join("");
+    view().innerHTML = hero + '<div class="panel trash">' + body + "</div>";
+    const panel = view().querySelector(".trash");
+    if (panel) panel.addEventListener("click", onClick);
+    motion(a => a.animate(".trash-item", { opacity: [0, 1], translateY: [6, 0], delay: a.stagger(30), duration: 300, ease: "out(3)" }));
+  }
+
+  async function onClick(e) {
+    const btn = e.target.closest("[data-act]");
+    if (!btn) return;
+    const act = btn.dataset.act, g = groups.find(x => x.key === btn.dataset.group), id = btn.dataset.id;
+    if (!g || !id) return;
+    const url = g.entity + "/" + encodeURIComponent(slug) + "/" + g.list + "/" + encodeURIComponent(id);
+    if (act === "restore") {
+      btn.disabled = true;
+      try {
+        await api(url + "/restore", { method: "POST" });
+        g.rows = g.rows.filter(r => String(r.id) !== String(id));
+        invalidateTrip(slug);
+        vt(paint);
+      } catch { btn.disabled = false; }
+    } else if (act === "purge") {
+      const msg = g.key === "steps"
+        ? "Delete this step forever?\n\nThis also permanently removes its activities and photos. This cannot be undone."
+        : "Delete this item forever?\n\nThis cannot be undone.";
+      if (!confirm(msg)) return;
+      btn.disabled = true;
+      try {
+        await api(url + "/purge", { method: "DELETE" });
+        g.rows = g.rows.filter(r => String(r.id) !== String(id));
+        invalidateTrip(slug);
+        vt(paint);
+      } catch { btn.disabled = false; }
+    }
+  }
+
+  paint();
+}
+
 async function viewWhatsNew() {
   markActive("/whats-new");
   view().innerHTML = '<div class="panel"><h1>What’s New</h1><p class="muted">Loading…</p></div>';
@@ -890,6 +997,7 @@ function route() {
     if (parts[2] === "activity" && parts[3]) return viewActivity(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
     if (parts[2] === "budget") return viewBudget(decodeURIComponent(parts[1]));
     if (parts[2] === "packing") return viewPacking(decodeURIComponent(parts[1]));
+    if (parts[2] === "trash") return viewTrash(decodeURIComponent(parts[1]));
     return viewTimeline(parts[1]);
   }
   return viewHome();
