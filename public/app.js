@@ -522,24 +522,10 @@ function stepCardHTML(s, rate, acts, slug) {
   const st = s.booking_status || "Idea";
   const chip = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
     { entity: "steps", list: "flow", id: s.id, field: "booking_status", input: "select", value: st, options: "Idea|Planned|Booked|Confirmed" });
-  // Estimate + actual are both editable (null -> a subtle "+ est" / "+ actual" affordance).
-  const estDisplay = (s.cost_est != null && s.cost_est !== "")
-    ? '<span class="cost mono est muted">est ' + esc(money(s.cost_est, s.cost_ccy)) + "</span>"
-    : '<span class="add-actual est">+ est</span>';
-  const estHTML = editable(estDisplay, { entity: "steps", list: "flow", id: s.id, field: "cost_est", input: "decimal", value: s.cost_est });
-  const act = s.cost_actual;
-  const actDisplay = (act != null && act !== "")
-    ? '<span class="cost mono">' + esc(money(act, s.cost_ccy)) +
-      (eurEquiv(act, s.cost_ccy, rate) ? ' <span class="muted">' + esc(eurEquiv(act, s.cost_ccy, rate)) + "</span>" : "") + "</span>"
-    : '<span class="add-actual">+ actual</span>';
-  const actHTML = editable(actDisplay, { entity: "steps", list: "flow", id: s.id, field: "cost_actual", input: "decimal", value: act });
-  // "included in another cost" -> hide the est/actual editors, show a chip instead (excluded from budget too).
-  const costHTML = (s.included === "1") ? '<span class="chip included-chip">' + icon("link") + "included</span>" : estHTML + actHTML;
   const detailHref = "#/trip/" + encodeURIComponent(slug || "") + "/step/" + encodeURIComponent(s.id);
-  const mu = mapsUrl(s);
-  const maplink = mu ? '<a class="maplink" href="' + esc(mu) + '" target="_blank" rel="noopener">' + icon("pin") + "Map</a>" : "";
-  const bl = safeUrl(s.booking_url);
-  const booklink = bl ? '<a class="maplink" href="' + esc(bl) + '" target="_blank" rel="noopener">' + icon("link") + "Booking</a>" : "";
+  // Overview lines are deliberately minimal — title, dates, status only. Cost, photos, map, carrier/
+  // accommodation and activities all live in the step detail view (tap the line to open it).
+  const openChev = '<a class="step-open" href="' + esc(detailHref) + '" aria-label="Open details">›</a>';
   // Dates & times are tap-to-edit inline (native picker); empty -> a subtle affordance.
   const editDate = (field, val, empty) => editable(
     (val != null && val !== "") ? esc(fmtDate(val)) : '<span class="add-actual">' + empty + "</span>",
@@ -553,30 +539,22 @@ function stepCardHTML(s, rate, acts, slug) {
     const when = '<span class="leg-when">' +
       '<span class="muted">dep</span> ' + editDate("depart", s.depart, "+ date") + " " + editTime("depart_time", s.depart_time, "+ time") +
       ' <span class="muted">· arr</span> ' + editDate("arrive", s.arrive, "+ date") + " " + editTime("arrive_time", s.arrive_time, "+ time") + "</span>";
-    return '<li class="step travel">' +
+    return '<li class="step travel" data-href="' + esc(detailHref) + '">' +
       '<span class="marker travel" aria-hidden="true">' + icon(mode) + "</span>" +
       '<div class="leg">' +
-        '<div class="leg-top"><a class="leg-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + chip + "</div>" +
-        '<div class="leg-sub">' + (s.carrier ? '<span class="mono">' + esc(s.carrier) + "</span> " : "") + when + "</div>" +
-        '<div class="step-meta">' + costHTML + maplink + booklink + "</div>" +
-        attachmentsHTML("step", s.id, slug, { compact: true }) +
+        '<div class="leg-top"><a class="leg-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + chip + openChev + "</div>" +
+        '<div class="leg-sub">' + when + "</div>" +
       "</div></li>";
   }
   const nights = '<span class="stay-when">' +
     editDate("arrive", s.arrive, "+ check-in") + " " + editTime("arrive_time", s.arrive_time, "+ time") +
     ' <span class="muted">→</span> ' +
     editDate("depart", s.depart, "+ check-out") + " " + editTime("depart_time", s.depart_time, "+ time") + "</span>";
-  const actsHTML = (acts && acts.length)
-    ? '<ul class="acts">' + acts.map(a => activityCardHTML(a, rate, slug)).join("") + "</ul>" : "";
-  const addActHTML = '<button type="button" class="insert-btn add-act" data-add-activity="' + esc(s.id) + '">' + icon("plus") + "add activity</button>";
-  return '<li class="step stay">' +
+  return '<li class="step stay" data-href="' + esc(detailHref) + '">' +
     '<span class="marker stay" aria-hidden="true"></span>' +
     '<div class="step-card">' +
-      '<div class="step-head">' + icon("stay", "step-kind") + '<a class="step-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + chip + "</div>" +
-      '<div class="step-sub">' + nights + (s.accom_name ? ' <span>· ' + esc(s.accom_name) + "</span>" : "") + "</div>" +
-      '<div class="step-meta">' + costHTML + maplink + booklink + "</div>" +
-      attachmentsHTML("step", s.id, slug, { compact: true }) +
-      actsHTML + addActHTML +
+      '<div class="step-head">' + icon("stay", "step-kind") + '<a class="step-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + chip + openChev + "</div>" +
+      '<div class="step-sub">' + nights + "</div>" +
     "</div></li>";
 }
 
@@ -602,7 +580,7 @@ async function viewTimeline(slug) {
   const rate = trip.thb_per_eur;
   const title = trip.title || slug;
   const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
-  const hint = '<p class="tl-hint muted">Tap a cost, status, date or time to edit it inline (long-press to copy). Use “add step” to build your timeline — or ask Claude.</p>';
+  const hint = '<p class="tl-hint muted">Tap a step to open its details; tap a status or date to edit inline. Use “add step” to build your timeline — or ask Claude.</p>';
   const body = steps.length
     ? '<ol class="tl">' + steps.map((s, i) => stepInserterHTML(i) + stepCardHTML(s, rate, byStep[s.id], slug)).join("") + stepInserterHTML(steps.length) + "</ol>"
     : '<div class="tl-empty"><p class="muted">No steps yet — start building your trip.</p>' +
@@ -917,12 +895,16 @@ async function viewStep(slug, id) {
   }
   const photos = attachmentsHTML("step", s.id, slug, {});
   const kindLabel = isTravel ? "Travel" : "Stay";
+  const actCount = isTravel ? 0 : (activities || []).filter(a => String(a.step_id) === String(s.id)).length;
+  const danger = '<div class="detail-danger"><button type="button" class="danger-btn" data-act="step-del"' +
+    ' data-slug="' + esc(slug) + '" data-id="' + esc(s.id) + '" data-acts="' + actCount + '">' +
+    icon("trash") + "Delete step</button></div>";
 
   view().innerHTML = '<div class="sheet">' + head +
     '<div class="panel detail">' +
       '<h1 class="detail-title" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</h1>" +
       '<div class="detail-context muted">' + esc(kindLabel) + "</div>" +
-      meta + notes + actsSection + photos +
+      meta + notes + actsSection + photos + danger +
     "</div></div>";
   motion(an => an.animate(".detail-meta, .notes, .step-acts, .photos", { opacity: [0, 1], translateY: [8, 0], delay: an.stagger(60), duration: 340, ease: "out(3)" }));
 }
@@ -1535,6 +1517,38 @@ function route() {
   return viewHome();
 }
 
+// ---- step delete + whole-card navigation -----------------------------------
+let _stepNavBound = false;
+function bindStepNav() {                                  // tap a timeline card (not a control) -> its detail
+  if (_stepNavBound) return; _stepNavBound = true;
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".editable, a, button, input, select, textarea, label")) return;  // let edits/links act
+    const sel = window.getSelection && window.getSelection();
+    if (sel && !sel.isCollapsed) return;                  // don't hijack a long-press text selection
+    const li = e.target.closest("li.step[data-href]");
+    if (li) location.hash = li.getAttribute("data-href");
+  });
+}
+let _stepDelBound = false;
+function bindStepDelete() {                               // the "Delete step" button in the step detail view
+  if (_stepDelBound) return; _stepDelBound = true;
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-act='step-del']");
+    if (!btn) return;
+    const slug = btn.dataset.slug, id = btn.dataset.id, n = Number(btn.dataset.acts || 0);
+    const msg = n > 0
+      ? "Delete this step?\n\nIts " + n + " activit" + (n === 1 ? "y" : "ies") + " will move to Unassigned. You can restore the step (and reunite them) from Trash."
+      : "Delete this step?\n\nYou can restore it from Trash.";
+    if (!confirm(msg)) return;
+    btn.disabled = true;
+    try {
+      await api("steps/" + encodeURIComponent(slug) + "/flow/" + encodeURIComponent(id), { method: "DELETE" });
+      invalidateTrip(slug);
+      location.hash = "#/trip/" + encodeURIComponent(slug);   // back to the timeline -> hashchange -> re-render
+    } catch { btn.disabled = false; }
+  });
+}
+
 // ---- boot ------------------------------------------------------------------
 function setTheme(t) { document.documentElement.setAttribute("data-theme", t); try { localStorage.setItem("app-theme", t); } catch {} }
 $("#theme-toggle").addEventListener("click", () => setTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light"));
@@ -1549,6 +1563,8 @@ window.addEventListener("hashchange", () => vt(route));
   buildNav();
   bindEditable();
   bindPhotos();
+  bindStepNav();
+  bindStepDelete();
   bindWizards();
   route();
 })();

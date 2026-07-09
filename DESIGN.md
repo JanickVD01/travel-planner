@@ -310,4 +310,9 @@ Records the locked brand inputs and the final visual decision.
   screenshots per step/activity (Workers KV); booking-status chips on steps + activities (no separate
   to-book view); soft-delete + trash. Full plan & milestones:
   [`docs/implementations/0003-feature-expansion.md`](docs/implementations/0003-feature-expansion.md).
+- **2026-07-09 — Timeline cards slimmed + step delete.** Each timeline line shows only title, dates and
+  the status chip; cost, photos, map/booking links, carrier/accommodation and the activity list move to
+  the step **detail** view (tap a line to open it). Added a "Delete step" action (soft-delete → Trash) in
+  that detail. Info-density feedback; supersedes Direction C's "activities as indented sub-stations" on
+  the timeline. See [`docs/implementations/0008-timeline-declutter-delete.md`](docs/implementations/0008-timeline-declutter-delete.md).
 

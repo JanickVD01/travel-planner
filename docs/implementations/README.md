@@ -18,6 +18,7 @@ map in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0005](0005-budget-detail-included-maps.md) | Budget depth, step detail, included-costs, map-URL-first & doc reconciliation | 2026-07-09 | ✅ Shipped | #26–#31 |
 | [0006](0006-mcp-connector-redirect-uri.md) | claude.ai web/mobile connector fix — Managed-OAuth redirect-URI allowlist | 2026-07-09 | 🚧 In progress | — |
 | [0007](0007-mobile-copy-values.md) | Mobile fix — long-press to copy a value (selectable span, not a button) | 2026-07-09 | 🚧 In progress | — |
+| [0008](0008-timeline-declutter-delete.md) | Timeline cards slimmed to title/dates/status + "Delete step" in detail | 2026-07-09 | 🚧 In progress | — |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
 
