@@ -5,9 +5,10 @@ no-build static SPA + `/api/*` Pages Functions + a shared domain core + a D1 dat
 MCP server, all fronted by Cloudflare Access and shipped through a hardened GitHub flow built for
 **safe parallel sessions**. Full rationale lives in `ai-first_project_initialisation.md`.
 
-> **Status:** the data model is intentionally a placeholder. The only entity is the generic
-> `entries` list (cols: `title, note, status, due`). It exists so the whole pipeline is verifiable.
-> Replace it / add real travel lists when ready — see **Add a list** below.
+> **Status:** live (v0.5), in active use. The data model is real (see **Data model** below): a **trip**
+> owns a metro **timeline** of `steps` (travel legs + stays), each stay nests `activities`, plus a
+> `packing` list and photo `attachments`. The generic `entries` list still exists but is now only the
+> MCP smoke-test fixture. Full history in `docs/implementations/`.
 
 ## Data map (where things live)
 
@@ -17,23 +18,42 @@ MCP server, all fronted by Cloudflare Access and shipped through a hardened GitH
 | Browser API (`/api/*`) — thin adapters over the core | `functions/api/**` |
 | Auth gate (require Access identity, fail-closed) | `functions/_middleware.js` |
 | Demo-mode switch (mock only when `!DB && DEMO_API=1`) | `functions/api/_middleware.js`, `functions/api/_mock.js` |
-| SPA shell / router / markdown wiki | `public/index.html`, `public/app.js`, `public/styles.css` |
+| SPA shell / router / views | `public/index.html`, `public/app.js`, `public/styles.css` |
 | Design language / taste contract (brand, fonts, palette, tokens thesis) — **read before any UI change** | `DESIGN.md` |
 | Implementation history — one numbered record per effort (plan · decisions · outcome) | `docs/implementations/` |
-| App metadata, releases, wiki content | `public/data/**` |
+| App metadata + release notes | `public/data/**` |
 | D1 schema (idempotent) | `schema.sql` |
 | One-off ALTERs | `migrations/NNN_*.sql` |
 | MCP server (operate by talking to Claude) | `worker-mcp/**` |
 | CI / deploy | `.github/workflows/**` |
-| CI gate (parses data, checks wiki) | `scripts/validate-data.mjs` |
+| CI gate (parses `public/data/*.json`) | `scripts/validate-data.mjs` |
 
 **Invariant:** business rules live ONLY in `shared/core.js`. Both the browser API and the MCP
 worker import it, so the UI and Claude can never disagree. Never duplicate logic into a route.
 
 ## Scoping model
 
-Every row is scoped by two free-text keys: `space` and `list`. Here: **`space` = a trip**
-(e.g. `tokyo-2026`), **`list` = a category** within it (e.g. `itinerary`, `lodging`, `todos`).
+Every row is scoped by two free-text keys: `space` and `list`. **`space` = a trip** (its slug, e.g.
+`france-2026`) and **`list` = the collection** within it: `flow` (timeline steps), `activities`,
+`packing`, or `attachments`. Trip config rows themselves live at `space='app'`, `list='trips'`.
+
+## Data model (real entities — `FLAT_SPECS` in `shared/core.js` + `schema.sql`)
+
+- **trips** (`app`/`trips`) — `title`, `slug` (immutable, unique), `home_ccy`, `thb_per_eur`,
+  `budget_target_eur`, `start_date`/`end_date`, `note`.
+- **steps** (`<slug>`/`flow`) — `kind` travel|stay; `title`/`location`; **`map_url`** (primary location
+  link) + `lat`/`lng` (legacy fallback); `arrive`/`depart` (+`_time`); `accom_name`; `transport`/`carrier`;
+  `cost_est`/`cost_actual`/`cost_ccy`; `booking_status`/`booking_url`; **`included`** (`'1'` = cost covered
+  by another ticket → hidden on the card + excluded from the budget); `note`.
+- **activities** (`<slug>`/`activities`) — hung off a step via `step_id`; `day`, `needs_advance`,
+  location/`map_url`, cost + booking + **`included`** + `note`.
+- **packing** (`<slug>`/`packing`) — `owner` (`'shared'` | email), `packed`, `category`, `qty`.
+- **attachments** (`<slug>`/`attachments`) — image metadata; bytes live in Workers KV (`IMAGES_KV`).
+
+Soft-delete is baked into every table (`deleted` column) → **Trash** (restore / delete-forever). **Money
+math lives ONLY in `computeBudget`** (all EUR; excludes `included` rows; returns estimated *and* actual
+category breakdowns + per-person figures, `PEOPLE=2`). **Locations:** a real Google Maps `map_url` wins;
+`lat`/`lng` only derives a search link as a fallback (set via MCP `set_map_url`).
 
 ## Add a list (the ~6-line change)
 
@@ -60,8 +80,12 @@ git verbs; the server-side `protect-main` ruleset is the real backstop.)
 - Open a PR. CI runs `validate` (required) and posts a **demo-mode preview** link. Merge is the only
   path to production. **Merge commits only** (squash/rebase are disabled) so release-note links stay valid.
 - **PR description = four lines:** `what/why` · `What's New? y/n` · `migration none/NNN` · `worker redeploy? y/n`.
-- **Conflicts in append-style files** (`releases.json`, `wiki/index.json`): keep BOTH entries, then
+- **Conflicts in append-style files** (`releases.json`): keep BOTH entries, then
   `node scripts/validate-data.mjs`, commit the merge, push.
+- **Reconcile at the end of every effort.** An effort's final milestone re-aligns the "glue" docs —
+  this file, `DESIGN.md`, the `MEMORY` journal, `README.md`, `public/data/app.json`, the
+  `docs/implementations/` index, and the **GitHub About** — with what actually shipped, so the project's
+  self-description never drifts back toward the generic scaffold. (Convention since effort 0005.)
 
 ### Running sessions concurrently with git worktrees
 
@@ -89,7 +113,10 @@ independent PRs. Remove when merged: `git worktree remove ../travel_planner-feat
 
 Once the worker is deployed and connected:
 `claude mcp add --transport http travel-planner https://<worker>.<sub>.workers.dev/mcp`
-Then ask Claude to list/add/edit/delete entries. Tools are thin wrappers over `shared/core.js`.
+Then ask Claude to manage trips, steps, activities, packing and photos — `create_trip`,
+`add_stay`/`add_travel`/`add_step`, `add_activity`, `edit_step`/`edit_activity`, `set_booking`,
+`set_included`, `set_map_url`, `get_trip_overview`, `get_budget`, and the packing/attachment tools.
+All are thin wrappers over `shared/core.js` (the same rules the browser API uses).
 
 ## Verified stack versions (mid-2026)
 

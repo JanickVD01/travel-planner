@@ -1,7 +1,7 @@
 # 0005 — Budget depth, step detail, included-costs, map links & doc reconciliation
 
-> **Status:** 🚧 In progress (started 2026-07-09). One numbered record per effort — see
-> [`README.md`](README.md) for the index. Updated in place as each milestone PR merges.
+> **Status:** ✅ Shipped 2026-07-09 (PRs #26–#31). One numbered record per effort — see
+> [`README.md`](README.md) for the index.
 
 ## Context
 
@@ -81,4 +81,24 @@ README rewrite; CLAUDE.md (drop placeholder Status, fix data map / scoping / MCP
 
 ## Outcome
 
-_(filled in at M6 as milestones land.)_
+Shipped 2026-07-09 across PRs #26–#31 (merge-commit only), each gated by CI `validate`.
+
+- **Delivered:** the `included` cost flag (excluded from budget + hidden on card/detail, MCP `set_included`);
+  budget est/actual `byCategoryActual` + per-person figures; step/stay **detail pages** (`viewStep`) with an
+  in-detail included toggle; the Budget **Estimated/Actual toggle** + **Budget Insights** (cost per person);
+  **`map_url`-primary** locations (3 mirrors flipped, `cleanMapUrl`, MCP `set_map_url`, wizard stores links)
+  with lat/lng as legacy fallback; and this **Reconciliation pass**.
+- **First migration:** `migrations/001_included.sql` (ALTER steps+activities) — applied to prod D1 via a
+  throwaway CI job and verified (both columns present) **before** M2 merged, then mirrored into `schema.sql`.
+- **France demo:** 10 real Google Maps place links set (Louvre, Eiffel, Versailles, Pont du Gard, …) via a
+  one-off CI update, showcasing `map_url`-primary; the earlier packing seed + trip stay untouched.
+- **Quality gate:** an adversarial review workflow (4 dimensions → verify) over the whole 0005 code diff
+  cleared budget-math, the included round-trip, and the maps flip, and caught one real bug — `openEditor`'s
+  `<select>` silently dropped an edit when the field was unset (e.g. `transport` on a new step detail:
+  tapping the pre-highlighted first option fired no `change`). Fixed with a neutral placeholder (PR #31).
+- **Reconciliation (this milestone):** README, CLAUDE.md (real data model + `included`/`map_url`/migrations +
+  the convention), `shared/core.js` header, `public/data/app.json` (coral accent + tagline, dropped `lists[]`),
+  DESIGN.md status, `releases.json` v0.5.0, this record, the `ui-upgrade-roadmap` memory, and the **GitHub
+  About** (description + topics + homepage) all brought in line with what shipped.
+- **Not verifiable headlessly:** the detail-page morphs, the budget toggle, and real Google-Maps-link opening
+  on a phone — to be confirmed by the user on the Access-gated production site.

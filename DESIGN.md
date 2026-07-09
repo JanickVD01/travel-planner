@@ -3,13 +3,14 @@
 The **taste contract** for this app's look and feel. Everything visual is measured against it.
 
 > **Read this before any UI change.** It is the durable record of *why the app looks the way it
-> does*; `public/tokens.css` (from Phase 3) will be the machine-readable half. This file is the
+> does*; `public/tokens.css` is the machine-readable half (the shipped tokens). This file is the
 > single source of visual intent — the way `shared/core.js` is the single source of business logic.
 >
-> **Status:** brand direction is **locked** (adjectives, references, density, theme, guardrails,
-> font shortlist). The **final palette + chosen font pairing** are decided by a real phone review of
-> three mockup directions (Phase 1) and recorded in the **Decision log** at the bottom (Phase 2).
-> Hex values below are *starting targets*, not gospel, until that log is filled in.
+> **Status:** **locked and shipped.** The chosen direction is **C "Transit Line"** (metro/route look),
+> calmer via progressive disclosure; palette is the warm light-primary set with the coral accent
+> `#C8542F`; fonts are **Space Grotesk / Instrument Sans / Spline Sans Mono** (self-hosted). All live
+> in `public/tokens.css` + `public/styles.css` since effort 0003 — the hex values below are the
+> shipped targets, not drafts.
 
 ---
 
