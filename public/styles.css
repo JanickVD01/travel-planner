@@ -295,6 +295,14 @@ a.step-title:hover, a.leg-title:hover { color: var(--accent-ink); text-decoratio
 .act-card { background: var(--paper-2); border: 1px solid var(--line-hair); border-radius: var(--radius-sm); padding: 8px 11px; }
 .act-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .act-title { font-family: var(--f-disp); font-weight: 600; letter-spacing: -.01em; color: var(--ink-0); }
+/* delete-activity button on the card (0012): subtle until hovered; invisible inset grows the tap target */
+.act-del { margin-left: auto; flex: 0 0 auto; position: relative; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--radius-pill);
+  background: transparent; color: var(--ink-3); }
+.act-del::after { content: ""; position: absolute; inset: -7px; }   /* ~44px hit area */
+.act-del:hover { color: var(--danger); background: var(--danger-bg); }
+.act-del .ico { width: 16px; height: 16px; }
 .act-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin-top: 4px; }
 .act-meta .cost { font-size: var(--text-sm); }
 /* 'book ahead' flag — subtle amber pill, echoes the Booked hue */

@@ -1,6 +1,15 @@
 {
   "releases": [
     {
+      "version": "v0.6.1",
+      "title": "Remove an activity",
+      "date": "2026-07-10",
+      "notes": [
+        "You can now delete an activity: tap the trash icon on it in a stay’s list, or use “Delete activity” on its detail page.",
+        "Deleted activities go to Trash, so you can restore them if you change your mind."
+      ]
+    },
+    {
       "version": "v0.6.0",
       "title": "A photo behind your stay",
       "date": "2026-07-09",

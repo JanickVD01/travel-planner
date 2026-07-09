@@ -22,6 +22,7 @@ map in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0009](0009-mobile-card-polish.md) | Mobile polish — "Lodging" label + stacked title/dates/status line | 2026-07-09 | ✅ Shipped | #37 |
 | [0010](0010-pinned-step-photo.md) | Pinned step photo — a chosen image as the card's background (readability-guaranteed) | 2026-07-09 | ✅ Shipped | #38, #39, #40 |
 | [0011](0011-pinned-photo-text-plate.md) | Pinned photo polish — contained text plate (vivid photo, darken only behind the text) | 2026-07-09 | ✅ Shipped | #42 |
+| [0012](0012-delete-activity-ui.md) | Delete an activity from the UI (card button + detail danger button; soft-delete → Trash) | 2026-07-10 | ✅ Shipped | #43 |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
 
