@@ -509,6 +509,7 @@ function stepCardHTML(s, rate, acts, slug) {
     editDate("depart", s.depart, "+ check-out") + " " + editTime("depart_time", s.depart_time, "+ time") + "</span>";
   const actsHTML = (acts && acts.length)
     ? '<ul class="acts">' + acts.map(a => activityCardHTML(a, rate, slug)).join("") + "</ul>" : "";
+  const addActHTML = '<button type="button" class="insert-btn add-act" data-add-activity="' + esc(s.id) + '">' + icon("plus") + "add activity</button>";
   return '<li class="step stay">' +
     '<span class="marker stay" aria-hidden="true"></span>' +
     '<div class="step-card">' +
@@ -516,7 +517,7 @@ function stepCardHTML(s, rate, acts, slug) {
       '<div class="step-sub">' + nights + (s.accom_name ? ' <span>· ' + esc(s.accom_name) + "</span>" : "") + "</div>" +
       '<div class="step-meta">' + costHTML + maplink + booklink + "</div>" +
       attachmentsHTML("step", s.id, slug, { compact: true }) +
-      actsHTML +
+      actsHTML + addActHTML +
     "</div></li>";
 }
 
@@ -1208,12 +1209,18 @@ async function createStepFromWizard(slug, insertIndex, steps, st) {
   const ll = parseLatLng(st.coords);
   if (ll) { body.lat = ll.lat; body.lng = ll.lng; }
 
-  const res = await api("steps/" + encodeURIComponent(slug) + "/flow", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
-  });
+  // Idempotent on retry: POST once, remember the new id on the wizard state. If a later reposition
+  // PATCH fails and the user re-submits, we skip the POST (no duplicate step) and only redo the PATCH.
+  if (!st._createdId) {
+    const res = await api("steps/" + encodeURIComponent(slug) + "/flow", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+    });
+    st._createdId = res && res.row && res.row.id;
+  }
   // Reposition only when inserting before the end. New row appended at MAX+10; slot it between neighbors
-  // with an integer midpoint, re-spacing the whole list if the gap is exhausted. (Skipped in demo: no id.)
-  const newId = res && res.row && res.row.id;
+  // with an integer midpoint, re-spacing the whole list if the gap is exhausted. (In demo the PATCH is a
+  // no-op, so the row stays at the end — non-persistent preview only.)
+  const newId = st._createdId;
   if (newId && insertIndex < steps.length) {
     const prevS = insertIndex > 0 ? Number(steps[insertIndex - 1].sort_order) : 0;
     const nextS = Number(steps[insertIndex].sort_order);
@@ -1234,6 +1241,68 @@ function stepInserterHTML(index) {
   return '<li class="tl-insert"><button type="button" class="insert-btn" data-insert-step="' + index + '">' + icon("plus") + "add step</button></li>";
 }
 
+function openActivityWizard(slug, stepId) {
+  const corePane = {
+    title: "New activity",
+    html: (st) => wzField("Title *", wzText("title", st.title, "e.g. Louvre Museum")) +
+      wzField("Day", wzDate("day", st.day)),
+    read: (el, st) => { readInputs(el, st); return (st.title || "").trim() ? null : "A title is required."; }
+  };
+  const optPane = {
+    title: "Optional extras",
+    html: (st) =>
+      wzField("Location", wzText("coords", st.coords, "paste a Google Maps link or lat, lng"), '<span class="field-hint"> · powers the map link</span>') +
+      wzField("Estimated cost", wzText("cost_est", st.cost_est, "0") + " " + selIn("cost_ccy", CCYS_UI, st.cost_ccy || "EUR")) +
+      wzField("Book ahead?", selIn("needs_advance", YESNO_UI, st.needs_advance || "no")) +
+      wzField("Booking status", selIn("booking_status", BOOKINGS_UI, st.booking_status || "Idea")) +
+      wzField("Booking link", wzText("booking_url", st.booking_url, "https://…")) +
+      wzField("Note", '<textarea class="wz-in" name="note" rows="3">' + esc(st.note || "") + "</textarea>"),
+    read: (el, st) => { readInputs(el, st); return null; }
+  };
+  const reviewPane = {
+    title: "Review",
+    html: (st) => {
+      const rows = [];
+      const add = (k, v) => { if (v) rows.push('<div class="rev-row"><span class="rev-k">' + esc(k) + '</span><span class="rev-v">' + esc(v) + "</span></div>"); };
+      add("Title", st.title); add("Day", st.day);
+      if (st.cost_est && String(st.cost_est).trim()) add("Cost", String(st.cost_est).trim() + " " + (st.cost_ccy || "EUR"));
+      add("Book ahead", st.needs_advance === "yes" ? "Yes" : ""); add("Status", st.booking_status);
+      const ll = parseLatLng(st.coords);
+      if (st.coords) add("Location", ll ? (ll.lat + ", " + ll.lng) : "⚠ couldn’t read coordinates — paste a full link or lat, lng");
+      add("Note", st.note);
+      return '<div class="rev">' + (rows.join("") || '<p class="muted">Nothing to review.</p>') + "</div>";
+    }
+  };
+  openWizard({
+    title: "Add an activity",
+    panes: [corePane, optPane, reviewPane],
+    createLabel: "Add activity",
+    onCreate: (st) => createActivityFromWizard(slug, stepId, st)
+  });
+}
+
+async function createActivityFromWizard(slug, stepId, st) {
+  const body = {
+    step_id: stepId, title: (st.title || "").trim(),
+    cost_ccy: st.cost_ccy || "EUR", booking_status: st.booking_status || "Idea",
+    needs_advance: st.needs_advance === "yes" ? "yes" : "no"
+  };
+  if (st.day) body.day = st.day;
+  if (st.cost_est && String(st.cost_est).trim() !== "") body.cost_est = String(st.cost_est).trim();
+  if (st.booking_url) body.booking_url = st.booking_url;
+  if (st.note) body.note = st.note;
+  const ll = parseLatLng(st.coords);
+  if (ll) { body.lat = ll.lat; body.lng = ll.lng; }
+  if (!st._createdId) {                                     // idempotent on retry — never double-create
+    const res = await api("activities/" + encodeURIComponent(slug) + "/activities", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+    });
+    st._createdId = (res && res.row && res.row.id) || true;
+  }
+  invalidateTrip(slug);
+  vt(route);
+}
+
 let _wizardsBound = false;
 function bindWizards() {
   if (_wizardsBound) return; _wizardsBound = true;
@@ -1245,6 +1314,13 @@ function bindWizards() {
       const idx = parseInt(stepBtn.dataset.insertStep, 10) || 0;
       const t = await loadTrip(slug);
       openStepWizard(slug, idx, (t && t.steps) || []);
+      return;
+    }
+    const actBtn = e.target.closest("[data-add-activity]");
+    if (actBtn) {
+      e.preventDefault();
+      const slug = tripSlugFromHash(); if (!slug) return;
+      openActivityWizard(slug, actBtn.dataset.addActivity);
     }
   });
 }
