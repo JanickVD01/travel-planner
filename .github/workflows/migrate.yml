@@ -1,0 +1,41 @@
+name: migrate
+# Manually apply a D1 migration (.sql) to the REMOTE prod database, on a runner where the Cloudflare
+# API token secret is available (secrets are write-only — they can't be read off a runner). Migrations
+# are ADDITIVE and safe to run before the code that uses the new column lands. Occasional/one-off use;
+# `merge` remains the only path to code in prod — this only applies schema ALTERs.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch/ref that contains the migration file"
+        required: true
+        default: main
+      file:
+        description: "Path to the .sql migration (e.g. migrations/002_pinned.sql)"
+        required: true
+
+concurrency:
+  group: migrate-remote-d1
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply migration to remote D1
+        env:
+          MIG_FILE: ${{ inputs.file }}   # via env (not inline) so the input can't inject into the shell
+        run: |
+          set -euo pipefail
+          test -f "$MIG_FILE" || { echo "no such migration file: $MIG_FILE"; exit 1; }
+          echo "Applying $MIG_FILE to remote travel-planner-db"
+          npx --yes wrangler@4 d1 execute travel-planner-db --remote --file="$MIG_FILE"
