@@ -1,7 +1,7 @@
 # 0006 — claude.ai web/mobile connector: Managed-OAuth redirect-URI allowlist
 
-> **Status:** 🚧 In progress 2026-07-09 — this record + doc reconciliation are the code artifact; the
-> actual fix is a one-time **Cloudflare dashboard** change by the account owner (below), then verify.
+> **Status:** ✅ Shipped 2026-07-09 (PR #33). Docs reconciliation merged, and the owner has added the
+> Claude callback (`https://claude.ai/api/mcp/auth_callback`) to the Access app's Managed OAuth allowlist.
 > One numbered record per effort — see [`README.md`](README.md) for the index.
 
 ## Context
@@ -68,5 +68,6 @@ Cloudflare API using the existing `CLOUDFLARE_API_TOKEN`; never commit the token
 
 ## Outcome
 
-_Pending._ Fill in once the owner has allowlisted the callback and steps 1–4 pass; then flip the index
-row to ✅ and merge this `content/` PR.
+Docs merged (PR #33) and the owner has allowlisted `https://claude.ai/api/mcp/auth_callback` on the
+Access app's Managed OAuth. The claude.ai web/mobile connector can now complete Dynamic Client
+Registration; the owner is validating the live phone connector (customer-feedback loop).

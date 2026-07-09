@@ -1,8 +1,7 @@
 # 0008 — Timeline declutter + Delete step
 
-> **Status:** 🚧 In progress 2026-07-09 — code landed on `code/timeline-declutter-delete`; final
-> sign-off is an on-device check on the CI demo preview. One numbered record per effort — see
-> [`README.md`](README.md). (0006 = MCP-connector docs, 0007 = mobile copy-fix — concurrent branches.)
+> **Status:** ✅ Shipped 2026-07-09 (PR #35). Merged to main; the owner is validating the slimmed
+> timeline + delete-step live. One numbered record per effort — see [`README.md`](README.md).
 
 ## Context
 
@@ -50,4 +49,5 @@ for a later cleanup sweep.
 
 ## Outcome
 
-_Pending on-device confirmation._ Flip the index row to ✅ + fill the PR number once verified and merged.
+Merged to main (PR #35). The owner is validating the slimmed timeline, tap-to-open detail, and
+delete-step (incl. Trash restore) on the live site (customer-feedback loop).
