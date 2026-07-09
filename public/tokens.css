@@ -63,17 +63,17 @@
   --f-body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --f-mono: 'Spline Sans Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* — pinned-photo media context (0010): a pinned STAY card becomes a warm dark "media island" with
-       light ink. THEME-INDEPENDENT on purpose — the scrim/ink must not flip with the page theme, or a
-       photo backdrop would break AA in one of them. --media-plate is the only theme-aware token here
-       (it's just the placeholder shown before load / on error). See DESIGN.md §8. — */
+  /* — pinned-photo media context (0010, refined 0011): a pinned STAY card shows the photo vivid and
+       sits its text on a small rounded frosted "plate". THEME-INDEPENDENT on purpose — the plate tint/
+       ink must not flip with the page theme, or the text would break AA in one of them. --media-plate
+       is the only theme-aware token here (the placeholder shown before load / on error). See DESIGN.md §8. — */
   --media-scrim:     18 15 11;       /* warm near-black as "R G B" for rgb( / alpha ) */
-  --on-media:        #FBFAF7;        /* primary text on media (title, times) */
-  --on-media-dim:    #E7E2D8;        /* secondary text on media (dates, dep/arr) */
+  --on-media:        #FBFAF7;        /* primary text on the plate (title, times) */
+  --on-media-dim:    #E7E2D8;        /* secondary text on the plate (dates, dep/arr) */
   --on-media-accent: #F7A183;        /* the one accent, light-on-dark (links/hover/focus) */
   --media-plate:     var(--paper-2); /* placeholder while the <img> loads / if it fails */
-  --pin-floor: .82;                  /* min scrim alpha anywhere text sits (the AA guarantee) */
-  --pin-peak:  .92;                  /* scrim alpha at the bottom edge */
+  --pin-plate-alpha: .72;            /* plate tint opacity — keeps light ink >=AA over ANY photo (>=~.65) */
+  --pin-plate-inset: 12px;           /* gap between the plate and the card edges (photo breathes around it) */
   --media-min-h: clamp(168px, 44vw, 208px);   /* a short pinned card still shows a real photo */
 }
 
