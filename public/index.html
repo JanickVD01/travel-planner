@@ -4,10 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Travel Planner</title>
-  <!-- Theme-before-paint: set data-theme before first paint to avoid a flash. Light is primary. -->
-  <script>(function(){try{var t=localStorage.getItem("app-theme");
-    if(t!=="light"&&t!=="dark")t=(matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";
-    document.documentElement.setAttribute("data-theme",t);}catch(e){document.documentElement.setAttribute("data-theme","light");}})();</script>
+  <!-- Theme-before-paint (externalized for a strict CSP; blocking so it runs before first paint). -->
+  <script src="theme-init.js"></script>
   <meta name="theme-color" content="#fcfcfa" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
