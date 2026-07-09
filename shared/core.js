@@ -2,9 +2,10 @@
 // re-exports it) and the MCP worker (worker-mcp/src/mcp.js). No Request/Response/env coupling:
 // every function is (env, args, actor) -> plain data | throw ServiceError.
 //
-// PLACEHOLDER ENTITY: `entries` is a generic example list (cols: title, note, status, due).
-// It exists so the whole pipeline (API, preview, MCP, smoke test) is verifiable end-to-end.
-// To add a real list later: add a FLAT_SPECS entry + named wrappers below, a route file under
+// REAL ENTITIES: trips, steps (flow), activities, packing, attachments — see FLAT_SPECS below.
+// `entries` (cols: title, note, status, due) is a leftover generic example, kept ONLY as the MCP
+// smoke-test fixture (worker-mcp `npm run smoke`); it is not part of the travel product.
+// To add a new list: add a FLAT_SPECS entry + named wrappers below, a route file under
 // functions/api/<x>/[[path]].js, a branch in functions/api/_mock.js, and (optional) MCP tools.
 
 export const STATUSES = ["Open", "Doing", "Blocked", "Done"];

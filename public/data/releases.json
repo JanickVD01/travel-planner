@@ -1,6 +1,18 @@
 {
   "releases": [
     {
+      "version": "v0.5.0",
+      "title": "Deeper budgets & detail pages",
+      "date": "2026-07-09",
+      "notes": [
+        "Tap any travel leg or stay to open its own detail page — with its activities, photos, notes and everything editable, just like activities already had.",
+        "Budget “Where it goes” now flips between Estimated and Actual, so you can see planned spend versus what you’ve really paid.",
+        "New Budget Insights: cost per person (split two ways for now).",
+        "Mark a cost as “included in another ticket” (on a step or activity) — it’s hidden on the card and left out of the budget, so bundled fares don’t double-count.",
+        "Locations now use real Google Maps links: paste a Maps link when adding a step/activity, or let Claude set the exact place — with coordinates as a fallback."
+      ]
+    },
+    {
       "version": "v0.4.0",
       "title": "Plan it yourself",
       "date": "2026-07-09",

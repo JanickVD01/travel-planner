@@ -15,7 +15,7 @@ map in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0002](0002-design-directions.md) | Three design directions → **Direction C** chosen | 2026-07-08 | ✅ Decided (mockups throwaway) | #6 (closed unmerged) |
 | [0003](0003-feature-expansion.md) | Feature expansion — the 12-milestone build (Direction C) | 2026-07-08 | ✅ Shipped (M1–M12) | #7–#17 |
 | [0004](0004-ui-editing-and-creation.md) | In-app editing & creation — feedback refinements (Google Maps, tap-to-edit, wizards, KV) | 2026-07-09 | ✅ Shipped | #19–#25 |
-| [0005](0005-budget-detail-included-maps.md) | Budget depth, step detail, included-costs, map-URL-first & doc reconciliation | 2026-07-09 | 🚧 In progress | — |
+| [0005](0005-budget-detail-included-maps.md) | Budget depth, step detail, included-costs, map-URL-first & doc reconciliation | 2026-07-09 | ✅ Shipped | #26–#31 |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
 

@@ -4,9 +4,11 @@ A $0, AI-first web app on Cloudflare: a no-build static SPA + `/api/*` Pages Fun
 domain core + a D1 (SQLite) database + a remote MCP server, fronted by Cloudflare Access and shipped
 through a hardened GitHub flow designed for **safe parallel Claude Code sessions**.
 
-The data model is an intentional placeholder right now (a generic `entries` list) — the point of
-this skeleton is that all the *connections* (GitHub, Cloudflare, Access, MCP) and the safe
-multi-session workflow are wired up, so you can build the rest without leaving Claude Code.
+A shared, mobile-first trip planner: organise a trip as a metro-style **timeline** of travel legs and
+stays, nest **activities** under each stay, track a **budget** (estimated vs actual, in EUR from a THB
+rate, with cost-per-person insights), keep a **packing list**, attach **photos**, and open any step or
+activity as its own detail page — all editable in the browser *and* by talking to Claude through the
+MCP server. Runs entirely on Cloudflare's free tier with no payment method attached.
 
 ## Architecture
 
@@ -37,12 +39,14 @@ npm run smoke                                  # add -> list -> delete round-tri
 node scripts/validate-data.mjs
 ```
 
-## Setup status
+## Status
 
-In-repo scaffolding is complete. The outward-facing setup (Wrangler login, D1 create, Pages project
-+ bindings, Cloudflare Access, GitHub repo + secrets + branch protection, CI, MCP deploy + connect)
-is a guided runbook — see `ai-first_project_initialisation.md` §6, or just ask Claude Code to
-continue the setup.
+Live (v0.5) and in active use. The whole stack is deployed — Pages + D1 + Workers KV + Cloudflare
+Access + the MCP worker + CI — and the product has shipped across efforts recorded in
+`docs/implementations/` (trips → metro timeline, activities, budget, packing, photo attachments,
+step/activity detail pages, in-app creation wizards, and an "included in another ticket" cost flag).
+The one-time outward-facing setup (Wrangler login, D1/KV create, Pages + bindings, Access, GitHub
+secrets + branch protection, MCP connect) is captured in `ai-first_project_initialisation.md` §6.
 
 ## Working in this repo
 
