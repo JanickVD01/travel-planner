@@ -56,6 +56,10 @@ export function cleanHomeCcy(v) { return CCYS.indexOf(String(v)) >= 0 ? String(v
 export function cleanTime(v) { return /^\d{2}:\d{2}$/.test(String(v)) ? String(v) : null; }        // HH:MM or null
 export function cleanSlug(v) { const s = String(v == null ? "" : v).trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, ""); return s || null; }
 export function cleanYesNo(v) { return (v === "yes" || v === true) ? "yes" : "no"; }   // needs_advance flag, default no
+// packing (M8): owner = 'shared' OR a person's email (lowercased); packed = '0'|'1' boolean; qty = int>=1 or null.
+export function cleanOwner(v) { const s = String(v == null ? "" : v).trim().toLowerCase(); return (s === "" || s === "shared") ? "shared" : s; }
+export function cleanBool(v) { return (v === true || v === 1 || v === "1" || v === "true" || v === "yes") ? "1" : "0"; }
+export function cleanQty(v) { const n = Math.trunc(Number(v)); return (Number.isFinite(n) && n >= 1) ? String(n) : null; }
 
 // -- the generic flat-list engine: one implementation, many lists -----------
 const FLAT_SPECS = {
@@ -125,6 +129,19 @@ const FLAT_SPECS = {
       { name: "cost_ccy", clean: cleanCcy },
       { name: "booking_status", clean: cleanBooking },
       { name: "booking_url", nullable: true },
+      { name: "note", nullable: true }
+    ]
+  },
+  // packing: the packing list, one row per item (space=<slug>, list='packing'). owner = 'shared' or a
+  // person's email; packed = '0'|'1'; qty = int>=1 or null. Replaces the old to-do checklist.
+  packing: {
+    table: "packing", audit: "packing_audit", idCol: "packing_id", prefix: "pk", soft: true,
+    cols: [
+      { name: "title" },
+      { name: "owner", clean: cleanOwner },
+      { name: "packed", clean: cleanBool },
+      { name: "category", nullable: true },
+      { name: "qty", clean: cleanQty, nullable: true },
       { name: "note", nullable: true }
     ]
   }
@@ -287,6 +304,26 @@ export const deleteActivity    = (env, a, who) => flatDelete(env, FLAT_SPECS.act
 export const restoreActivity   = (env, a, who) => flatRestore(env, FLAT_SPECS.activities, a, who);
 export const purgeActivity     = (env, a, who) => flatPurge(env, FLAT_SPECS.activities, a, who);
 export const seedActivities    = (env, a, who) => flatSeed(env, FLAT_SPECS.activities, a, who);
+
+// packing (the packing list; replaces the old to-do checklist).
+export const listPacking    = (env, a, who) => flatList(env, FLAT_SPECS.packing, a, who);
+export const createPacking  = (env, a, who) => flatCreate(env, FLAT_SPECS.packing, a, who);
+export const patchPacking   = (env, a, who) => flatPatch(env, FLAT_SPECS.packing, a, who);
+export const deletePacking  = (env, a, who) => flatDelete(env, FLAT_SPECS.packing, a, who);
+export const restorePacking = (env, a, who) => flatRestore(env, FLAT_SPECS.packing, a, who);
+export const purgePacking   = (env, a, who) => flatPurge(env, FLAT_SPECS.packing, a, who);
+export const seedPacking    = (env, a, who) => flatSeed(env, FLAT_SPECS.packing, a, who);
+// PURE ownership filter for packing rows. actor is the current user's email.
+//   scope 'mine'    -> rows this actor owns          scope 'partner' -> rows owned by some OTHER person (email, not shared)
+//   scope 'shared'  -> rows owned by 'shared'         else (all/undefined) -> every row
+export function filterPacking(rows, actor, scope) {
+  const list = Array.isArray(rows) ? rows : [];
+  const a = String(actor == null ? "" : actor).toLowerCase();
+  if (scope === "mine") return list.filter(r => r.owner === a);
+  if (scope === "partner") return list.filter(r => String(r.owner || "").includes("@") && r.owner !== a);
+  if (scope === "shared") return list.filter(r => r.owner === "shared");
+  return list;
+}
 
 // Resolve a trip by slug -> its config row (registry lives at space='app', list='trips').
 export async function tripBySlug(env, slug) {

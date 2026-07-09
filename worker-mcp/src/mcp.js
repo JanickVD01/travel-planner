@@ -9,6 +9,7 @@ import {
   listTrips, createTrip, patchTrip, tripBySlug,
   listSteps, createStep, patchStep, deleteStep, restoreStep, addStay, addTravel,
   listActivities, createActivity, patchActivity, deleteActivity, restoreActivity,
+  listPacking, createPacking, patchPacking, deletePacking, restorePacking, filterPacking,
   setCoordinate, setBooking, tripOverview, getBudget
 } from "../../shared/core.js";
 
@@ -136,6 +137,36 @@ export class AppMCP extends McpAgent {
     this.server.registerTool("list_deleted_activities",
       { description: "List a trip's soft-deleted (trashed) activities.", inputSchema: { slug: SLUG } },
       (a) => self.run(() => listActivities(env, { space: a.slug, list: "activities", trash: true }, self.actor)));
+
+    // ---- packing (the packing list; replaces the old to-do checklist) ----
+    // owner = 'shared' or a person's email; the literal 'mine' maps to the current actor's email.
+    const PACK_OWNER = z.string().optional().describe("'shared', a person's email, or 'mine' (maps to you)");
+    const ownerOf = (v) => (v === "mine" ? self.actor : v);
+    this.server.registerTool("list_packing",
+      { description: "List a trip's packing items. Optional scope: 'mine' (yours), 'partner' (someone else's), 'shared', or all.", inputSchema: { slug: SLUG, scope: z.enum(["mine", "partner", "shared", "all"]).optional() } },
+      (a) => self.run(async () => {
+        const r = await listPacking(env, { space: a.slug, list: "packing" }, self.actor);
+        return { rows: filterPacking(r.rows, self.actor, a.scope) };
+      }));
+    this.server.registerTool("add_packing",
+      { description: "Add a packing item to a trip. owner defaults to 'shared'; pass 'mine' to assign it to yourself.", inputSchema: { slug: SLUG, title: z.string(), owner: PACK_OWNER, packed: z.boolean().optional(), category: z.string().optional(), qty: z.number().optional(), note: z.string().optional() } },
+      (a) => self.run(() => createPacking(env, Object.assign({}, a, { space: a.slug, list: "packing", owner: ownerOf(a.owner) }), self.actor)));
+    this.server.registerTool("edit_packing",
+      { description: "Edit a packing item by id (any field, incl. owner and sort_order). owner 'mine' maps to you.", inputSchema: { slug: SLUG, id: z.string(), title: z.string().optional(), owner: PACK_OWNER, packed: z.boolean().optional(), category: z.string().optional(), qty: z.number().optional(), note: z.string().optional(), sort_order: z.number().optional() } },
+      (a) => self.run(() => {
+        const p = Object.assign({}, a, { space: a.slug, list: "packing" });
+        if (a.owner !== undefined) p.owner = ownerOf(a.owner);   // only touch owner when explicitly given
+        return patchPacking(env, p, self.actor);
+      }));
+    this.server.registerTool("toggle_packed",
+      { description: "Set whether a packing item is packed (checked off) by id.", inputSchema: { slug: SLUG, id: z.string(), packed: z.boolean() } },
+      (a) => self.run(() => patchPacking(env, { space: a.slug, list: "packing", id: a.id, packed: a.packed }, self.actor)));
+    this.server.registerTool("delete_packing",
+      { description: "Delete a packing item by id (soft-delete; recoverable via restore_packing).", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => deletePacking(env, { space: a.slug, list: "packing", id: a.id }, self.actor)));
+    this.server.registerTool("restore_packing",
+      { description: "Restore a soft-deleted packing item by id.", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => restorePacking(env, { space: a.slug, list: "packing", id: a.id }, self.actor)));
 
     // ---- cross-entity routers + overview ----
     this.server.registerTool("set_coordinate",

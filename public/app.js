@@ -50,7 +50,8 @@ const ICONS = {
   car:   '<path d="M5 13.5 6.4 9A2 2 0 0 1 8.3 7.6h7.4A2 2 0 0 1 17.6 9L19 13.5V18h-2.5M5 18v-4.5M5 18h2.5"/><circle cx="8" cy="17.5" r="1.6"/><circle cx="16" cy="17.5" r="1.6"/>',
   stay:  '<path d="M3.5 20.5V9L12 4l8.5 5v11.5M3.5 20.5h17M9.5 20.5v-5h5v5"/>',
   pin:   '<path d="M12 21.5s6.5-6 6.5-10.5a6.5 6.5 0 0 0-13 0C5.5 15.5 12 21.5 12 21.5z"/><circle cx="12" cy="11" r="2.3"/>',
-  link:  '<path d="M9 15l6-6M10.5 6.5 12 5a4 4 0 0 1 6 6l-2 2M13.5 17.5 12 19a4 4 0 0 1-6-6l2-2"/>'
+  link:  '<path d="M9 15l6-6M10.5 6.5 12 5a4 4 0 0 1 6 6l-2 2M13.5 17.5 12 19a4 4 0 0 1-6-6l2-2"/>',
+  check: '<path d="M5 12.5 10 17.5 19 6.5"/>'
 };
 function icon(name, cls) {
   const p = ICONS[name] || ICONS.pin;
@@ -356,8 +357,8 @@ function renderSubnav(slug, active) {
   const s = encodeURIComponent(slug);
   const tabs = [
     { key: "timeline", label: "Timeline", href: "#/trip/" + s },
-    { key: "budget",   label: "Budget",   href: "#/trip/" + s + "/budget" }
-    // M8: { key: "packing", label: "Packing", href: "#/trip/" + s + "/packing" }
+    { key: "budget",   label: "Budget",   href: "#/trip/" + s + "/budget" },
+    { key: "packing",  label: "Packing",  href: "#/trip/" + s + "/packing" }
   ];
   return '<nav class="subnav" aria-label="Trip sections">' +
     tabs.map(t => '<a href="' + t.href + '"' + (t.key === active ? ' aria-current="page"' : "") +
@@ -566,6 +567,168 @@ async function viewActivity(slug, id) {
   motion(an => an.animate(".detail-meta, .notes", { opacity: [0, 1], translateY: [8, 0], delay: an.stagger(60), duration: 340, ease: "out(3)" }));
 }
 
+// ---- packing (M8): a shared checklist scoped by owner (Mine / Partner / Shared) ----
+// The active filter is a module var so switching chips re-renders from the cached rows (no refetch).
+let _packFilter = "all";
+const PACK_SCOPES = [["all", "All"], ["mine", "Mine"], ["partner", "Partner"], ["shared", "Shared"]];
+// Mirror shared/core.js filterPacking EXACTLY so the UI and Claude agree on what each scope means.
+function packFilterRows(rows, actor, scope) {
+  const list = Array.isArray(rows) ? rows : [];
+  const a = String(actor == null ? "" : actor).toLowerCase();
+  if (scope === "mine") return list.filter(r => r.owner === a);
+  if (scope === "partner") return list.filter(r => String(r.owner || "").includes("@") && r.owner !== a);
+  if (scope === "shared") return list.filter(r => r.owner === "shared");
+  return list;
+}
+// A per-owner badge: 'shared' -> Shared; my email -> You; any other email -> Partner.
+function ownerBadge(owner, actor) {
+  const a = String(actor == null ? "" : actor).toLowerCase();
+  if (owner === "shared") return '<span class="owner-badge shared">Shared</span>';
+  if (owner === a) return '<span class="owner-badge you">You</span>';
+  if (String(owner || "").includes("@")) return '<span class="owner-badge partner">Partner</span>';
+  return "";
+}
+// Fetch (once) the packing rows for a trip and cache them on the trip object; drops soft-deleted tombstones.
+async function loadPacking(slug) {
+  const t = await loadTrip(slug);
+  if (!t) return null;
+  if (!t.packing) {
+    let rows = [];
+    try { const d = await api("packing/" + encodeURIComponent(slug) + "/packing"); rows = (d && d.rows) || []; } catch {}
+    t.packing = rows.filter(r => !r.deleted);
+  }
+  return t;
+}
+
+function packItemHTML(r, actor) {
+  const packed = r.packed === "1";
+  const check = '<button type="button" class="pack-check" data-act="toggle" data-id="' + esc(r.id) +
+    '" data-packed="' + (packed ? "1" : "0") + '" role="checkbox" aria-checked="' + (packed ? "true" : "false") +
+    '" aria-label="Mark ' + esc(r.title || "item") + (packed ? " not packed" : " packed") + '">' +
+    (packed ? icon("check", "pack-tick") : "") + "</button>";
+  const titleHTML = editable('<span class="pack-title-text">' + esc(r.title || "") + "</span>",
+    { entity: "packing", list: "packing", id: r.id, field: "title", input: "text", value: r.title });
+  const qty = Number(r.qty);
+  const qtyHTML = (isFinite(qty) && qty > 1) ? '<span class="pack-qty mono">×' + esc(String(qty)) + "</span>" : "";
+  const del = '<button type="button" class="pack-del" data-act="del" data-id="' + esc(r.id) +
+    '" aria-label="Delete ' + esc(r.title || "item") + '">×</button>';
+  return '<div class="pack-item' + (packed ? " packed" : "") + '" data-id="' + esc(r.id) + '">' +
+    check +
+    '<div class="pack-body"><span class="pack-title">' + titleHTML + "</span>" +
+      ownerBadge(r.owner, actor) + qtyHTML + "</div>" +
+    del + "</div>";
+}
+
+async function viewPacking(slug) {
+  markActive(null);
+  view().innerHTML = '<div class="panel"><p class="muted">Loading packing…</p></div>';
+  const t = await loadPacking(slug);
+  const trip = t && t.trip;
+  if (!trip) { view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
+  const actor = (state.me && state.me.email) || "";
+  const title = trip.title || slug;
+  const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
+  const hero = '<div class="trip-hero"><a class="back" href="#/">' + icon("pin") + "All trips</a>" +
+    "<h1>" + esc(title) + "</h1>" + (range ? '<div class="muted mono">' + esc(range) + "</div>" : "") +
+    (trip.note ? '<div class="muted">' + esc(trip.note) + "</div>" : "") + "</div>";
+  const shell = hero + renderSubnav(slug, "packing");
+
+  const all = t.packing || [];
+  const rows = packFilterRows(all, actor, _packFilter);
+
+  // filter chips (with per-scope counts so an empty scope reads clearly)
+  const chips = '<div class="pack-filters" role="tablist" aria-label="Filter packing list">' +
+    PACK_SCOPES.map(([key, label]) => {
+      const n = packFilterRows(all, actor, key).length;
+      return '<button type="button" class="pack-chip' + (key === _packFilter ? " active" : "") + '"' +
+        ' data-scope="' + esc(key) + '" role="tab" aria-selected="' + (key === _packFilter ? "true" : "false") + '">' +
+        esc(label) + ' <span class="pack-count mono">' + esc(String(n)) + "</span></button>";
+    }).join("") + "</div>";
+
+  // add-row form
+  const addForm = '<form class="pack-add" data-act="add" autocomplete="off">' +
+    '<input class="pack-in pack-in-title" name="title" type="text" placeholder="Add an item…" aria-label="Item name" required>' +
+    '<select class="pack-in pack-in-owner" name="owner" aria-label="Owner">' +
+      '<option value="mine">Mine</option><option value="shared" selected>Shared</option></select>' +
+    '<input class="pack-in pack-in-cat" name="category" type="text" placeholder="Category" aria-label="Category">' +
+    '<input class="pack-in pack-in-qty" name="qty" type="text" inputmode="numeric" placeholder="Qty" aria-label="Quantity">' +
+    '<button type="submit" class="pack-add-btn">Add</button></form>';
+
+  // list, grouped by category (missing category -> "Other"); packed items sink within each group
+  let listHTML;
+  if (!rows.length) {
+    listHTML = '<p class="muted pack-empty">' +
+      (all.length ? "Nothing in this view. Try another filter." :
+        "No items yet. Add one above, or ask Claude to build a packing list.") + "</p>";
+  } else {
+    const groups = new Map();
+    rows.forEach(r => { const k = (r.category && String(r.category).trim()) || "Other"; (groups.get(k) || groups.set(k, []).get(k)).push(r); });
+    const keys = Array.from(groups.keys()).sort((a, b) => (a === "Other") - (b === "Other") || a.localeCompare(b));
+    listHTML = '<div class="pack-list">' + keys.map(k => {
+      const items = groups.get(k).slice().sort((a, b) => (a.packed === "1") - (b.packed === "1") ||
+        (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
+      return '<section class="pack-group"><h2 class="pack-group-h">' + esc(k) +
+        '<span class="pack-count mono">' + esc(String(items.length)) + "</span></h2>" +
+        items.map(r => packItemHTML(r, actor)).join("") + "</section>";
+    }).join("") + "</div>";
+  }
+
+  view().innerHTML = shell + '<div class="panel packing">' + addForm + chips + listHTML + "</div>";
+
+  // ---- wire up (delegated; rebound each render) ----
+  const panel = view().querySelector(".packing");
+  // filter chips: pure client-side, re-render from cache
+  panel.querySelectorAll(".pack-chip").forEach(btn => btn.addEventListener("click", () => {
+    _packFilter = btn.dataset.scope || "all";
+    vt(() => viewPacking(slug));
+  }));
+  // toggle packed + delete (ignore clicks on inline-edit controls, handled globally)
+  panel.addEventListener("click", async (e) => {
+    if (e.target.closest(".editable, .edit-input, .edit-select")) return;
+    const btn = e.target.closest("[data-act]");
+    if (!btn || btn.tagName === "FORM") return;
+    const id = btn.dataset.id, act = btn.dataset.act;
+    if (act === "toggle") {
+      const next = btn.dataset.packed === "1" ? "0" : "1";
+      btn.disabled = true;
+      try {
+        await api("packing/" + encodeURIComponent(slug) + "/packing/" + encodeURIComponent(id),
+          { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ packed: next }) });
+        const row = (t.packing || []).find(r => String(r.id) === String(id));
+        if (row) row.packed = next;
+        vt(() => viewPacking(slug));
+      } catch { btn.disabled = false; }
+    } else if (act === "del") {
+      btn.disabled = true;
+      try {
+        await api("packing/" + encodeURIComponent(slug) + "/packing/" + encodeURIComponent(id), { method: "DELETE" });
+        t.packing = (t.packing || []).filter(r => String(r.id) !== String(id));
+        vt(() => viewPacking(slug));
+      } catch { btn.disabled = false; }
+    }
+  });
+  // add form
+  const form = panel.querySelector(".pack-add");
+  if (form) form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const titleV = String(fd.get("title") || "").trim();
+    if (!titleV) return;
+    const ownerSel = fd.get("owner");
+    const body = { title: titleV, owner: ownerSel === "mine" ? actor : "shared" };
+    const catV = String(fd.get("category") || "").trim(); if (catV) body.category = catV;
+    const qtyV = String(fd.get("qty") || "").trim(); if (qtyV) body.qty = qtyV;
+    const submit = form.querySelector(".pack-add-btn");
+    if (submit) submit.disabled = true;
+    try {
+      await api("packing/" + encodeURIComponent(slug) + "/packing",
+        { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      t.packing = undefined;                 // invalidate the cache -> loadPacking refetches
+      vt(() => viewPacking(slug));
+    } catch { if (submit) submit.disabled = false; }
+  });
+}
+
 async function viewWhatsNew() {
   markActive("/whats-new");
   view().innerHTML = '<div class="panel"><h1>What’s New</h1><p class="muted">Loading…</p></div>';
@@ -589,6 +752,7 @@ function route() {
   if (parts[0] === "trip" && parts[1]) {
     if (parts[2] === "activity" && parts[3]) return viewActivity(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
     if (parts[2] === "budget") return viewBudget(decodeURIComponent(parts[1]));
+    if (parts[2] === "packing") return viewPacking(decodeURIComponent(parts[1]));
     return viewTimeline(parts[1]);
   }
   return viewHome();

@@ -2,7 +2,7 @@
 // the real adapters; self-seeds a realistic Thailand trip so previews aren't empty. Edits evaporate.
 // IMPORTANT: when you add an /api/* route, add a branch here too, or it 404s in previews.
 import { computeBudget } from "../../shared/core.js";
-const S = { entries: [], trips: [], steps: [], activities: [] };
+const S = { entries: [], trips: [], steps: [], activities: [], packing: [] };
 function j(o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json; charset=utf-8" } }); }
 
 (function seed() {
@@ -37,6 +37,10 @@ function j(o, s) { return new Response(JSON.stringify(o), { status: s || 200, he
     day: "2026-11-09", cost_est: "2500", needs_advance: "yes", booking_status: "Confirmed", booking_url: "https://example.com/elephants" });
   act(3, { step_id: "st-demo-6", title: "Four Islands snorkel tour", location: "Ko Lanta", day: "2026-11-14",
     cost_est: "1800", needs_advance: "yes", booking_status: "Idea" });
+
+  const pack = (i, o) => S.packing.push(base(Object.assign({ id: "pk-demo-" + i, sort_order: i * 10, packed: "0", category: null, qty: null, note: null }, o)));
+  pack(1, { title: "Travel adapters", owner: "shared", packed: "0", category: "Tech" });
+  pack(2, { title: "Sunscreen", owner: "demo@example.com", packed: "0", category: "Toiletries", qty: "2" });
 })();
 
 // Mirror core.js decorate (maps_url + eur) so the demo /overview shape matches production.
@@ -75,6 +79,7 @@ export async function handleMock(request, env) {
   if (parts[0] === "trips")   { if (request.method === "GET") return j({ rows: isTrash ? [] : S.trips }); return j({ ok: true, demo: true }); }
   if (parts[0] === "steps")   { if (request.method === "GET") return j({ rows: isTrash ? [] : S.steps }); return j({ ok: true, demo: true }); }
   if (parts[0] === "activities") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.activities }); return j({ ok: true, demo: true }); }
+  if (parts[0] === "packing") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.packing }); return j({ ok: true, demo: true }); }
   if (parts[0] === "overview") { if (request.method === "GET") return j(mockOverview()); return j({ ok: true, demo: true }); }
   if (parts[0] === "budget") { if (request.method === "GET") return j(mockBudget()); return j({ ok: true, demo: true }); }
   return j({ ok: true, demo: true });     // unknown route degrades to ok, never 500
