@@ -955,13 +955,24 @@ export default AppMCP.serve("/mcp");
        self‑hosted app can't be completed by an MCP client.
      - **Add a policy:** Include → **Emails** → your `<ALLOWLIST_EMAILS>`; login method **One‑time PIN**;
        attach it to the app and **Save**.
+     - **Allow the Claude connector's redirect URI (required for claude.ai web + the phone apps):** in the
+       app's **Advanced settings → Managed OAuth → "Allowed redirect URIs"**, add
+       `https://claude.ai/api/mcp/auth_callback` (one entry covers claude.ai web, Desktop, iOS/Android &
+       Cowork — they share this callback), and **leave "Allow loopback/localhost clients" on** so Claude
+       Code keeps working. Skip this and claude.ai's **Dynamic Client Registration is rejected** with
+       *"Couldn't register with … sign‑in service"* — even though Claude Code still connects (it registers
+       a `127.0.0.1` loopback redirect, allowed by default). That asymmetry is the #1 "works in the CLI,
+       fails on my phone" trap. (See `docs/implementations/0006-*`.)
    - Open the created app → copy its **Application Audience (AUD)** tag.
    - Put that AUD in `worker-mcp/wrangler.jsonc` `vars` as **`POLICY_AUD`** (`TEAM_DOMAIN` is the same as the
      Pages app), then **redeploy** (`npx --yes wrangler@4 deploy`, or let `deploy-worker.yml` do it on merge)
      so the var takes effect. **Verify with the live probe** from the ⚠️ callout (401 + `WWW-Authenticate`;
      `/.well-known/oauth-*` = 200) before moving on.
-3. `[You]` **Connect Claude — use the Claude Code CLI** (claude.ai/Desktop connectors are commonly
-   org‑managed and blocked; the CLI is the reliable path):
+3. `[You]` **Connect Claude — claude.ai connector (for phones) or the Claude Code CLI (for a terminal).**
+   *Phones/web:* add a **custom connector** on claude.ai (*Settings → Connectors → Add custom connector →*
+   the `/mcp` URL, OAuth fields blank). It needs the **Allowed redirect URI** from step 2 in place; it then
+   completes the Access email one‑time‑PIN and **syncs to the iOS/Android apps** automatically. *Terminal
+   (also the fallback if a work account has connectors admin‑disabled):*
    ```bash
    claude mcp add --transport http --scope user <APP_SLUG> https://<WORKER_NAME>.<your-subdomain>.workers.dev/mcp
    ```
