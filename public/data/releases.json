@@ -1,6 +1,22 @@
 {
   "releases": [
     {
+      "version": "v0.4.0",
+      "title": "Plan it yourself",
+      "date": "2026-07-09",
+      "notes": [
+        "Build your trip right in the app: tap “add step” anywhere on the timeline to insert a stay or a travel leg through a quick guided wizard — no need to ask Claude.",
+        "Add activities the same way: an “add activity” button on each stay opens a short wizard for the title, day, cost, booking status and more.",
+        "Setting a location is easy — just paste a Google Maps link (or “lat, lng”) and the wizard pulls out the coordinates.",
+        "Map links now open Google Maps instead of OpenStreetMap.",
+        "More things are tap-to-edit inline: cost estimates, activity dates, and each step’s dates and times — with native date/time pickers.",
+        "Status chips open on a single tap now (no more double-tap to change Idea → Booked).",
+        "Travel legs show the date and the time (departure and arrival), not just the time.",
+        "Photo & screenshot uploads are switched on — attach tickets and confirmations to any step or activity.",
+        "Added a sample packing list to the France demo trip so the Mine / Partner / Shared filters have something to show."
+      ]
+    },
+    {
       "version": "v0.3.0",
       "title": "Your trip, on a timeline",
       "date": "2026-07-09",
