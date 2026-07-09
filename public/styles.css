@@ -613,6 +613,7 @@ a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-u
 .insert-btn .ico { width: 14px; height: 14px; }
 .tl-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); padding: var(--space-4) 0; }
 .insert-btn-lg { display: inline-flex; align-items: center; gap: 6px; }
+.insert-btn.add-act { margin-top: var(--space-2); }
 
 /* ---- guided wizard bottom-sheet (M5/M6) ---- */
 .wizard-overlay {
