@@ -7,9 +7,9 @@ import { z } from "zod";
 import {
   ServiceError, listEntries, createEntry, patchEntry, deleteEntry,
   listTrips, createTrip, patchTrip, tripBySlug,
-  listSteps, createStep, patchStep, deleteStep, restoreStep, addStay, addTravel,
-  listActivities, createActivity, patchActivity, deleteActivity, restoreActivity,
-  listPacking, createPacking, patchPacking, deletePacking, restorePacking, filterPacking,
+  listSteps, createStep, patchStep, deleteStep, restoreStep, purgeStepDeep, addStay, addTravel,
+  listActivities, createActivity, patchActivity, deleteActivity, restoreActivity, purgeActivity,
+  listPacking, createPacking, patchPacking, deletePacking, restorePacking, purgePacking, filterPacking,
   listAttachments, patchAttachment, deleteAttachment, purgeAttachment,
   setCoordinate, setBooking, tripOverview, getBudget
 } from "../../shared/core.js";
@@ -115,6 +115,12 @@ export class AppMCP extends McpAgent {
     this.server.registerTool("restore_step",
       { description: "Restore a soft-deleted step by id.", inputSchema: { slug: SLUG, id: z.string() } },
       (a) => self.run(() => restoreStep(env, { space: a.slug, list: "flow", id: a.id }, self.actor)));
+    this.server.registerTool("purge_step",
+      { description: "Permanently delete a step AND its activities/photos (cascade). Cannot be undone.", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => purgeStepDeep(env, { space: a.slug, list: "flow", id: a.id }, self.actor)));
+    this.server.registerTool("delete_step_deep",
+      { description: "Permanently delete a step AND its activities/photos (cascade). Alias of purge_step.", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => purgeStepDeep(env, { space: a.slug, list: "flow", id: a.id }, self.actor)));
 
     // ---- activities (things to do, hung off a step) ----
     this.server.registerTool("list_activities",
@@ -138,6 +144,9 @@ export class AppMCP extends McpAgent {
     this.server.registerTool("list_deleted_activities",
       { description: "List a trip's soft-deleted (trashed) activities.", inputSchema: { slug: SLUG } },
       (a) => self.run(() => listActivities(env, { space: a.slug, list: "activities", trash: true }, self.actor)));
+    this.server.registerTool("purge_activity",
+      { description: "Permanently delete a soft-deleted activity by id. Cannot be undone.", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => purgeActivity(env, { space: a.slug, list: "activities", id: a.id }, self.actor)));
 
     // ---- packing (the packing list; replaces the old to-do checklist) ----
     // owner = 'shared' or a person's email; the literal 'mine' maps to the current actor's email.
@@ -168,6 +177,12 @@ export class AppMCP extends McpAgent {
     this.server.registerTool("restore_packing",
       { description: "Restore a soft-deleted packing item by id.", inputSchema: { slug: SLUG, id: z.string() } },
       (a) => self.run(() => restorePacking(env, { space: a.slug, list: "packing", id: a.id }, self.actor)));
+    this.server.registerTool("list_deleted_packing",
+      { description: "List a trip's soft-deleted (trashed) packing items.", inputSchema: { slug: SLUG } },
+      (a) => self.run(() => listPacking(env, { space: a.slug, list: "packing", trash: true }, self.actor)));
+    this.server.registerTool("purge_packing",
+      { description: "Permanently delete a soft-deleted packing item by id. Cannot be undone.", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => purgePacking(env, { space: a.slug, list: "packing", id: a.id }, self.actor)));
 
     // ---- attachments (photo METADATA; image BYTES are uploaded via the web UI only, never MCP) ----
     this.server.registerTool("list_attachments",

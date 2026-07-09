@@ -347,6 +347,48 @@ export const restoreAttachment  = (env, a, who) => flatRestore(env, FLAT_SPECS.a
 export const purgeAttachment    = (env, a, who) => flatPurge(env, FLAT_SPECS.attachments, a, who);
 export const seedAttachments    = (env, a, who) => flatSeed(env, FLAT_SPECS.attachments, a, who);
 
+// Cascade hard-delete (M10): permanently remove a step AND everything hanging off it — its
+// activities (by step_id) and every photo attachment on the step or on any of those activities.
+// All DB deletes + purge-audit snapshots run in ONE env.DB.batch (atomic); KV image bytes are
+// deleted only AFTER the batch commits (KV has no transaction with D1). Reads live children only
+// (mirrors the trash UI). Works on a live OR trashed step. Returns counts for the caller.
+export async function purgeStepDeep(env, { space, list, id }, actor) {
+  const now = new Date().toISOString();
+  const stepSpec = FLAT_SPECS.steps, actSpec = FLAT_SPECS.activities, attSpec = FLAT_SPECS.attachments;
+  const step = await env.DB.prepare(
+    "SELECT * FROM " + stepSpec.table + " WHERE space=? AND list=? AND " + stepSpec.idCol + "=?"
+  ).bind(space, list, id).first();
+  if (!step) throw new ServiceError(404, "not found");
+  const { rows: acts } = await listActivities(env, { space, list: "activities" }, actor);
+  const childActs = acts.filter(a => a.step_id === id);
+  const childActIds = new Set(childActs.map(a => a.id));
+  const { rows: atts } = await listAttachments(env, { space, list: "attachments" }, actor);
+  const childAtts = atts.filter(x =>
+    (x.parent_type === "step" && x.parent_id === id) ||
+    (x.parent_type === "activity" && childActIds.has(x.parent_id))
+  );
+  const del = (spec, l, rowId) => env.DB.prepare(
+    "DELETE FROM " + spec.table + " WHERE space=? AND list=? AND " + spec.idCol + "=?"
+  ).bind(space, l, rowId);
+  const stmts = [
+    del(stepSpec, list, id),
+    auditStmt(env, stepSpec, space, list, id, "purge", mapRow(stepSpec, step), actor, now)
+  ];
+  childActs.forEach(a => {
+    stmts.push(del(actSpec, "activities", a.id));
+    stmts.push(auditStmt(env, actSpec, space, "activities", a.id, "purge", a, actor, now));
+  });
+  childAtts.forEach(x => {
+    stmts.push(del(attSpec, "attachments", x.id));
+    stmts.push(auditStmt(env, attSpec, space, "attachments", x.id, "purge", x, actor, now));
+  });
+  await env.DB.batch(stmts);
+  if (env.IMAGES_KV) {
+    for (const x of childAtts) { if (x.kv_key) { try { await env.IMAGES_KV.delete(x.kv_key); } catch {} } }
+  }
+  return { ok: true, purged: id, activities: childActs.length, attachments: childAtts.length };
+}
+
 export function filterPacking(rows, actor, scope) {
   const list = Array.isArray(rows) ? rows : [];
   const a = String(actor == null ? "" : actor).toLowerCase();
