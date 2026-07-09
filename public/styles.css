@@ -192,6 +192,9 @@ a.card:hover { border-color: var(--accent); text-decoration: none; }
 }
 .editable:hover { background: var(--paper-2); border-bottom-color: var(--accent); text-decoration: none; }
 .add-actual { color: var(--accent-ink); font-size: var(--text-sm); font-weight: 600; }
+/* inline date/time on the timeline — compact tappable pills that wrap on small screens */
+.leg-when, .stay-when { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 1px 5px; }
+.leg-when .editable, .stay-when .editable { min-height: 34px; padding: 1px 4px; gap: 3px; }
 .edit-input, .edit-select {
   font-family: var(--f-mono); font-size: 16px;        /* >=16px so iOS won't zoom */
   color: var(--ink-0); background: var(--paper-0);

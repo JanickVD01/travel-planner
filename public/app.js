@@ -77,7 +77,7 @@ function eurEquiv(amt, ccy, rate) {
 function safeUrl(u) { return /^https?:\/\//i.test(String(u == null ? "" : u)) ? String(u) : ""; }
 function mapsUrl(row) {
   if (row.lat != null && row.lat !== "" && row.lng != null && row.lng !== "")
-    return "https://www.openstreetmap.org/?mlat=" + encodeURIComponent(row.lat) + "&mlon=" + encodeURIComponent(row.lng) + "#map=12/" + encodeURIComponent(row.lat) + "/" + encodeURIComponent(row.lng);
+    return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(row.lat + "," + row.lng);
   return safeUrl(row.map_url);
 }
 function fmtDate(d) { if (!d) return ""; const p = String(d).split("-"); if (p.length !== 3) return String(d);
@@ -210,6 +210,10 @@ function openEditor(btn) {
   } else if (d.input === "textarea") {                 // multiline (e.g. notes)
     ctrl = document.createElement("textarea");
     ctrl.className = "edit-input edit-textarea"; ctrl.rows = 5; ctrl.value = cur;
+  } else if (d.input === "date" || d.input === "time") { // native picker (single-tap; value already ISO / HH:MM)
+    ctrl = document.createElement("input");
+    ctrl.type = d.input;
+    ctrl.className = "edit-input"; ctrl.value = cur;
   } else {
     ctrl = document.createElement("input");
     ctrl.type = "text"; ctrl.inputMode = "decimal";   // NEVER type=number (iOS)
@@ -250,11 +254,14 @@ function openEditor(btn) {
     else if (e.key === "Escape") { e.preventDefault(); cancel(); }
   });
   if (d.input === "select") { ctrl.addEventListener("change", commit); ctrl.addEventListener("blur", cancel); }
+  else if (d.input === "date" || d.input === "time") { ctrl.addEventListener("change", commit); ctrl.addEventListener("blur", commit); }
   else { ctrl.addEventListener("blur", commit); }                     // input + textarea commit on blur
 
   btn.replaceWith(ctrl);
   ctrl.focus();
   if (d.input === "decimal" && ctrl.select) ctrl.select();            // pre-select numeric value for quick replace
+  // Open the native picker on the SAME tap (select/date/time) — otherwise focus alone leaves it closed (the old two-tap).
+  if (d.input === "select" || d.input === "date" || d.input === "time") { try { ctrl.showPicker && ctrl.showPicker(); } catch (e) {} }
 }
 let _editableBound = false;
 function bindEditable() {                                // attach the ONE delegated listener once
@@ -303,8 +310,10 @@ function activityCardHTML(a, rate, slug) {
   const st = a.booking_status || "Idea";
   const chip = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
     { entity: "activities", list: "activities", id: a.id, field: "booking_status", input: "select", value: st, options: "Idea|Planned|Booked|Confirmed" });
-  const estHTML = (a.cost_est != null && a.cost_est !== "")
-    ? '<span class="cost mono est muted">est ' + esc(money(a.cost_est, a.cost_ccy)) + "</span>" : "";
+  const estDisplay = (a.cost_est != null && a.cost_est !== "")
+    ? '<span class="cost mono est muted">est ' + esc(money(a.cost_est, a.cost_ccy)) + "</span>"
+    : '<span class="add-actual est">+ est</span>';
+  const estHTML = editable(estDisplay, { entity: "activities", list: "activities", id: a.id, field: "cost_est", input: "decimal", value: a.cost_est });
   const act = a.cost_actual;
   const actDisplay = (act != null && act !== "")
     ? '<span class="cost mono">' + esc(money(act, a.cost_ccy)) +
@@ -455,9 +464,11 @@ function stepCardHTML(s, rate, acts, slug) {
   const st = s.booking_status || "Idea";
   const chip = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
     { entity: "steps", list: "flow", id: s.id, field: "booking_status", input: "select", value: st, options: "Idea|Planned|Booked|Confirmed" });
-  // Estimate is read-only; ACTUAL cost is editable (null -> a subtle "+ actual" affordance).
-  const estHTML = (s.cost_est != null && s.cost_est !== "")
-    ? '<span class="cost mono est muted">est ' + esc(money(s.cost_est, s.cost_ccy)) + "</span>" : "";
+  // Estimate + actual are both editable (null -> a subtle "+ est" / "+ actual" affordance).
+  const estDisplay = (s.cost_est != null && s.cost_est !== "")
+    ? '<span class="cost mono est muted">est ' + esc(money(s.cost_est, s.cost_ccy)) + "</span>"
+    : '<span class="add-actual est">+ est</span>';
+  const estHTML = editable(estDisplay, { entity: "steps", list: "flow", id: s.id, field: "cost_est", input: "decimal", value: s.cost_est });
   const act = s.cost_actual;
   const actDisplay = (act != null && act !== "")
     ? '<span class="cost mono">' + esc(money(act, s.cost_ccy)) +
@@ -469,21 +480,32 @@ function stepCardHTML(s, rate, acts, slug) {
   const maplink = mu ? '<a class="maplink" href="' + esc(mu) + '" target="_blank" rel="noopener">' + icon("pin") + "Map</a>" : "";
   const bl = safeUrl(s.booking_url);
   const booklink = bl ? '<a class="maplink" href="' + esc(bl) + '" target="_blank" rel="noopener">' + icon("link") + "Booking</a>" : "";
+  // Dates & times are tap-to-edit inline (native picker); empty -> a subtle affordance.
+  const editDate = (field, val, empty) => editable(
+    (val != null && val !== "") ? esc(fmtDate(val)) : '<span class="add-actual">' + empty + "</span>",
+    { entity: "steps", list: "flow", id: s.id, field: field, input: "date", value: val });
+  const editTime = (field, val, empty) => editable(
+    (val != null && val !== "") ? '<span class="mono">' + esc(val) + "</span>" : '<span class="add-actual">' + empty + "</span>",
+    { entity: "steps", list: "flow", id: s.id, field: field, input: "time", value: val });
 
   if (s.kind === "travel") {
     const mode = MODE_ICON[s.transport] || "plane";
-    const when = [s.depart_time ? "dep " + esc(s.depart_time) : "", s.arrive_time ? "arr " + esc(s.arrive_time) : ""].filter(Boolean).join(" · ");
+    const when = '<span class="leg-when">' +
+      '<span class="muted">dep</span> ' + editDate("depart", s.depart, "+ date") + " " + editTime("depart_time", s.depart_time, "+ time") +
+      ' <span class="muted">· arr</span> ' + editDate("arrive", s.arrive, "+ date") + " " + editTime("arrive_time", s.arrive_time, "+ time") + "</span>";
     return '<li class="step travel">' +
       '<span class="marker travel" aria-hidden="true">' + icon(mode) + "</span>" +
       '<div class="leg">' +
         '<div class="leg-top"><span class="leg-title">' + esc(s.title || s.location) + "</span>" + chip + "</div>" +
-        '<div class="leg-sub">' + (s.carrier ? '<span class="mono">' + esc(s.carrier) + "</span>" : "") +
-          (when ? ' <span class="muted mono">' + when + "</span>" : "") + "</div>" +
+        '<div class="leg-sub">' + (s.carrier ? '<span class="mono">' + esc(s.carrier) + "</span> " : "") + when + "</div>" +
         '<div class="step-meta">' + costHTML + maplink + booklink + "</div>" +
         attachmentsHTML("step", s.id, slug, { compact: true }) +
       "</div></li>";
   }
-  const nights = (s.arrive && s.depart) ? '<span class="muted mono">' + esc(fmtDate(s.arrive)) + " → " + esc(fmtDate(s.depart)) + "</span>" : "";
+  const nights = '<span class="stay-when">' +
+    editDate("arrive", s.arrive, "+ check-in") + " " + editTime("arrive_time", s.arrive_time, "+ time") +
+    ' <span class="muted">→</span> ' +
+    editDate("depart", s.depart, "+ check-out") + " " + editTime("depart_time", s.depart_time, "+ time") + "</span>";
   const actsHTML = (acts && acts.length)
     ? '<ul class="acts">' + acts.map(a => activityCardHTML(a, rate, slug)).join("") + "</ul>" : "";
   return '<li class="step stay">' +
@@ -675,16 +697,18 @@ async function viewActivity(slug, id) {
   const st = a.booking_status || "Idea";
   const statusCtrl = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
     { entity: "activities", list: "activities", id: a.id, field: "booking_status", input: "select", value: st, options: "Idea|Planned|Booked|Confirmed" });
-  const estHTML = (a.cost_est != null && a.cost_est !== "")
+  const estDisplay = (a.cost_est != null && a.cost_est !== "")
     ? '<span class="cost mono est muted">' + esc(money(a.cost_est, a.cost_ccy)) + "</span>"
-    : '<span class="muted">—</span>';
+    : '<span class="add-actual">+ est</span>';
+  const estHTML = editable(estDisplay, { entity: "activities", list: "activities", id: a.id, field: "cost_est", input: "decimal", value: a.cost_est });
   const act = a.cost_actual;
   const actDisplay = (act != null && act !== "")
     ? '<span class="cost mono">' + esc(money(act, a.cost_ccy)) +
       (eurEquiv(act, a.cost_ccy, rate) ? ' <span class="muted">' + esc(eurEquiv(act, a.cost_ccy, rate)) + "</span>" : "") + "</span>"
     : '<span class="add-actual">+ actual</span>';
   const actCtrl = editable(actDisplay, { entity: "activities", list: "activities", id: a.id, field: "cost_actual", input: "decimal", value: act });
-  const dayHTML = (a.day != null && a.day !== "") ? esc(String(a.day)) : "—";
+  const dayDisplay = (a.day != null && a.day !== "") ? esc(fmtDate(a.day)) : '<span class="add-actual">+ date</span>';
+  const dayHTML = editable(dayDisplay, { entity: "activities", list: "activities", id: a.id, field: "day", input: "date", value: a.day });
 
   const flag = a.needs_advance === "yes" ? '<span class="flag">' + icon("link") + "book ahead</span>" : "";
   const mu = mapsUrl(a);
