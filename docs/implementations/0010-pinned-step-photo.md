@@ -1,9 +1,9 @@
 # 0010 — Pinned step photo: a chosen image as the card's background
 
-> **Status:** 🚧 In review (2026-07-09). M1–M2 shipped (PR #38, merged); M3–M6 built + backend-verified
-> in the feature PR — **merges to prod only after migration `002_pinned.sql` is applied to prod**
-> (see Verification). This record carries the full plan and is **updated in place** as milestones land
-> (like [0003](0003-feature-expansion.md)). See [`README.md`](README.md) for the index.
+> **Status:** ✅ Shipped 2026-07-09 (PR #38 kickoff+preview, #39 feature; #40 added the CI `migrate`
+> workflow). Migration `002_pinned.sql` applied to prod D1 via the `migrate` workflow before #39 merged;
+> Pages + MCP worker redeployed on merge. This record carries the full plan and was **updated in place**
+> as milestones landed (like [0003](0003-feature-expansion.md)). See [`README.md`](README.md) for the index.
 >
 > **Sign-off decisions (owner, 2026-07-09):** travel legs get NO photo (stays only); default look =
 > **muted** (photo desaturated to a calm texture); scrim floor left at **0.82**.
@@ -85,9 +85,12 @@ uploads are live and there are real photos to pin.
 
 ## Outcome
 
-Built and backend-verified. **One manual step remains before the feature PR can merge:** apply the
-additive column to prod once —
-`npx --yes wrangler@4 d1 execute travel-planner-db --remote --env production --file=./migrations/002_pinned.sql`
-(safe to run before the code lands; old code ignores the new column). Then merge (worker redeploy, since
-`worker-mcp` changed). Without it, uploads/pins would 500 in prod. Flip this record + the index to
-✅ Shipped on merge.
+Shipped. The additive column was applied to prod D1 by dispatching the `migrate` workflow
+(`.github/workflows/migrate.yml`, added in #40) with `ref=code/pinned-step-photo`,
+`file=migrations/002_pinned.sql` — it runs `wrangler d1 execute --remote` on a CI runner where the
+Cloudflare token secret is injected (secrets are write-only and can't be read off-runner). Run logged
+"1 rows written". #39 then merged; `deploy` (Pages) and `deploy-worker` (MCP `pin_image` tool) both
+succeeded. Owner to confirm the look live and pin real photos.
+
+**Reusable outcome:** the `migrate` workflow now gives migrations a sanctioned CI path (dispatch a
+`.sql` from any ref), instead of a local `wrangler --remote` needing the token on someone's machine.
