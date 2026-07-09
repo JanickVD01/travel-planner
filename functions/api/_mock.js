@@ -77,13 +77,29 @@ function mockBudget() {
   );
 }
 
+// Demo create: mint an id + append to the in-memory store and echo {row}, so a wizard add is visible
+// in previews (still non-persistent — the isolate resets). Mirrors the real route's 201 {row} shape.
+let _demoSeq = 1000;
+async function demoCreate(store, prefix, request) {
+  let body = {}; try { body = await request.json(); } catch (e) {}
+  const now = "2026-07-08T00:00:00.000Z";
+  const max = store.reduce((m, r) => Math.max(m, Number(r.sort_order) || 0), 0);
+  const row = Object.assign(
+    { created_by: "demo@example.com", created_at: now, updated_by: "demo@example.com", updated_at: now, deleted: null },
+    body, { id: prefix + "-demo-" + (++_demoSeq), sort_order: max + 10 }
+  );
+  store.push(row);
+  return j({ row }, 201);
+}
+
 export async function handleMock(request, env) {
   const url = new URL(request.url), parts = url.pathname.replace(/^\/api\//, "").split("/").filter(Boolean);
   const isTrash = parts.indexOf("trash") >= 0;
+  const last = parts[parts.length - 1];
   if (parts[0] === "me") return j({ email: "demo@example.com", isSuperAdmin: false, mock: true });
   if (parts[0] === "entries") { if (request.method === "GET") return j({ rows: S.entries }); return j({ ok: true, demo: true }); }
   if (parts[0] === "trips")   { if (request.method === "GET") return j({ rows: isTrash ? [] : S.trips }); return j({ ok: true, demo: true }); }
-  if (parts[0] === "steps")   { if (request.method === "GET") return j({ rows: isTrash ? [] : S.steps }); return j({ ok: true, demo: true }); }
+  if (parts[0] === "steps")   { if (request.method === "GET") return j({ rows: isTrash ? [] : S.steps }); if (request.method === "POST" && last === "flow") return demoCreate(S.steps, "st", request); return j({ ok: true, demo: true }); }
   if (parts[0] === "activities") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.activities }); return j({ ok: true, demo: true }); }
   if (parts[0] === "packing") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.packing }); return j({ ok: true, demo: true }); }
   if (parts[0] === "attachments") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.attachments }); return j({ ok: true, demo: true }); }

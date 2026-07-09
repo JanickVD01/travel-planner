@@ -54,7 +54,8 @@ const ICONS = {
   check: '<path d="M5 12.5 10 17.5 19 6.5"/>',
   image: '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="8.8" cy="10" r="1.5"/><path d="M4 17l4.3-4.3a1.8 1.8 0 0 1 2.5 0L15 17M13.5 14.2l1.6-1.6a1.8 1.8 0 0 1 2.5 0L20.5 14.2"/>',
   trash: '<path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M6.5 7l.9 12.1a2 2 0 0 0 2 1.9h5.2a2 2 0 0 0 2-1.9L19.5 7M10 11v6M14 11v6"/>',
-  undo:  '<path d="M9 7 4.5 11.5 9 16M4.5 11.5H14a5 5 0 0 1 0 10h-2.5"/>'
+  undo:  '<path d="M9 7 4.5 11.5 9 16M4.5 11.5H14a5 5 0 0 1 0 10h-2.5"/>',
+  plus:  '<path d="M12 5v14M5 12h14"/>'
 };
 function icon(name, cls) {
   const p = ICONS[name] || ICONS.pin;
@@ -541,10 +542,11 @@ async function viewTimeline(slug) {
   const rate = trip.thb_per_eur;
   const title = trip.title || slug;
   const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
-  const hint = '<p class="tl-hint muted">Tap a cost or status to edit it inline. To add or reorder steps, ask Claude.</p>';
+  const hint = '<p class="tl-hint muted">Tap a cost, status, date or time to edit it inline. Use “add step” to build your timeline — or ask Claude.</p>';
   const body = steps.length
-    ? '<ol class="tl">' + steps.map(s => stepCardHTML(s, rate, byStep[s.id], slug)).join("") + "</ol>"
-    : '<p class="muted">No steps yet. Ask Claude to add a stay or a travel leg.</p>';
+    ? '<ol class="tl">' + steps.map((s, i) => stepInserterHTML(i) + stepCardHTML(s, rate, byStep[s.id], slug)).join("") + stepInserterHTML(steps.length) + "</ol>"
+    : '<div class="tl-empty"><p class="muted">No steps yet — start building your trip.</p>' +
+      '<button type="button" class="btn insert-btn-lg" data-insert-step="0">' + icon("plus") + "Add your first step</button></div>";
   // Activities whose parent step no longer exists get their own group so they're never dropped.
   const unassignedHTML = (unassigned && unassigned.length)
     ? '<section class="unassigned"><h2 class="unassigned-title">Unassigned</h2>' +
@@ -1011,6 +1013,242 @@ async function viewWhatsNew() {
   view().innerHTML = '<div class="panel"><h1>What’s New</h1><div class="cards">' + body + "</div></div>";
 }
 
+// ---- guided wizards (M5 steps, M6 activities) ------------------------------
+const TRANSPORTS_UI = ["plane", "train", "bus", "ferry", "car", "other"];
+const BOOKINGS_UI = ["Idea", "Planned", "Booked", "Confirmed"];
+const CCYS_UI = ["EUR", "THB"];
+const YESNO_UI = ["no", "yes"];
+
+// Extract coordinates from a pasted Google Maps URL or a bare "lat, lng". Returns {lat,lng} (strings,
+// so the server's cleanLat/cleanLng validate them) or null. Short goo.gl / maps.app.goo.gl links can't
+// be resolved in-page under CSP connect-src 'self' -> null (the UI hints to paste the full link/coords).
+function parseLatLng(text) {
+  const s = String(text == null ? "" : text).trim();
+  if (!s) return null;
+  const N = "(-?\\d{1,3}(?:\\.\\d+)?)";
+  const pats = [
+    new RegExp("@" + N + "," + N),                                    // /maps/@48.8566,2.3522,14z
+    new RegExp("[?&](?:q|query|ll|destination)=" + N + "%2C" + N, "i"), // ?query=48.85%2C2.35
+    new RegExp("[?&](?:q|query|ll|destination)=" + N + "," + N, "i"),   // ?query=48.85,2.35
+    new RegExp("^" + N + "\\s*,\\s*" + N + "$")                        // bare "48.8566, 2.3522"
+  ];
+  for (let k = 0; k < pats.length; k++) {
+    const m = s.match(pats[k]);
+    if (m) {
+      const lat = Number(m[1]), lng = Number(m[2]);
+      if (isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat: m[1], lng: m[2] };
+    }
+  }
+  return null;
+}
+
+function selIn(name, opts, cur) {
+  return '<select class="wz-in" name="' + esc(name) + '">' +
+    opts.map(o => '<option value="' + esc(o) + '"' + (String(o) === String(cur) ? " selected" : "") + ">" + esc(o) + "</option>").join("") + "</select>";
+}
+function readInputs(el, st) { el.querySelectorAll("[name]").forEach(i => { st[i.name] = i.value; }); }
+function wzField(label, inner, hintHtml) {
+  return '<label class="wz-field"><span class="wz-label">' + esc(label) + (hintHtml || "") + "</span>" + inner + "</label>";
+}
+function wzText(name, val, ph) {
+  return '<input class="wz-in" name="' + esc(name) + '" value="' + esc(val || "") + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : "") + " />";
+}
+function wzDate(name, val) { return '<input class="wz-in" type="date" name="' + esc(name) + '" value="' + esc(val || "") + '" />'; }
+function wzTime(name, val) { return '<input class="wz-in" type="time" name="' + esc(name) + '" value="' + esc(val || "") + '" />'; }
+
+// A pane = { title, html(state), read?(bodyEl,state)->errMsg|null, mount?(bodyEl,{state,advance}) }.
+// read() pulls the pane's inputs into state (+ optional validation) before advancing. onCreate(state)
+// runs the POST(s) and returns a Promise; createLabel names the final button.
+function openWizard(opts) {
+  const panes = opts.panes; let idx = 0; const state = opts.state || {};
+  const overlay = document.createElement("div");
+  overlay.className = "wizard-overlay";
+  overlay.innerHTML =
+    '<div class="wizard-sheet" role="dialog" aria-modal="true" aria-label="' + esc(opts.title) + '">' +
+      '<div class="wizard-head"><span class="wizard-title">' + esc(opts.title) + "</span>" +
+        '<button type="button" class="icon-btn wizard-close" aria-label="Close">✕</button></div>' +
+      '<div class="wizard-body"></div>' +
+      '<div class="wizard-err" role="alert" hidden></div>' +
+      '<div class="wizard-foot">' +
+        '<button type="button" class="btn ghost wizard-back">Back</button>' +
+        '<span class="wizard-progress muted mono"></span>' +
+        '<button type="button" class="btn wizard-next">Next</button>' +
+      "</div></div>";
+  document.body.appendChild(overlay);
+  const Q = s => overlay.querySelector(s);
+  const bodyEl = Q(".wizard-body"), errEl = Q(".wizard-err"), backBtn = Q(".wizard-back"), nextBtn = Q(".wizard-next"), progEl = Q(".wizard-progress");
+  const onKey = e => { if (e.key === "Escape") close(); };
+  function close() { overlay.remove(); document.removeEventListener("keydown", onKey); }
+  document.addEventListener("keydown", onKey);
+  overlay.addEventListener("mousedown", e => { if (e.target === overlay) close(); });
+  Q(".wizard-close").addEventListener("click", close);
+  const showErr = m => { if (m) { errEl.textContent = m; errEl.hidden = false; } else { errEl.hidden = true; errEl.textContent = ""; } };
+  const advance = () => nextBtn.click();
+  function render() {
+    showErr(null);
+    const pane = panes[idx];
+    bodyEl.innerHTML = '<div class="wizard-pane"><h3 class="pane-title">' + esc(pane.title) + "</h3>" + pane.html(state) + "</div>";
+    progEl.textContent = (idx + 1) + " / " + panes.length;
+    backBtn.disabled = idx === 0;
+    nextBtn.textContent = idx === panes.length - 1 ? (opts.createLabel || "Create") : "Next";
+    if (pane.mount) pane.mount(bodyEl, { state, advance });
+    const f = bodyEl.querySelector("input,select,textarea,.kind-opt");
+    if (f && f.focus) f.focus();
+  }
+  backBtn.addEventListener("click", () => { if (idx > 0) { const p = panes[idx]; if (p.read) p.read(bodyEl, state); idx--; render(); } });
+  nextBtn.addEventListener("click", async () => {
+    const pane = panes[idx];
+    const err = pane.read ? pane.read(bodyEl, state) : null;
+    if (err) { showErr(err); return; }
+    if (idx < panes.length - 1) { idx++; render(); return; }
+    nextBtn.disabled = true; nextBtn.textContent = "Saving…";
+    try { await opts.onCreate(state); close(); }
+    catch (e) { nextBtn.disabled = false; nextBtn.textContent = opts.createLabel || "Create"; showErr((e && e.message) || "Couldn’t save"); }
+  });
+  render();
+  return { close };
+}
+
+function openStepWizard(slug, insertIndex, steps) {
+  const prev = insertIndex > 0 ? steps[insertIndex - 1] : null;
+  const next = insertIndex < steps.length ? steps[insertIndex] : null;
+  const prevEnd = prev ? (prev.depart || prev.arrive) : null;
+  const nextStart = next ? (next.arrive || next.depart) : null;
+  const hintEnd = prevEnd ? '<span class="field-hint"> · prev ends ' + esc(fmtDate(prevEnd)) + "</span>" : "";
+  const hintStart = nextStart ? '<span class="field-hint"> · next starts ' + esc(fmtDate(nextStart)) + "</span>" : "";
+
+  const kindPane = {
+    title: "What are you adding?",
+    html: () => '<div class="kind-choice">' +
+      '<button type="button" class="kind-opt" data-kind="stay">' + icon("stay") + "<span>Stay</span><small>Somewhere you sleep</small></button>" +
+      '<button type="button" class="kind-opt" data-kind="travel">' + icon("plane") + "<span>Travel</span><small>Getting from A to B</small></button>" +
+      "</div>",
+    mount: (el, w) => el.querySelectorAll(".kind-opt").forEach(b => b.addEventListener("click", () => { w.state.kind = b.dataset.kind; w.advance(); })),
+    read: (el, st) => st.kind ? null : "Pick Stay or Travel."
+  };
+  const corePane = {
+    title: "Details",
+    html: (st) => st.kind === "stay"
+      ? wzField("Place *", wzText("place", st.place, "e.g. Paris")) +
+        wzField("Check-in", wzDate("arrive", st.arrive), hintEnd) +
+        wzField("Check-out", wzDate("depart", st.depart), hintStart) +
+        wzField("Accommodation", wzText("accom_name", st.accom_name, "hotel / apartment (optional)"))
+      : wzField("From", wzText("from", st.from, "e.g. Brussels")) +
+        wzField("To", wzText("to", st.to, "e.g. Paris")) +
+        wzField("Transport", selIn("transport", TRANSPORTS_UI, st.transport || "plane")) +
+        wzField("Carrier", wzText("carrier", st.carrier, "airline / operator (optional)")) +
+        wzField("Depart", wzDate("depart", st.depart) + wzTime("depart_time", st.depart_time), hintEnd) +
+        wzField("Arrive", wzDate("arrive", st.arrive) + wzTime("arrive_time", st.arrive_time), hintStart),
+    read: (el, st) => {
+      readInputs(el, st);
+      if (st.kind === "stay" && !(st.place || "").trim()) return "A place name is required.";
+      if (st.kind === "travel" && !(st.from || "").trim() && !(st.to || "").trim()) return "Enter at least a From or To.";
+      return null;
+    }
+  };
+  const optPane = {
+    title: "Optional extras",
+    html: (st) =>
+      wzField("Estimated cost", wzText("cost_est", st.cost_est, "0") + " " + selIn("cost_ccy", CCYS_UI, st.cost_ccy || "EUR")) +
+      wzField("Booking status", selIn("booking_status", BOOKINGS_UI, st.booking_status || "Idea")) +
+      wzField("Booking link", wzText("booking_url", st.booking_url, "https://…")) +
+      wzField("Location", wzText("coords", st.coords, "paste a Google Maps link or lat, lng"), '<span class="field-hint"> · powers the map link</span>') +
+      wzField("Note", '<textarea class="wz-in" name="note" rows="3">' + esc(st.note || "") + "</textarea>"),
+    read: (el, st) => { readInputs(el, st); return null; }
+  };
+  const reviewPane = {
+    title: "Review",
+    html: (st) => {
+      const rows = [];
+      const add = (k, v) => { if (v) rows.push('<div class="rev-row"><span class="rev-k">' + esc(k) + '</span><span class="rev-v">' + esc(v) + "</span></div>"); };
+      add("Type", st.kind === "stay" ? "Stay" : "Travel");
+      if (st.kind === "stay") { add("Place", st.place); add("Check-in", st.arrive); add("Check-out", st.depart); add("Accommodation", st.accom_name); }
+      else {
+        add("From", st.from); add("To", st.to); add("Transport", st.transport); add("Carrier", st.carrier);
+        add("Depart", [st.depart, st.depart_time].filter(Boolean).join(" ")); add("Arrive", [st.arrive, st.arrive_time].filter(Boolean).join(" "));
+      }
+      if (st.cost_est && String(st.cost_est).trim()) add("Cost", String(st.cost_est).trim() + " " + (st.cost_ccy || "EUR"));
+      add("Status", st.booking_status);
+      const ll = parseLatLng(st.coords);
+      if (st.coords) add("Location", ll ? (ll.lat + ", " + ll.lng) : "⚠ couldn’t read coordinates — paste a full link or lat, lng");
+      add("Note", st.note);
+      return '<div class="rev">' + (rows.join("") || '<p class="muted">Nothing to review.</p>') + "</div>";
+    }
+  };
+  openWizard({
+    title: insertIndex >= steps.length ? "Add a step" : "Insert a step",
+    panes: [kindPane, corePane, optPane, reviewPane],
+    createLabel: "Add step",
+    onCreate: (st) => createStepFromWizard(slug, insertIndex, steps, st)
+  });
+}
+
+async function createStepFromWizard(slug, insertIndex, steps, st) {
+  const body = { kind: st.kind, cost_ccy: st.cost_ccy || "EUR", booking_status: st.booking_status || "Idea" };
+  if (st.kind === "stay") {
+    const place = (st.place || "").trim();
+    body.title = place; body.location = place;
+    if (st.accom_name) body.accom_name = st.accom_name;
+    if (st.arrive) body.arrive = st.arrive;
+    if (st.depart) body.depart = st.depart;
+  } else {
+    const from = (st.from || "").trim(), to = (st.to || "").trim();
+    const routeName = (from && to) ? (from + " → " + to) : (from || to);
+    body.title = routeName; body.location = routeName;
+    if (st.transport) body.transport = st.transport;
+    if (st.carrier) body.carrier = st.carrier;
+    if (st.depart) body.depart = st.depart;
+    if (st.depart_time) body.depart_time = st.depart_time;
+    if (st.arrive) body.arrive = st.arrive;
+    if (st.arrive_time) body.arrive_time = st.arrive_time;
+  }
+  if (st.cost_est && String(st.cost_est).trim() !== "") body.cost_est = String(st.cost_est).trim();
+  if (st.booking_url) body.booking_url = st.booking_url;
+  if (st.note) body.note = st.note;
+  const ll = parseLatLng(st.coords);
+  if (ll) { body.lat = ll.lat; body.lng = ll.lng; }
+
+  const res = await api("steps/" + encodeURIComponent(slug) + "/flow", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+  });
+  // Reposition only when inserting before the end. New row appended at MAX+10; slot it between neighbors
+  // with an integer midpoint, re-spacing the whole list if the gap is exhausted. (Skipped in demo: no id.)
+  const newId = res && res.row && res.row.id;
+  if (newId && insertIndex < steps.length) {
+    const prevS = insertIndex > 0 ? Number(steps[insertIndex - 1].sort_order) : 0;
+    const nextS = Number(steps[insertIndex].sort_order);
+    const patch = (id, so) => api("steps/" + encodeURIComponent(slug) + "/flow/" + encodeURIComponent(id),
+      { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ sort_order: so }) });
+    if (isFinite(prevS) && isFinite(nextS) && nextS - prevS >= 2) {
+      await patch(newId, Math.floor((prevS + nextS) / 2));
+    } else {
+      const order = steps.slice(); order.splice(insertIndex, 0, { id: newId });
+      for (let i = 0; i < order.length; i++) await patch(order[i].id, (i + 1) * 10);
+    }
+  }
+  invalidateTrip(slug);
+  vt(route);
+}
+
+function stepInserterHTML(index) {
+  return '<li class="tl-insert"><button type="button" class="insert-btn" data-insert-step="' + index + '">' + icon("plus") + "add step</button></li>";
+}
+
+let _wizardsBound = false;
+function bindWizards() {
+  if (_wizardsBound) return; _wizardsBound = true;
+  document.addEventListener("click", async (e) => {
+    const stepBtn = e.target.closest("[data-insert-step]");
+    if (stepBtn) {
+      e.preventDefault();
+      const slug = tripSlugFromHash(); if (!slug) return;
+      const idx = parseInt(stepBtn.dataset.insertStep, 10) || 0;
+      const t = await loadTrip(slug);
+      openStepWizard(slug, idx, (t && t.steps) || []);
+    }
+  });
+}
+
 // ---- router ----------------------------------------------------------------
 function route() {
   const hash = location.hash.replace(/^#/, "") || "/";
@@ -1041,5 +1279,6 @@ window.addEventListener("hashchange", () => vt(route));
   buildNav();
   bindEditable();
   bindPhotos();
+  bindWizards();
   route();
 })();
