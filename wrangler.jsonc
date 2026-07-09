@@ -17,13 +17,10 @@
       "d1_databases": [
         { "binding": "DB", "database_name": "travel-planner-db", "database_id": "720b6ad7-11d2-47a1-9569-22142d13a1d6" }
       ],
-      // PHOTOS (M9): image bytes live in Workers KV under binding IMAGES_KV. We ship WITHOUT it — a
-      // fake/absent id would break the prod deploy, and all KV code guards on env.IMAGES_KV (uploads
-      // return 503 until it's bound). TO ENABLE, once, from repo root:
-      //   npx --yes wrangler@4 kv namespace create IMAGES_KV
-      // then paste the returned id into a kv_namespaces array INSIDE THIS production env only (NOT
-      // preview — previews must stay on demo data), e.g.:
-      //   "kv_namespaces": [ { "binding": "IMAGES_KV", "id": "<paste-id-here>" } ]
+      // PHOTOS (M9): image bytes live in Workers KV under binding IMAGES_KV. Bound in production ONLY
+      // (never preview — previews must stay on demo data). Created 2026-07-09 via
+      // `wrangler kv namespace create IMAGES_KV`. All KV code guards on env.IMAGES_KV.
+      "kv_namespaces": [ { "binding": "IMAGES_KV", "id": "a43ae5ff444c418f9eb8a604d50082b2" } ],
       "vars": { "SUPER_ADMIN_EMAIL": "janickvandamme@hotmail.com" }
     },
     "preview": {
