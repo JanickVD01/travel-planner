@@ -19,6 +19,7 @@ map in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0006](0006-mcp-connector-redirect-uri.md) | claude.ai web/mobile connector fix — Managed-OAuth redirect-URI allowlist | 2026-07-09 | ✅ Shipped | #33 |
 | [0007](0007-mobile-copy-values.md) | Mobile fix — long-press to copy a value (selectable span, not a button) | 2026-07-09 | ✅ Shipped | #34 |
 | [0008](0008-timeline-declutter-delete.md) | Timeline cards slimmed to title/dates/status + "Delete step" in detail | 2026-07-09 | ✅ Shipped | #35 |
+| [0009](0009-mobile-card-polish.md) | Mobile polish — "Lodging" label + stacked title/dates/status line | 2026-07-09 | ✅ Shipped | #37 |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
 
