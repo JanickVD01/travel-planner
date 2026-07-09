@@ -135,6 +135,28 @@ CREATE TABLE IF NOT EXISTS packing_audit (
   op TEXT NOT NULL, detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
 );
 
+-- attachments (M9): photo METADATA. space=<slug>, list='attachments'. Image BYTES live in Workers KV
+-- (binding IMAGES_KV) at key att/<slug>/<attachment_id>; only /api/image/** ever touches the bytes.
+-- parent_type = step|activity; kv_key is rebuilt server-side from slug+id (never trusted from a client).
+CREATE TABLE IF NOT EXISTS attachments (
+  space TEXT NOT NULL, list TEXT NOT NULL, attachment_id TEXT NOT NULL,
+  parent_type    TEXT NOT NULL DEFAULT 'step',      -- step | activity
+  parent_id      TEXT NOT NULL DEFAULT '',          -- parent step/activity id (free-text, not an FK)
+  kv_key         TEXT NOT NULL DEFAULT '',          -- KV key holding the bytes: att/<slug>/<attachment_id>
+  caption        TEXT,
+  content_type   TEXT,                              -- image/* whitelist value or NULL
+  size           TEXT,                              -- byte count (integer as TEXT) or NULL
+  deleted        TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT,
+  PRIMARY KEY (space, list, attachment_id)
+);
+CREATE INDEX IF NOT EXISTS idx_attachments_parent ON attachments (space, list, parent_type, parent_id, sort_order);
+CREATE TABLE IF NOT EXISTS attachments_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, space TEXT NOT NULL, list TEXT NOT NULL, attachment_id TEXT,
+  op TEXT NOT NULL, detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
+);
+
 -- OPTIONAL roles layer: who may edit, plus an audit. Super-admin comes from env (SUPER_ADMIN_EMAIL).
 CREATE TABLE IF NOT EXISTS role_members (
   role_key TEXT NOT NULL, email TEXT NOT NULL, added_by TEXT, added_at TEXT,

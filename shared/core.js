@@ -60,6 +60,14 @@ export function cleanYesNo(v) { return (v === "yes" || v === true) ? "yes" : "no
 export function cleanOwner(v) { const s = String(v == null ? "" : v).trim().toLowerCase(); return (s === "" || s === "shared") ? "shared" : s; }
 export function cleanBool(v) { return (v === true || v === 1 || v === "1" || v === "true" || v === "yes") ? "1" : "0"; }
 export function cleanQty(v) { const n = Math.trunc(Number(v)); return (Number.isFinite(n) && n >= 1) ? String(n) : null; }
+// attachments (M9): image BYTES live in Workers KV (env.IMAGES_KV); METADATA lives in D1. parent_type
+// = which entity the photo hangs off (step|activity, default step); content_type is coerced through an
+// image/* whitelist (anything else -> null); attachmentKey builds the KV key server-side from slug+id
+// (never trust a client-supplied key -> no path traversal).
+export function cleanParentType(v) { return String(v) === "activity" ? "activity" : "step"; }   // default step
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"];
+export function cleanContentType(v) { return IMAGE_TYPES.indexOf(String(v)) >= 0 ? String(v) : null; }
+export function attachmentKey(slug, id) { return "att/" + slug + "/" + id; }
 
 // -- the generic flat-list engine: one implementation, many lists -----------
 const FLAT_SPECS = {
@@ -143,6 +151,20 @@ const FLAT_SPECS = {
       { name: "category", nullable: true },
       { name: "qty", clean: cleanQty, nullable: true },
       { name: "note", nullable: true }
+    ]
+  },
+  // attachments: photo metadata, one row per image (space=<slug>, list='attachments'). The bytes live
+  // in KV (kv:true); parent_type+parent_id say which step/activity the photo belongs to. kv_key holds
+  // the KV key (att/<slug>/<id>); it is rebuilt server-side, never trusted from a client.
+  attachments: {
+    table: "attachments", audit: "attachments_audit", idCol: "attachment_id", prefix: "at", soft: true, kv: true,
+    cols: [
+      { name: "parent_type", clean: cleanParentType },
+      { name: "parent_id" },
+      { name: "kv_key" },
+      { name: "caption", nullable: true },
+      { name: "content_type", clean: cleanContentType, nullable: true },
+      { name: "size", clean: cleanQty, nullable: true }
     ]
   }
 };
@@ -316,6 +338,15 @@ export const seedPacking    = (env, a, who) => flatSeed(env, FLAT_SPECS.packing,
 // PURE ownership filter for packing rows. actor is the current user's email.
 //   scope 'mine'    -> rows this actor owns          scope 'partner' -> rows owned by some OTHER person (email, not shared)
 //   scope 'shared'  -> rows owned by 'shared'         else (all/undefined) -> every row
+// attachments (photo metadata; bytes are handled only by /api/image/**, never here).
+export const listAttachments    = (env, a, who) => flatList(env, FLAT_SPECS.attachments, a, who);
+export const createAttachment   = (env, a, who) => flatCreate(env, FLAT_SPECS.attachments, a, who);
+export const patchAttachment    = (env, a, who) => flatPatch(env, FLAT_SPECS.attachments, a, who);
+export const deleteAttachment   = (env, a, who) => flatDelete(env, FLAT_SPECS.attachments, a, who);
+export const restoreAttachment  = (env, a, who) => flatRestore(env, FLAT_SPECS.attachments, a, who);
+export const purgeAttachment    = (env, a, who) => flatPurge(env, FLAT_SPECS.attachments, a, who);
+export const seedAttachments    = (env, a, who) => flatSeed(env, FLAT_SPECS.attachments, a, who);
+
 export function filterPacking(rows, actor, scope) {
   const list = Array.isArray(rows) ? rows : [];
   const a = String(actor == null ? "" : actor).toLowerCase();
