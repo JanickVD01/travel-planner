@@ -1,6 +1,18 @@
 {
   "releases": [
     {
+      "version": "v0.6.0",
+      "title": "A photo behind your stay",
+      "date": "2026-07-09",
+      "notes": [
+        "Pin a photo to a stay and it becomes the background of that stay’s card on the timeline — so scrolling your trip shows the view behind each place you’re staying.",
+        "Open a stay’s detail, then tap the pin button on any of its photos to set it as the background; pinning another photo replaces it, and tapping again unpins.",
+        "Text stays easy to read over any photo — a warm scrim keeps the title, dates and status legible in both light and dark mode.",
+        "Travel legs stay clean and text-only; only stays get a background photo.",
+        "Claude can do it too: ask it to pin a photo (the new pin_image tool)."
+      ]
+    },
+    {
       "version": "v0.5.0",
       "title": "Deeper budgets & detail pages",
       "date": "2026-07-09",

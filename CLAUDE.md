@@ -48,7 +48,9 @@ Every row is scoped by two free-text keys: `space` and `list`. **`space` = a tri
 - **activities** (`<slug>`/`activities`) — hung off a step via `step_id`; `day`, `needs_advance`,
   location/`map_url`, cost + booking + **`included`** + `note`.
 - **packing** (`<slug>`/`packing`) — `owner` (`'shared'` | email), `packed`, `category`, `qty`.
-- **attachments** (`<slug>`/`attachments`) — image metadata; bytes live in Workers KV (`IMAGES_KV`).
+- **attachments** (`<slug>`/`attachments`) — image metadata; bytes live in Workers KV (`IMAGES_KV`);
+  **`pinned`** (`'1'` = this photo is its parent **stay**'s timeline-card background; ≤1 per parent,
+  enforced by `setPinned` which un-pins siblings atomically).
 
 Soft-delete is baked into every table (`deleted` column) → **Trash** (restore / delete-forever). **Money
 math lives ONLY in `computeBudget`** (all EUR; excludes `included` rows; returns estimated *and* actual

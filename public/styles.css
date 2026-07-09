@@ -186,6 +186,73 @@ a.step-title:hover, a.leg-title:hover { color: var(--accent-ink); text-decoratio
 .step-status { margin-top: 5px; }
 .step-status .editable { min-height: 34px; }
 
+/* ---- pinned photo behind a STAY card (0010; opt-in media surface) --------------------------
+   A pinned stay becomes a warm dark "media island": one lazy <img>, calmed to a texture, under a
+   text-anchored scrim whose floor alpha keeps light ink >=AA over ANY photo, in both themes.
+   Travel legs never get a photo. The .pin-body wrapper is layout-neutral (display:contents) when a
+   card isn't pinned. Spine + markers + chips are deliberately unchanged. */
+.step-card.pinned {
+  position: relative; isolation: isolate;
+  min-height: var(--media-min-h);
+  display: flex; flex-direction: column; justify-content: flex-end;
+  padding: 0;                                   /* padding moves onto .pin-body */
+  overflow: hidden;                             /* clip photo + scrim to the radius */
+  background: var(--media-plate);               /* placeholder / fallback if the photo fails */
+}
+.pin-media {
+  position: absolute; inset: 0; z-index: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: var(--pin-pos, 50% 30%);
+  background: var(--media-plate); color: transparent;   /* hide broken-alt glyph on error */
+  pointer-events: none;                          /* taps fall through to the card */
+  filter: saturate(.8) contrast(.9) brightness(.92);    /* calm the photo to a backdrop texture */
+}
+.step-card.pinned::before {                      /* gentle full-card scrim so the photo stays a backdrop */
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(to bottom,
+    rgb(var(--media-scrim) / .34) 0%,
+    rgb(var(--media-scrim) / .30) 45%,
+    rgb(var(--media-scrim) / .55) 100%);
+}
+.pin-body { display: contents; }                 /* neutral when NOT pinned */
+.step-card.pinned .pin-body {
+  position: relative; z-index: 2;                /* above the full-card scrim */
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 44px 14px 12px;                       /* 44px top feather sits above any text */
+  background: linear-gradient(to top,
+    rgb(var(--media-scrim) / var(--pin-peak))              0,
+    rgb(var(--media-scrim) / var(--pin-floor))             calc(100% - 44px),
+    rgb(var(--media-scrim) / calc(var(--pin-floor) * .60)) calc(100% - 22px),
+    rgb(var(--media-scrim) / 0)                            100%);
+}
+/* recolor the rows over media (light ink) */
+.step-card.pinned a.step-title { color: var(--on-media); }
+.step-card.pinned a.step-title:hover { color: var(--on-media-accent); text-decoration-color: var(--on-media-accent); }
+.step-card.pinned .step-kind,
+.step-card.pinned .step-sub,
+.step-card.pinned .muted { color: var(--on-media-dim); }
+.step-card.pinned .mono { color: var(--on-media); }
+.step-card.pinned .editable { color: var(--on-media); border-bottom-color: rgb(255 255 255 / .5); }
+.step-card.pinned .editable:hover { background: rgb(255 255 255 / .14); border-bottom-color: var(--on-media-accent); }
+.step-card.pinned .add-actual { color: var(--on-media-accent); }
+.step-card.pinned .step-open { color: var(--on-media-dim); }
+.step-card.pinned .step-open:hover { color: var(--on-media-accent); }
+.step-card.pinned .step-sub, .step-card.pinned .step-status { margin-top: 0; }
+.step-card.pinned .chip { box-shadow: 0 0 0 1px rgb(0 0 0 / .12), 0 1px 2px rgb(0 0 0 / .28); }
+/* focus ring over media: bright coral + a dark backing halo -> clears 3:1 on bright AND dark photos */
+.step-card.pinned :focus-visible {
+  outline: 2.5px solid var(--on-media-accent); outline-offset: 2px;
+  box-shadow: 0 0 0 5px rgb(var(--media-scrim) / .55);
+}
+@media (prefers-reduced-transparency: no-preference) {
+  .step-card.pinned::before { backdrop-filter: saturate(1.05) blur(1.5px); -webkit-backdrop-filter: saturate(1.05) blur(1.5px); }
+}
+@media (forced-colors: active) {                 /* keep a legible plate behind text in high-contrast */
+  .step-card.pinned .pin-body { background: Canvas; }
+  .step-card.pinned a.step-title { color: LinkText; }
+  .step-card.pinned .step-sub, .step-card.pinned .mono, .step-card.pinned .muted { color: CanvasText; }
+}
+
 .cost { font-weight: 600; }
 .cost.est { font-weight: 500; }
 .maplink { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; color: var(--accent-ink); font-size: var(--text-sm); }
@@ -527,6 +594,20 @@ a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-u
 .thumb-del::after { content: ""; position: absolute; inset: -10px; }   /* 44px hit area */
 .thumb-del:hover { background: var(--danger); }
 .thumb-del:disabled { opacity: .5; cursor: default; }
+
+/* pin (0010): mark one photo as the stay card's background. Top-left disc mirroring .thumb-del. */
+.thumb-pin {
+  position: absolute; top: 4px; left: 4px; z-index: 1; cursor: pointer;
+  width: 24px; height: 24px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center;
+  color: #fff; background: color-mix(in srgb, var(--ink-0) 58%, transparent);
+  border: 1px solid color-mix(in srgb, #fff 30%, transparent);
+}
+.thumb-pin .ico { width: 15px; height: 15px; }
+.thumb-pin::after { content: ""; position: absolute; inset: -10px; }   /* 44px hit area */
+.thumb-pin:hover { background: color-mix(in srgb, var(--ink-0) 72%, transparent); }
+.thumb-pin.is-pinned { background: var(--accent); border-color: transparent; color: var(--accent-contrast); }
+.thumb-pin:disabled { opacity: .5; cursor: default; }
 
 /* "+N more" pill shown when a compact card hides extra photos */
 .thumb-more {

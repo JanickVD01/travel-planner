@@ -170,7 +170,8 @@ const FLAT_SPECS = {
       { name: "kv_key" },
       { name: "caption", nullable: true },
       { name: "content_type", clean: cleanContentType, nullable: true },
-      { name: "size", clean: cleanQty, nullable: true }
+      { name: "size", clean: cleanQty, nullable: true },
+      { name: "pinned", clean: cleanBool }   // '1' = this photo is the parent step's card background (one per parent)
     ]
   }
 };
@@ -487,6 +488,31 @@ export function setIncluded(env, { target, space, list, id, included }, actor) {
 export function setMapUrl(env, { target, space, list, id, map_url }, actor) {
   const spec = target === "step" ? FLAT_SPECS.steps : FLAT_SPECS.activities;
   return flatPatch(env, spec, { space, list, id, map_url }, actor);
+}
+// Pin (or unpin) one attachment as its parent's card background. "One pinned per parent" can't be a DB
+// constraint here, so it's enforced in code: pinning also un-pins any sibling on the SAME parent, all in
+// one atomic env.DB.batch (UPDATE + audit per row) — modeled on purgeStepDeep. Deleting/purging a pinned
+// photo needs no cleanup (the flag lives on the row). `space` = trip slug; attachments are list='attachments'.
+export async function setPinned(env, { space, id, pinned }, actor) {
+  const want = cleanBool(pinned);                       // '1' | '0'
+  const spec = FLAT_SPECS.attachments, now = new Date().toISOString();
+  const { rows } = await listAttachments(env, { space, list: "attachments" }, actor);   // live rows only
+  const target = rows.find(r => String(r.id) === String(id));
+  if (!target) throw new ServiceError(404, "attachment not found");
+  const setPin = (rowId, val) => {
+    const upd = env.DB.prepare("UPDATE " + spec.table + " SET pinned=?, updated_by=?, updated_at=? WHERE space=? AND list=? AND " + spec.idCol + "=?");
+    return [upd.bind(val, actor, now, space, "attachments", rowId), auditStmt(env, spec, space, "attachments", rowId, "update", { pinned: val }, actor, now)];
+  };
+  const stmts = setPin(id, want);
+  if (want === "1") {   // exclusive pin: clear any currently-pinned sibling on the same parent
+    rows.forEach(r => {
+      if (String(r.id) !== String(id) && r.pinned === "1" && r.parent_type === target.parent_type && r.parent_id === target.parent_id) {
+        stmts.push.apply(stmts, setPin(r.id, "0"));
+      }
+    });
+  }
+  await env.DB.batch(stmts);
+  return { ok: true, id, pinned: want };
 }
 
 // -- budget (M7): the single source of truth for all money math -------------

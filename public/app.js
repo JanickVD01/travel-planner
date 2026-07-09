@@ -372,6 +372,7 @@ function activityCardHTML(a, rate, slug) {
 function attachmentsHTML(parentType, parentId, slug, opts) {
   opts = opts || {};
   const compact = !!opts.compact;
+  const pinnable = !!opts.pinnable;   // only stay steps can pin a photo as their card background (0010)
   const bundle = state.trip[slug];
   const byParent = (bundle && bundle.byParent) || {};
   const rows = byParent[parentType + ":" + parentId] || [];
@@ -383,12 +384,19 @@ function attachmentsHTML(parentType, parentId, slug, opts) {
     const cap = r.caption == null ? "" : String(r.caption);
     const del = '<button type="button" class="thumb-del" data-act="photo-del" data-id="' + esc(r.id) +
       '" aria-label="Delete photo">×</button>';
+    const isPin = r.pinned === "1";
+    const pinBtn = pinnable ? '<button type="button" class="thumb-pin' + (isPin ? " is-pinned" : "") +
+      '" data-act="photo-pin" data-id="' + esc(r.id) + '" data-pinned="' + (isPin ? "1" : "0") +
+      '" aria-pressed="' + (isPin ? "true" : "false") +
+      '" aria-label="' + (isPin ? "Unpin as card background" : "Pin as card background") +
+      '" title="' + (isPin ? "Pinned as the stay card background — tap to unpin" : "Pin as the stay card background") + '">' +
+      icon("pin") + "</button>" : "";
     const capHTML = (!compact && cap) ? '<figcaption class="thumb-cap">' + esc(cap) + "</figcaption>" : "";
     return '<figure class="thumb">' +
       '<a class="thumb-link" href="' + esc(src) + '" target="_blank" rel="noopener" aria-label="' +
         (cap ? esc(cap) : "View photo") + '">' +
         '<img loading="lazy" src="' + esc(src) + '" alt="' + esc(cap) + '"></a>' +
-      del + capHTML + "</figure>";
+      del + pinBtn + capHTML + "</figure>";
   };
   const thumbs = shown.map(thumb).join("");
   const moreHTML = (compact && extra > 0) ? '<span class="thumb-more" aria-hidden="true">+' + esc(String(extra)) + "</span>" : "";
@@ -503,12 +511,31 @@ async function deletePhoto(btn) {
     vt(route);
   } catch { btn.disabled = false; photoMsg(wrap, "Couldn’t delete photo."); }
 }
+// Pin (or unpin) a photo as its stay's card background. The server (setPinned) un-pins any sibling on
+// the same step atomically, so we just refetch to get the authoritative state (no fragile optimistic
+// sibling juggling). PATCH {pinned} is routed to setPinned by the attachments API.
+async function photoPin(btn) {
+  const wrap = btn.closest(".photos");
+  if (!wrap) return;
+  const slug = wrap.dataset.slug, id = btn.dataset.id;
+  if (!slug || !id) return;
+  const next = btn.dataset.pinned === "1" ? "no" : "yes";   // toggle
+  btn.disabled = true;
+  try {
+    await api("attachments/" + encodeURIComponent(slug) + "/attachments/" + encodeURIComponent(id),
+      { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ pinned: next }) });
+    invalidateTrip(slug);          // drop the cache so the re-render reflects the exclusive pin
+    vt(route);
+  } catch { btn.disabled = false; photoMsg(wrap, "Couldn’t update the pinned photo."); }
+}
 let _photosBound = false;
 function bindPhotos() {                                // one delegated pair of listeners for all photo strips
   if (_photosBound) return; _photosBound = true;
   document.addEventListener("click", (e) => {
     const add = e.target.closest("[data-act='photo-add']");
     if (add) { const w = add.closest(".photos"); const inp = w && w.querySelector(".photo-input"); if (inp) inp.click(); return; }
+    const pin = e.target.closest("[data-act='photo-pin']");
+    if (pin) { e.preventDefault(); photoPin(pin); return; }
     const del = e.target.closest("[data-act='photo-del']");
     if (del) { e.preventDefault(); deletePhoto(del); }
   });
@@ -516,6 +543,14 @@ function bindPhotos() {                                // one delegated pair of 
     const inp = e.target.closest(".photo-input");
     if (inp) uploadPhotos(inp);
   });
+  // If a pinned background image fails to load (deleted/404), drop `pinned` so the card reverts to the
+  // normal surface. Capture phase — `error` doesn't bubble. CSP forbids an inline onerror handler.
+  document.addEventListener("error", (e) => {
+    const img = e.target;
+    if (img && img.classList && img.classList.contains("pin-media")) {
+      const card = img.closest(".step-card"); if (card) card.classList.remove("pinned");
+    }
+  }, true);
 }
 
 function stepCardHTML(s, rate, acts, slug) {
@@ -551,12 +586,20 @@ function stepCardHTML(s, rate, acts, slug) {
     editDate("arrive", s.arrive, "+ check-in") + " " + editTime("arrive_time", s.arrive_time, "+ time") +
     ' <span class="muted">→</span> ' +
     editDate("depart", s.depart, "+ check-out") + " " + editTime("depart_time", s.depart_time, "+ time") + "</span>";
+  // A pinned photo (if any) becomes this stay's card background. Stays only — travel legs never get one.
+  const bundle = state.trip[slug];
+  const atts = (bundle && bundle.byParent && bundle.byParent["step:" + s.id]) || [];
+  const pin = atts.find(a => a.pinned === "1");
+  const media = pin ? '<img class="pin-media" alt="" decoding="async" loading="lazy" src="api/image/' +
+    encodeURIComponent(slug) + "/" + encodeURIComponent(pin.id) + '">' : "";
   return '<li class="step stay" data-href="' + esc(detailHref) + '">' +
     '<span class="marker stay" aria-hidden="true"></span>' +
-    '<div class="step-card">' +
-      '<div class="step-head">' + icon("stay", "step-kind") + '<a class="step-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + openChev + "</div>" +
-      '<div class="step-sub">' + nights + "</div>" +
-      '<div class="step-status">' + chip + "</div>" +
+    '<div class="step-card' + (pin ? " pinned" : "") + '">' + media +
+      '<div class="pin-body">' +
+        '<div class="step-head">' + icon("stay", "step-kind") + '<a class="step-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + openChev + "</div>" +
+        '<div class="step-sub">' + nights + "</div>" +
+        '<div class="step-status">' + chip + "</div>" +
+      "</div>" +
     "</div></li>";
 }
 
@@ -895,7 +938,7 @@ async function viewStep(slug, id) {
     const addBtn = '<button type="button" class="insert-btn add-act" data-add-activity="' + esc(s.id) + '">' + icon("plus") + "add activity</button>";
     actsSection = '<section class="step-acts"><h2>Activities</h2>' + list + addBtn + "</section>";
   }
-  const photos = attachmentsHTML("step", s.id, slug, {});
+  const photos = attachmentsHTML("step", s.id, slug, { pinnable: !isTravel });   // only a stay renders a background
   const kindLabel = isTravel ? "Travel" : "Stay";
   const actCount = isTravel ? 0 : (activities || []).filter(a => String(a.step_id) === String(s.id)).length;
   const danger = '<div class="detail-danger"><button type="button" class="danger-btn" data-act="step-del"' +

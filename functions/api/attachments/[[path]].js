@@ -5,7 +5,7 @@
 //   PATCH  /api/attachments/<slug>/attachments/<id>   -> edit metadata (e.g. caption)
 //   DELETE /api/attachments/<slug>/attachments/<id>   -> soft-delete
 import { json, userEmail, parsePath, fail } from "../_lib.js";
-import { listAttachments, patchAttachment, deleteAttachment } from "../../../shared/core.js";
+import { listAttachments, patchAttachment, deleteAttachment, setPinned } from "../../../shared/core.js";
 
 function ctx(request, env, params) { const p = parsePath(params); return { email: userEmail(request, env), space: p[0], list: p[1], seg: p[2] }; }
 async function body(request) { try { return { body: await request.json() }; } catch { return { error: json({ error: "invalid JSON body" }, 400) }; } }
@@ -23,7 +23,14 @@ export async function onRequestPatch({ request, env, params }) {
   if (!env || !env.DB) return json({ error: "DB binding not configured" }, 500);
   if (!c.seg) return json({ error: "expected /api/attachments/<slug>/attachments/<id>" }, 400);
   const r = await body(request); if (r.error) return r.error;
-  try { return json(await patchAttachment(env, Object.assign({ space: c.space, list: c.list, id: c.seg }, r.body), c.email)); } catch (e) { return fail(e); }
+  try {
+    // A `pinned` change must go through setPinned (it un-pins siblings on the same parent atomically);
+    // any other field (e.g. caption) patches the row directly. The UI sends one field per PATCH.
+    if (r.body && Object.prototype.hasOwnProperty.call(r.body, "pinned")) {
+      return json(await setPinned(env, { space: c.space, id: c.seg, pinned: r.body.pinned }, c.email));
+    }
+    return json(await patchAttachment(env, Object.assign({ space: c.space, list: c.list, id: c.seg }, r.body), c.email));
+  } catch (e) { return fail(e); }
 }
 export async function onRequestDelete({ request, env, params }) {
   const c = ctx(request, env, params);

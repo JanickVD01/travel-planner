@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS attachments (
   caption        TEXT,
   content_type   TEXT,                              -- image/* whitelist value or NULL
   size           TEXT,                              -- byte count (integer as TEXT) or NULL
+  pinned         TEXT NOT NULL DEFAULT '0',         -- '1' = this photo is the parent step's card background (one per parent; see migrations/002)
   deleted        TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT,

@@ -46,8 +46,8 @@ const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCA
   pack(1, { title: "Travel adapters", owner: "shared", packed: "0", category: "Tech" });
   pack(2, { title: "Sunscreen", owner: "demo@example.com", packed: "0", category: "Toiletries", qty: "2" });
 
-  const att = (i, o) => S.attachments.push(base(Object.assign({ id: "at-demo-" + i, sort_order: i * 10, caption: null, content_type: "image/jpeg", size: null }, o)));
-  att(1, { parent_type: "step", parent_id: "st-demo-2", kv_key: "att/thailand-2026/at-demo-1", caption: "Riva Surya rooftop pool", size: "184320" });
+  const att = (i, o) => S.attachments.push(base(Object.assign({ id: "at-demo-" + i, sort_order: i * 10, caption: null, content_type: "image/jpeg", size: null, pinned: "0" }, o)));
+  att(1, { parent_type: "step", parent_id: "st-demo-2", kv_key: "att/thailand-2026/at-demo-1", caption: "Riva Surya rooftop pool", size: "184320", pinned: "1" });   // pinned -> Bangkok stay card shows this as its background
   att(2, { parent_type: "activity", parent_id: "ac-demo-1", kv_key: "att/thailand-2026/at-demo-2", caption: "Grand Palace at golden hour", size: "205112" });
 })();
 
