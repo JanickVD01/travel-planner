@@ -585,3 +585,102 @@ a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-u
   .trash-actions { flex: 1 1 100%; }
   .trash-btn { flex: 1 1 auto; justify-content: center; }
 }
+
+/* ---- generic button (used by wizards) ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; padding: 0 18px; cursor: pointer;
+  font: inherit; font-weight: 600; border-radius: var(--radius-sm);
+  color: var(--accent-contrast); background: var(--accent); border: 1px solid var(--accent);
+}
+.btn:hover { filter: brightness(1.05); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.ghost { color: var(--ink-1); background: var(--paper-1); border-color: var(--line-hair); }
+.btn.ghost:hover { filter: none; border-color: var(--accent); background: var(--paper-2); }
+.btn.ghost:disabled { opacity: .4; }
+
+/* ---- timeline "+ add step" inserters (M5) ---- */
+.tl-insert { list-style: none; position: relative; padding: 2px 0 2px calc(var(--rail-x) + 22px); }
+.insert-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  min-height: 30px; padding: 2px 12px; cursor: pointer;
+  font: inherit; font-size: var(--text-sm); font-weight: 600;
+  color: var(--ink-3); background: transparent;
+  border: 1px dashed var(--line-hair); border-radius: var(--radius-pill);
+  opacity: .65; transition: opacity .12s, color .12s, border-color .12s;
+}
+.insert-btn:hover { opacity: 1; color: var(--accent-ink); border-color: var(--accent); }
+.insert-btn .ico { width: 14px; height: 14px; }
+.tl-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); padding: var(--space-4) 0; }
+.insert-btn-lg { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---- guided wizard bottom-sheet (M5/M6) ---- */
+.wizard-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: color-mix(in srgb, var(--ink-0) 42%, transparent);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0; animation: wz-fade .14s ease;
+}
+@keyframes wz-fade { from { opacity: 0; } to { opacity: 1; } }
+.wizard-sheet {
+  width: 100%; max-width: 560px; max-height: 92vh; display: flex; flex-direction: column;
+  background: var(--paper-0); border: 1px solid var(--line-hair);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -8px 40px color-mix(in srgb, var(--ink-0) 22%, transparent);
+  animation: wz-rise .18s ease;
+}
+@keyframes wz-rise { from { transform: translateY(14px); } to { transform: translateY(0); } }
+@media (min-width: 640px) { .wizard-overlay { align-items: center; } .wizard-sheet { border-radius: var(--radius); } }
+@media (prefers-reduced-motion: reduce) { .wizard-overlay, .wizard-sheet { animation: none; } }
+.wizard-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--line-hair);
+}
+.wizard-title { font-family: var(--f-disp); font-weight: 600; font-size: var(--text-lg); }
+.wizard-close { min-width: 36px; }
+.wizard-body { overflow-y: auto; padding: var(--space-4) var(--space-5); }
+.pane-title { font-size: var(--text-lg); margin: 0 0 var(--space-4); font-family: var(--f-disp); }
+.wizard-err {
+  margin: 0 var(--space-5) var(--space-3); padding: 8px 12px; border-radius: var(--radius-sm);
+  color: var(--danger); background: var(--danger-bg); font-size: var(--text-sm);
+}
+.wizard-foot {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-5) var(--space-4); border-top: 1px solid var(--line-hair);
+}
+.wizard-foot .wizard-next { margin-left: auto; }
+.wizard-progress { font-size: var(--text-xs); }
+
+/* kind choice */
+.kind-choice { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.kind-opt {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+  padding: var(--space-5) var(--space-3); min-height: 108px; cursor: pointer;
+  font: inherit; color: var(--ink-0); background: var(--paper-1);
+  border: 1px solid var(--line-hair); border-radius: var(--radius);
+}
+.kind-opt:hover { border-color: var(--accent); background: var(--paper-2); }
+.kind-opt .ico { width: 26px; height: 26px; color: var(--accent-ink); }
+.kind-opt span { font-weight: 600; }
+.kind-opt small { color: var(--ink-2); font-size: var(--text-xs); }
+
+/* wizard fields */
+.wz-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: var(--space-4); }
+.wz-label { font-size: var(--text-sm); font-weight: 600; color: var(--ink-1); }
+.wz-in {
+  font-family: var(--f-body); font-size: 16px;          /* >=16px so iOS won't zoom */
+  color: var(--ink-0); background: var(--paper-0);
+  border: 1px solid var(--line-hair); border-radius: var(--radius-sm);
+  padding: 9px 11px; min-height: 44px; min-width: 0; width: 100%;
+}
+.wz-in:focus { border-color: var(--accent); outline: none; }
+.wz-field input[type="date"].wz-in, .wz-field input[type="time"].wz-in { width: auto; display: inline-block; }
+.wz-field > span + input[type="date"] + input[type="time"] { margin-left: 6px; }
+.field-hint { font-weight: 400; color: var(--ink-3); font-size: var(--text-xs); }
+
+/* review */
+.rev { display: flex; flex-direction: column; gap: 2px; }
+.rev-row { display: flex; gap: var(--space-3); padding: 6px 0; border-bottom: 1px solid var(--line-hair); }
+.rev-k { flex: 0 0 34%; color: var(--ink-2); font-size: var(--text-sm); }
+.rev-v { flex: 1 1 auto; color: var(--ink-0); word-break: break-word; }
