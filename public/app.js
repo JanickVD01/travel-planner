@@ -542,8 +542,9 @@ function stepCardHTML(s, rate, acts, slug) {
     return '<li class="step travel" data-href="' + esc(detailHref) + '">' +
       '<span class="marker travel" aria-hidden="true">' + icon(mode) + "</span>" +
       '<div class="leg">' +
-        '<div class="leg-top"><a class="leg-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + chip + openChev + "</div>" +
+        '<div class="leg-top"><a class="leg-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + openChev + "</div>" +
         '<div class="leg-sub">' + when + "</div>" +
+        '<div class="step-status">' + chip + "</div>" +
       "</div></li>";
   }
   const nights = '<span class="stay-when">' +
@@ -553,8 +554,9 @@ function stepCardHTML(s, rate, acts, slug) {
   return '<li class="step stay" data-href="' + esc(detailHref) + '">' +
     '<span class="marker stay" aria-hidden="true"></span>' +
     '<div class="step-card">' +
-      '<div class="step-head">' + icon("stay", "step-kind") + '<a class="step-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + chip + openChev + "</div>" +
+      '<div class="step-head">' + icon("stay", "step-kind") + '<a class="step-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + openChev + "</div>" +
       '<div class="step-sub">' + nights + "</div>" +
+      '<div class="step-status">' + chip + "</div>" +
     "</div></li>";
 }
 
@@ -689,7 +691,7 @@ async function viewBudget(slug) {
   // ---- category breakdown with an Estimated | Actual toggle (both come from the API; no re-query) ----
   const basis = (budgetBasis === "actual") ? "actual" : "est";
   const bc = (basis === "actual" ? b.byCategoryActual : b.byCategory) || {};
-  const cats = [["Accommodation", Number(bc.accommodation) || 0], ["Transport", Number(bc.transport) || 0], ["Activities", Number(bc.activities) || 0]];
+  const cats = [["Lodging", Number(bc.accommodation) || 0], ["Transport", Number(bc.transport) || 0], ["Activities", Number(bc.activities) || 0]];
   const maxCat = Math.max.apply(null, cats.map(c => c[1]).concat([0])) || 1;
   const denom = cats.reduce((s, c) => s + c[1], 0) || 1;
   const catbars = '<div class="catbars">' + cats.map(c => {
@@ -869,7 +871,7 @@ async function viewStep(slug, id) {
       '<div class="mrow"><span class="mlabel">Depart</span><span class="mval">' + eDate("depart", s.depart, "+ date") + " " + eTime("depart_time", s.depart_time, "+ time") + "</span></div>" +
       '<div class="mrow"><span class="mlabel">Arrive</span><span class="mval">' + eDate("arrive", s.arrive, "+ date") + " " + eTime("arrive_time", s.arrive_time, "+ time") + "</span></div>";
   } else {
-    rows = '<div class="mrow"><span class="mlabel">Accommodation</span><span class="mval">' + eText("accom_name", s.accom_name, "name") + "</span></div>" +
+    rows = '<div class="mrow"><span class="mlabel">Lodging</span><span class="mval">' + eText("accom_name", s.accom_name, "name") + "</span></div>" +
       '<div class="mrow"><span class="mlabel">Check-in</span><span class="mval">' + eDate("arrive", s.arrive, "+ date") + " " + eTime("arrive_time", s.arrive_time, "+ time") + "</span></div>" +
       '<div class="mrow"><span class="mlabel">Check-out</span><span class="mval">' + eDate("depart", s.depart, "+ date") + " " + eTime("depart_time", s.depart_time, "+ time") + "</span></div>";
   }
@@ -1308,7 +1310,7 @@ function openStepWizard(slug, insertIndex, steps) {
       ? wzField("Place *", wzText("place", st.place, "e.g. Paris")) +
         wzField("Check-in", wzDate("arrive", st.arrive), hintEnd) +
         wzField("Check-out", wzDate("depart", st.depart), hintStart) +
-        wzField("Accommodation", wzText("accom_name", st.accom_name, "hotel / apartment (optional)"))
+        wzField("Lodging", wzText("accom_name", st.accom_name, "hotel / apartment (optional)"))
       : wzField("From", wzText("from", st.from, "e.g. Brussels")) +
         wzField("To", wzText("to", st.to, "e.g. Paris")) +
         wzField("Transport", selIn("transport", TRANSPORTS_UI, st.transport || "plane")) +
@@ -1338,7 +1340,7 @@ function openStepWizard(slug, insertIndex, steps) {
       const rows = [];
       const add = (k, v) => { if (v) rows.push('<div class="rev-row"><span class="rev-k">' + esc(k) + '</span><span class="rev-v">' + esc(v) + "</span></div>"); };
       add("Type", st.kind === "stay" ? "Stay" : "Travel");
-      if (st.kind === "stay") { add("Place", st.place); add("Check-in", st.arrive); add("Check-out", st.depart); add("Accommodation", st.accom_name); }
+      if (st.kind === "stay") { add("Place", st.place); add("Check-in", st.arrive); add("Check-out", st.depart); add("Lodging", st.accom_name); }
       else {
         add("From", st.from); add("To", st.to); add("Transport", st.transport); add("Carrier", st.carrier);
         add("Depart", [st.depart, st.depart_time].filter(Boolean).join(" ")); add("Arrive", [st.arrive, st.arrive_time].filter(Boolean).join(" "));

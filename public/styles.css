@@ -182,6 +182,9 @@ a.step-title:hover, a.leg-title:hover { color: var(--accent-ink); text-decoratio
 .step-open { margin-left: auto; flex: 0 0 auto; color: var(--ink-3); font-size: 1.5em; line-height: 1;
   text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; padding: 0 2px 0 6px; }
 .step-open:hover { color: var(--accent-ink); text-decoration: none; }
+/* status chip sits on its own row beneath the dates (title / dates / status stack) */
+.step-status { margin-top: 5px; }
+.step-status .editable { min-height: 34px; }
 
 .cost { font-weight: 600; }
 .cost.est { font-weight: 500; }
