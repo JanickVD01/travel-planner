@@ -14,6 +14,12 @@
     { "binding": "DB", "database_name": "travel-planner-db", "database_id": "720b6ad7-11d2-47a1-9569-22142d13a1d6" }
   ],
 
+  // PHOTOS (M9): the MCP worker only reads/writes attachment METADATA + purges bytes on hard-delete.
+  // KV is OPTIONAL here (flatPurge guards on env.IMAGES_KV); we ship WITHOUT a binding so a missing id
+  // can't break the deploy. TO ENABLE (bind the SAME namespace the Pages site uses so purges hit the
+  // real bytes), add its id at top level:
+  //   "kv_namespaces": [ { "binding": "IMAGES_KV", "id": "<same-id-as-Pages-production>" } ]
+
   // Free in-Worker rate limit on /mcp, keyed by user email (period must be 10 or 60).
   "ratelimits": [
     { "name": "MCP_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 120, "period": 60 } }

@@ -10,6 +10,7 @@ import {
   listSteps, createStep, patchStep, deleteStep, restoreStep, addStay, addTravel,
   listActivities, createActivity, patchActivity, deleteActivity, restoreActivity,
   listPacking, createPacking, patchPacking, deletePacking, restorePacking, filterPacking,
+  listAttachments, patchAttachment, deleteAttachment, purgeAttachment,
   setCoordinate, setBooking, tripOverview, getBudget
 } from "../../shared/core.js";
 
@@ -167,6 +168,26 @@ export class AppMCP extends McpAgent {
     this.server.registerTool("restore_packing",
       { description: "Restore a soft-deleted packing item by id.", inputSchema: { slug: SLUG, id: z.string() } },
       (a) => self.run(() => restorePacking(env, { space: a.slug, list: "packing", id: a.id }, self.actor)));
+
+    // ---- attachments (photo METADATA; image BYTES are uploaded via the web UI only, never MCP) ----
+    this.server.registerTool("list_attachments",
+      { description: "List a trip's photo attachments (metadata only), optionally filtered to one parent step/activity.", inputSchema: { slug: SLUG, parent_type: z.enum(["step", "activity"]).optional(), parent_id: z.string().optional().describe("Filter to this parent step/activity id") } },
+      (a) => self.run(async () => {
+        const r = await listAttachments(env, { space: a.slug, list: "attachments" }, self.actor);
+        let rows = r.rows;
+        if (a.parent_type) rows = rows.filter(x => x.parent_type === a.parent_type);
+        if (a.parent_id) rows = rows.filter(x => x.parent_id === a.parent_id);
+        return { rows };
+      }));
+    this.server.registerTool("set_caption",
+      { description: "Set (or clear, pass null/empty) the caption of a photo attachment by id.", inputSchema: { slug: SLUG, id: z.string(), caption: z.string().nullable().optional() } },
+      (a) => self.run(() => patchAttachment(env, { space: a.slug, list: "attachments", id: a.id, caption: a.caption == null ? null : a.caption }, self.actor)));
+    this.server.registerTool("delete_attachment",
+      { description: "Delete a photo attachment by id (soft-delete; the image bytes stay in KV until purged).", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => deleteAttachment(env, { space: a.slug, list: "attachments", id: a.id }, self.actor)));
+    this.server.registerTool("purge_attachment",
+      { description: "Permanently delete a soft-deleted photo attachment by id (also removes its image bytes from KV).", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => purgeAttachment(env, { space: a.slug, list: "attachments", id: a.id }, self.actor)));
 
     // ---- cross-entity routers + overview ----
     this.server.registerTool("set_coordinate",

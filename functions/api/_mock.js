@@ -2,8 +2,10 @@
 // the real adapters; self-seeds a realistic Thailand trip so previews aren't empty. Edits evaporate.
 // IMPORTANT: when you add an /api/* route, add a branch here too, or it 404s in previews.
 import { computeBudget } from "../../shared/core.js";
-const S = { entries: [], trips: [], steps: [], activities: [], packing: [] };
+const S = { entries: [], trips: [], steps: [], activities: [], packing: [], attachments: [] };
 function j(o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json; charset=utf-8" } }); }
+// A real (tiny) PNG so preview <img> tags served by /api/image resolve to actual bytes (no KV in previews).
+const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCAYAAAD5PA/NAAAAC0lEQVR4nGNgQAMAABEAAe4mBk8AAAAASUVORK5CYII="), c => c.charCodeAt(0));
 
 (function seed() {
   const now = "2026-07-08T00:00:00.000Z", by = "demo@example.com";
@@ -41,6 +43,10 @@ function j(o, s) { return new Response(JSON.stringify(o), { status: s || 200, he
   const pack = (i, o) => S.packing.push(base(Object.assign({ id: "pk-demo-" + i, sort_order: i * 10, packed: "0", category: null, qty: null, note: null }, o)));
   pack(1, { title: "Travel adapters", owner: "shared", packed: "0", category: "Tech" });
   pack(2, { title: "Sunscreen", owner: "demo@example.com", packed: "0", category: "Toiletries", qty: "2" });
+
+  const att = (i, o) => S.attachments.push(base(Object.assign({ id: "at-demo-" + i, sort_order: i * 10, caption: null, content_type: "image/jpeg", size: null }, o)));
+  att(1, { parent_type: "step", parent_id: "st-demo-2", kv_key: "att/thailand-2026/at-demo-1", caption: "Riva Surya rooftop pool", size: "184320" });
+  att(2, { parent_type: "activity", parent_id: "ac-demo-1", kv_key: "att/thailand-2026/at-demo-2", caption: "Grand Palace at golden hour", size: "205112" });
 })();
 
 // Mirror core.js decorate (maps_url + eur) so the demo /overview shape matches production.
@@ -80,6 +86,11 @@ export async function handleMock(request, env) {
   if (parts[0] === "steps")   { if (request.method === "GET") return j({ rows: isTrash ? [] : S.steps }); return j({ ok: true, demo: true }); }
   if (parts[0] === "activities") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.activities }); return j({ ok: true, demo: true }); }
   if (parts[0] === "packing") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.packing }); return j({ ok: true, demo: true }); }
+  if (parts[0] === "attachments") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.attachments }); return j({ ok: true, demo: true }); }
+  if (parts[0] === "image") {   // GET -> real placeholder PNG bytes (no KV in previews); POST -> ok/demo (never touches KV)
+    if (request.method === "GET") return new Response(PNG_PLACEHOLDER, { status: 200, headers: { "content-type": "image/png", "cache-control": "public, max-age=31536000, immutable" } });
+    return j({ ok: true, demo: true });
+  }
   if (parts[0] === "overview") { if (request.method === "GET") return j(mockOverview()); return j({ ok: true, demo: true }); }
   if (parts[0] === "budget") { if (request.method === "GET") return j(mockBudget()); return j({ ok: true, demo: true }); }
   return j({ ok: true, demo: true });     // unknown route degrades to ok, never 500

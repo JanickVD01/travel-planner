@@ -51,7 +51,8 @@ const ICONS = {
   stay:  '<path d="M3.5 20.5V9L12 4l8.5 5v11.5M3.5 20.5h17M9.5 20.5v-5h5v5"/>',
   pin:   '<path d="M12 21.5s6.5-6 6.5-10.5a6.5 6.5 0 0 0-13 0C5.5 15.5 12 21.5 12 21.5z"/><circle cx="12" cy="11" r="2.3"/>',
   link:  '<path d="M9 15l6-6M10.5 6.5 12 5a4 4 0 0 1 6 6l-2 2M13.5 17.5 12 19a4 4 0 0 1-6-6l2-2"/>',
-  check: '<path d="M5 12.5 10 17.5 19 6.5"/>'
+  check: '<path d="M5 12.5 10 17.5 19 6.5"/>',
+  image: '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="8.8" cy="10" r="1.5"/><path d="M4 17l4.3-4.3a1.8 1.8 0 0 1 2.5 0L15 17M13.5 14.2l1.6-1.6a1.8 1.8 0 0 1 2.5 0L20.5 14.2"/>'
 };
 function icon(name, cls) {
   const p = ICONS[name] || ICONS.pin;
@@ -148,7 +149,15 @@ async function loadTrip(slug) {
     if (liveStepIds.has(a.step_id)) (byStep[a.step_id] = byStep[a.step_id] || []).push(a);
     else unassigned.push(a);
   });
-  state.trip[slug] = { trip, steps, activities, byStep, unassigned };
+  // Attachments (M9): photo metadata; bytes are served separately by /api/image. Group live rows by
+  // parent so a card/detail view can look up its photos in O(1). Degrades to [] if unbound/unavailable.
+  let attachments = [];
+  try { const d = await api("attachments/" + encodeURIComponent(slug) + "/attachments"); attachments = (d && d.rows) || []; } catch {}
+  const byParent = {};
+  attachments.filter(a => !a.deleted)
+    .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0))
+    .forEach(a => { const k = a.parent_type + ":" + a.parent_id; (byParent[k] = byParent[k] || []).push(a); });
+  state.trip[slug] = { trip, steps, activities, byStep, unassigned, attachments, byParent };
   return state.trip[slug];
 }
 function invalidateTrip(slug) { delete state.trip[slug]; }
@@ -307,6 +316,131 @@ function activityCardHTML(a, rate, slug) {
     "</div></li>";
 }
 
+// ---- attachments / photos (M9) ---------------------------------------------
+// A reusable "Photos" strip for a step or activity. Reads the pre-grouped byParent map off the cached
+// trip bundle (loadTrip), so no per-card fetch. `opts.compact` -> the calm card affordance (up to 3
+// thumbs + a small add tile); otherwise the full detail-view section (all thumbs, captions, add button).
+// Bytes stream from /api/image/<slug>/<id>; images are lazy + fixed 1:1 aspect (no layout shift).
+// Wiring is delegated once in bindPhotos(); container data-* carry slug/parent so handlers stay generic.
+function attachmentsHTML(parentType, parentId, slug, opts) {
+  opts = opts || {};
+  const compact = !!opts.compact;
+  const bundle = state.trip[slug];
+  const byParent = (bundle && bundle.byParent) || {};
+  const rows = byParent[parentType + ":" + parentId] || [];
+  const shown = compact ? rows.slice(0, 3) : rows;
+  const extra = rows.length - shown.length;
+
+  const thumb = (r) => {
+    const src = "api/image/" + encodeURIComponent(slug) + "/" + encodeURIComponent(r.id);
+    const cap = r.caption == null ? "" : String(r.caption);
+    const del = '<button type="button" class="thumb-del" data-act="photo-del" data-id="' + esc(r.id) +
+      '" aria-label="Delete photo">×</button>';
+    const capHTML = (!compact && cap) ? '<figcaption class="thumb-cap">' + esc(cap) + "</figcaption>" : "";
+    return '<figure class="thumb">' +
+      '<a class="thumb-link" href="' + esc(src) + '" target="_blank" rel="noopener" aria-label="' +
+        (cap ? esc(cap) : "View photo") + '">' +
+        '<img loading="lazy" src="' + esc(src) + '" alt="' + esc(cap) + '"></a>' +
+      del + capHTML + "</figure>";
+  };
+  const thumbs = shown.map(thumb).join("");
+  const moreHTML = (compact && extra > 0) ? '<span class="thumb-more" aria-hidden="true">+' + esc(String(extra)) + "</span>" : "";
+
+  const upload =
+    '<input type="file" class="photo-input" accept="image/*" multiple hidden tabindex="-1" aria-hidden="true">' +
+    '<button type="button" class="photo-upload-btn" data-act="photo-add">' + icon("image") +
+      "<span>Add photo" + (compact ? "" : "s") + "</span></button>";
+  const uploadWrap = '<div class="photo-upload">' + upload + "</div>";
+  const attrs = ' data-slug="' + esc(slug) + '" data-ptype="' + esc(parentType) + '" data-pid="' + esc(parentId) + '"';
+
+  if (compact) {
+    return '<div class="photos compact' + (rows.length ? "" : " empty") + '"' + attrs + '>' +
+      '<div class="thumbs">' + thumbs + moreHTML + uploadWrap + "</div>" +
+      '<div class="photo-msg" role="status" hidden></div>' +
+    "</div>";
+  }
+  return '<section class="photos"' + attrs + '>' +
+    "<h2>Photos</h2>" +
+    (thumbs ? '<div class="thumbs">' + thumbs + "</div>" : "") +
+    uploadWrap +
+    '<div class="photo-msg" role="status" hidden></div>' +
+  "</section>";
+}
+// Map an upload failure to a friendly, non-technical line. 503 = KV not yet enabled (graceful degrade).
+function photoErrMsg(status, err) {
+  if (status === 503) return "Photo uploads aren’t set up yet.";
+  if (status === 413) return "That image is too large (max 5 MB).";
+  if (status === 415) return "That file type isn’t supported — use JPEG, PNG, WebP, GIF or HEIC.";
+  if (status === 401) return "Please sign in again to upload.";
+  return err || "Upload failed. Please try again.";
+}
+function photoMsg(wrap, text) {
+  const el = wrap && wrap.querySelector(".photo-msg");
+  if (!el) return;
+  el.textContent = text || ""; el.hidden = !text;
+}
+async function uploadPhotos(input) {
+  const wrap = input.closest(".photos");
+  if (!wrap) return;
+  const slug = wrap.dataset.slug, ptype = wrap.dataset.ptype, pid = wrap.dataset.pid;
+  const files = Array.prototype.slice.call(input.files || []);
+  if (!files.length || !slug || !pid) { input.value = ""; return; }
+  photoMsg(wrap, "");
+  const btn = wrap.querySelector(".photo-upload-btn");
+  const label = btn && btn.querySelector("span");
+  const restore = label ? label.textContent : "";
+  if (btn) btn.disabled = true;
+  if (label) label.textContent = "Uploading…";
+  let ok = 0, lastErr = "";
+  for (const file of files) {
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      // FormData upload — bypass api() (which forces JSON). Same "api/" base as every other call.
+      const r = await fetch("api/image/" + encodeURIComponent(slug) + "/" + encodeURIComponent(ptype) + "/" + encodeURIComponent(pid),
+        { method: "POST", body: fd });
+      if (r.ok) { ok++; }
+      else { let b = null; try { b = await r.json(); } catch {} lastErr = photoErrMsg(r.status, b && b.error); }
+    } catch { lastErr = "Upload failed. Check your connection."; }
+  }
+  input.value = "";                                   // reset so the same file can be re-picked
+  if (ok > 0) { invalidateTrip(slug); vt(route); return; }   // re-render picks up the new rows
+  if (btn) btn.disabled = false;
+  if (label) label.textContent = restore;
+  photoMsg(wrap, lastErr || "Upload failed.");
+}
+async function deletePhoto(btn) {
+  const wrap = btn.closest(".photos");
+  if (!wrap) return;
+  const slug = wrap.dataset.slug, id = btn.dataset.id;
+  if (!slug || !id) return;
+  btn.disabled = true;
+  try {
+    await api("attachments/" + encodeURIComponent(slug) + "/attachments/" + encodeURIComponent(id), { method: "DELETE" });
+    // Optimistically drop it from the cached bundle, then re-render from cache (works offline of a refetch).
+    const b = state.trip[slug];
+    if (b) {
+      b.attachments = (b.attachments || []).filter(r => String(r.id) !== String(id));
+      Object.keys(b.byParent || {}).forEach(k => { b.byParent[k] = b.byParent[k].filter(r => String(r.id) !== String(id)); });
+    }
+    vt(route);
+  } catch { btn.disabled = false; photoMsg(wrap, "Couldn’t delete photo."); }
+}
+let _photosBound = false;
+function bindPhotos() {                                // one delegated pair of listeners for all photo strips
+  if (_photosBound) return; _photosBound = true;
+  document.addEventListener("click", (e) => {
+    const add = e.target.closest("[data-act='photo-add']");
+    if (add) { const w = add.closest(".photos"); const inp = w && w.querySelector(".photo-input"); if (inp) inp.click(); return; }
+    const del = e.target.closest("[data-act='photo-del']");
+    if (del) { e.preventDefault(); deletePhoto(del); }
+  });
+  document.addEventListener("change", (e) => {
+    const inp = e.target.closest(".photo-input");
+    if (inp) uploadPhotos(inp);
+  });
+}
+
 function stepCardHTML(s, rate, acts, slug) {
   const st = s.booking_status || "Idea";
   const chip = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
@@ -336,6 +470,7 @@ function stepCardHTML(s, rate, acts, slug) {
         '<div class="leg-sub">' + (s.carrier ? '<span class="mono">' + esc(s.carrier) + "</span>" : "") +
           (when ? ' <span class="muted mono">' + when + "</span>" : "") + "</div>" +
         '<div class="step-meta">' + costHTML + maplink + booklink + "</div>" +
+        attachmentsHTML("step", s.id, slug, { compact: true }) +
       "</div></li>";
   }
   const nights = (s.arrive && s.depart) ? '<span class="muted mono">' + esc(fmtDate(s.arrive)) + " → " + esc(fmtDate(s.depart)) + "</span>" : "";
@@ -347,6 +482,7 @@ function stepCardHTML(s, rate, acts, slug) {
       '<div class="step-head">' + icon("stay", "step-kind") + '<span class="step-title">' + esc(s.title || s.location) + "</span>" + chip + "</div>" +
       '<div class="step-sub">' + nights + (s.accom_name ? ' <span>· ' + esc(s.accom_name) + "</span>" : "") + "</div>" +
       '<div class="step-meta">' + costHTML + maplink + booklink + "</div>" +
+      attachmentsHTML("step", s.id, slug, { compact: true }) +
       actsHTML +
     "</div></li>";
 }
@@ -557,14 +693,15 @@ async function viewActivity(slug, id) {
     : '<span class="note-empty muted">Add notes…</span>';
   const noteCtrl = editable(noteDisplay, { entity: "activities", list: "activities", id: a.id, field: "note", input: "textarea", value: noteVal });
   const notes = '<section class="notes"><h2>Notes</h2><div class="notes-body">' + noteCtrl + "</div></section>";
+  const photos = attachmentsHTML("activity", a.id, slug, {});
 
   view().innerHTML = '<div class="sheet">' + head +
     '<div class="panel detail">' +
       '<h1 class="detail-title" style="view-transition-name:' + esc(vtName(a.id)) + '">' + esc(a.title || a.location) + "</h1>" +
       '<div class="detail-context muted">in ' + esc(parentTitle) + "</div>" +
-      meta + notes +
+      meta + notes + photos +
     "</div></div>";
-  motion(an => an.animate(".detail-meta, .notes", { opacity: [0, 1], translateY: [8, 0], delay: an.stagger(60), duration: 340, ease: "out(3)" }));
+  motion(an => an.animate(".detail-meta, .notes, .photos", { opacity: [0, 1], translateY: [8, 0], delay: an.stagger(60), duration: 340, ease: "out(3)" }));
 }
 
 // ---- packing (M8): a shared checklist scoped by owner (Mine / Partner / Shared) ----
@@ -771,5 +908,6 @@ window.addEventListener("hashchange", () => vt(route));
   await loadMe();
   buildNav();
   bindEditable();
+  bindPhotos();
   route();
 })();
