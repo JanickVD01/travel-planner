@@ -1,8 +1,8 @@
 # 0007 — Mobile fix: long-press to copy a value
 
-> **Status:** 🚧 In progress 2026-07-09 — code landed on `code/mobile-copy-values`; final sign-off is a
-> real-device long-press check on the CI demo preview. One numbered record per effort — see
-> [`README.md`](README.md) for the index. (0006 is the concurrent MCP-connector doc effort, PR #33.)
+> **Status:** ✅ Shipped 2026-07-09 (PR #34). Merged to main; the owner is validating the
+> long-press-to-copy behavior live. One numbered record per effort — see
+> [`README.md`](README.md) for the index.
 
 ## Context
 
@@ -41,6 +41,6 @@ expectation. No visual, API, worker, or data change.
 
 ## Outcome
 
-_Pending on-device confirmation._ Flip the index row to ✅ + fill the PR number once verified and merged.
-No `DESIGN.md` change (interaction refinement, no visual/token change); the in-app hint is the
-user-facing reconciliation.
+Merged to main (PR #34). The owner is validating the long-press-to-copy behavior on the live site
+(customer-feedback loop); any issue folds into a follow-up. No `DESIGN.md` change (interaction
+refinement, no visual/token change).
