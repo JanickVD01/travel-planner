@@ -399,6 +399,34 @@ function photoMsg(wrap, text) {
   if (!el) return;
   el.textContent = text || ""; el.hidden = !text;
 }
+// Shrink a large photo in the browser before upload: phones shoot 5–15 MB, the KV store caps at 5 MB.
+// Longest edge -> <=2048px, re-encoded as JPEG with quality stepped down until it fits. Small images,
+// non-images/GIFs, and anything the browser can't decode (e.g. some HEIC) pass through untouched.
+async function downscaleImage(file) {
+  const CAP = 4.5 * 1024 * 1024, MAX_DIM = 2048;
+  if (!file || !/^image\//i.test(file.type) || file.type === "image/gif") return file;
+  if (file.size <= CAP) return file;                                  // already small enough
+  if (typeof createImageBitmap !== "function") return file;
+  let bmp;
+  try { bmp = await createImageBitmap(file); } catch (e) { return file; }   // undecodable -> upload as-is
+  const scale = Math.min(1, MAX_DIM / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale));
+  const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx || !canvas.toBlob) { if (bmp.close) bmp.close(); return file; }
+  ctx.drawImage(bmp, 0, 0, w, h); if (bmp.close) bmp.close();
+  const toBlob = (q) => new Promise(res => canvas.toBlob(res, "image/jpeg", q));
+  let best = null;
+  for (const q of [0.85, 0.72, 0.6, 0.5]) {
+    const blob = await toBlob(q);
+    if (!blob) break;
+    best = blob;                                                       // keep the smallest we produce
+    if (blob.size <= CAP) break;
+  }
+  if (!best) return file;
+  const name = (file.name || "photo").replace(/\.[^.]+$/, "") + ".jpg";
+  return new File([best], name, { type: "image/jpeg" });
+}
 async function uploadPhotos(input) {
   const wrap = input.closest(".photos");
   if (!wrap) return;
@@ -412,7 +440,9 @@ async function uploadPhotos(input) {
   if (btn) btn.disabled = true;
   if (label) label.textContent = "Uploading…";
   let ok = 0, lastErr = "";
-  for (const file of files) {
+  for (const original of files) {
+    let file = original;
+    try { file = await downscaleImage(original); } catch (e) { file = original; }   // never block the upload
     const fd = new FormData();
     fd.append("file", file);
     try {
