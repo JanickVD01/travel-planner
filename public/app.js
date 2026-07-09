@@ -599,6 +599,7 @@ async function viewTimeline(slug) {
   motion(a => a.animate(".tl .step", { opacity: [0, 1], translateY: [8, 0], delay: a.stagger(45), duration: 380, ease: "out(3)" }));
 }
 
+let budgetBasis = "est";   // "Where it goes" breakdown basis: 'est' | 'actual' (module state, like the packing filter)
 // Budget view: authoritative EUR totals + a projected-vs-target meter + a category breakdown.
 // Every money value from /api/budget is already EUR, 2dp — render verbatim (money() just adds the €).
 async function viewBudget(slug) {
@@ -673,17 +674,30 @@ async function viewBudget(slug) {
       "</div>" + cap + "</div>";
   }
 
-  // ---- category breakdown (estimated EUR); bar widths set in JS after insert ----
-  const bc = b.byCategory || {};
+  // ---- Budget insights: cost per person (÷ people); all figures come straight from the API ----
+  const insights = '<section class="insights"><h2 class="cat-h">Budget insights</h2>' +
+    '<div class="stats">' +
+      tile("Est / person", money(b.perPersonEst, homeC)) +
+      tile("Actual / person", money(b.perPersonActual, homeC)) +
+      (hasTarget ? tile("Projected / person", money(b.perPersonProjected, homeC), b.over ? "neg" : "") : "") +
+    '</div><p class="muted insights-note">Split across ' + esc(String(b.people || 2)) + " people.</p></section>";
+
+  // ---- category breakdown with an Estimated | Actual toggle (both come from the API; no re-query) ----
+  const basis = (budgetBasis === "actual") ? "actual" : "est";
+  const bc = (basis === "actual" ? b.byCategoryActual : b.byCategory) || {};
   const cats = [["Accommodation", Number(bc.accommodation) || 0], ["Transport", Number(bc.transport) || 0], ["Activities", Number(bc.activities) || 0]];
   const maxCat = Math.max.apply(null, cats.map(c => c[1]).concat([0])) || 1;
-  const denom = Number(b.totalEst) || cats.reduce((s, c) => s + c[1], 0) || 1;
+  const denom = cats.reduce((s, c) => s + c[1], 0) || 1;
   const catbars = '<div class="catbars">' + cats.map(c => {
     const w = Math.round(c[1] / maxCat * 100), share = Math.round(c[1] / denom * 100);
     return '<div class="catbar"><div class="catbar-label">' + esc(c[0]) + "</div>" +
       '<div class="catbar-track"><div class="catbar-fill" data-w="' + esc(String(w)) + '"></div></div>' +
       '<div class="catbar-val mono">' + esc(money(c[1], homeC)) + ' <span class="muted">' + esc(String(share)) + "%</span></div></div>";
   }).join("") + "</div>";
+  const basisToggle = '<div class="basis-toggle">' +
+    '<button type="button" class="basis-chip' + (basis === "est" ? " active" : "") + '" data-basis="est">Estimated</button>' +
+    '<button type="button" class="basis-chip' + (basis === "actual" ? " active" : "") + '" data-basis="actual">Actual</button>' +
+    "</div>";
 
   const config = '<div class="budget-config">' +
     '<div class="cfg-row"><span class="cfg-label">Exchange rate</span>' +
@@ -694,7 +708,8 @@ async function viewBudget(slug) {
   view().innerHTML = shell +
     '<div class="panel budget">' +
       totals + meter +
-      '<h2 class="cat-h">Where it goes <span class="muted">(estimated)</span></h2>' + catbars +
+      insights +
+      '<div class="cat-h-row"><h2 class="cat-h">Where it goes</h2>' + basisToggle + "</div>" + catbars +
       config +
     "</div>";
 
@@ -703,6 +718,15 @@ async function viewBudget(slug) {
   if (mf) { const w = Number(mf.dataset.pct) || 0; mf.style.width = w + "%"; }
   const fills = Array.prototype.slice.call(document.querySelectorAll(".catbar-fill"));
   fills.forEach(el => { el.style.width = (Number(el.dataset.w) || 0) + "%"; });
+  // Estimated | Actual toggle -> flip the module basis and re-render (cheap refetch, matches packing).
+  Array.prototype.slice.call(document.querySelectorAll(".basis-chip")).forEach(chip => {
+    chip.addEventListener("click", () => {
+      const nb = chip.dataset.basis === "actual" ? "actual" : "est";
+      if (nb === budgetBasis) return;
+      budgetBasis = nb;
+      vt(() => viewBudget(slug));
+    });
+  });
   motion(an => {
     if (mf) an.animate(mf, { width: ["0%", (Number(mf.dataset.pct) || 0) + "%"], duration: 640, ease: "out(3)" });
     fills.forEach((el, i) => an.animate(el, { width: ["0%", (Number(el.dataset.w) || 0) + "%"], duration: 560, delay: 80 + i * 70, ease: "out(3)" }));
