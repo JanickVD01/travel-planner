@@ -10,7 +10,7 @@ import {
   listSteps, createStep, patchStep, deleteStep, restoreStep, purgeStepDeep, addStay, addTravel,
   listActivities, createActivity, patchActivity, deleteActivity, restoreActivity, purgeActivity,
   listPacking, createPacking, patchPacking, deletePacking, restorePacking, purgePacking, filterPacking,
-  listAttachments, patchAttachment, deleteAttachment, purgeAttachment,
+  listAttachments, patchAttachment, deleteAttachment, purgeAttachment, setPinned,
   setCoordinate, setBooking, setIncluded, setMapUrl, tripOverview, getBudget
 } from "../../shared/core.js";
 
@@ -201,6 +201,9 @@ export class AppMCP extends McpAgent {
     this.server.registerTool("set_caption",
       { description: "Set (or clear, pass null/empty) the caption of a photo attachment by id.", inputSchema: { slug: SLUG, id: z.string(), caption: z.string().nullable().optional() } },
       (a) => self.run(() => patchAttachment(env, { space: a.slug, list: "attachments", id: a.id, caption: a.caption == null ? null : a.caption }, self.actor)));
+    this.server.registerTool("pin_image",
+      { description: "Pin a photo as its parent step's card background (shown behind the step on the timeline while scrolling). Pinning one photo automatically un-pins any other photo on the same step. Pass pinned:false to unpin. Note: only 'stay' steps render a background.", inputSchema: { slug: SLUG, id: z.string(), pinned: z.boolean().optional().describe("true (default) to pin as the background, false to unpin") } },
+      (a) => self.run(() => setPinned(env, { space: a.slug, id: a.id, pinned: a.pinned === undefined ? true : a.pinned }, self.actor)));
     this.server.registerTool("delete_attachment",
       { description: "Delete a photo attachment by id (soft-delete; the image bytes stay in KV until purged).", inputSchema: { slug: SLUG, id: z.string() } },
       (a) => self.run(() => deleteAttachment(env, { space: a.slug, list: "attachments", id: a.id }, self.actor)));

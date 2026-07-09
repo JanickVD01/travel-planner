@@ -213,7 +213,7 @@ low-end Android). Signature moves:
 | **Cramped tap targets** (tiny chips, dense rows on the line) | ≥44px hit area (padding or a `::before` hit-slop even when the pill is smaller); space adjacent steps | Two thumbs on phones; sub-44px fails WCAG 2.5.5 and mis-taps between steps. |
 | Encode **status / over-budget by color alone** | Redundant cues: **text label + icon/shape + color**; budget bar turns red AND crosses a labeled 100% marker | Color-only fails WCAG 1.4.1, invisible in sunlight, and CVD-unsafe. |
 | **Ambiguous money** — bare number, guessed currency, silent/stale FX | Explicit symbol/code **+ labeled €-equivalent** (`฿4,200 · ≈ €108`), tabular figures, surface the FX rate + date | Dual-currency clarity is the whole point; ambiguity causes real budgeting errors. |
-| **Full-bleed hero photo on every step**, burying A→B structure | Keep the **connector-spine + markers** primary; images are optional restrained thumbnails in fixed aspect boxes, lazy-loaded | The signature screen must stay scannable and fast on Thai mobile networks. |
+| **Full-bleed hero photo on every step**, burying A→B structure | Keep the **connector-spine + markers** primary; images are optional restrained thumbnails in fixed aspect boxes, lazy-loaded. **One opt-in exception (0010):** a user may pin ONE photo as a **stay** card's background — a scrimmed "media island" with a text scrim whose floor alpha guarantees AA over any photo. Never travel legs, never automatic. | The signature screen must stay scannable and fast on Thai mobile networks; a pinned photo is opt-in, scrimmed and readability-guaranteed, so it stays the exception, not the rule. |
 | **Layout-property or unguarded** entrance animation | Animate `transform`/`opacity` only; route changes via View Transitions; wrap **all** motion in `prefers-reduced-motion` | Layout animation janks; unguarded motion is an a11y + perf regression. |
 
 ---
@@ -315,4 +315,11 @@ Records the locked brand inputs and the final visual decision.
   the step **detail** view (tap a line to open it). Added a "Delete step" action (soft-delete → Trash) in
   that detail. Info-density feedback; supersedes Direction C's "activities as indented sub-stations" on
   the timeline. See [`docs/implementations/0008-timeline-declutter-delete.md`](docs/implementations/0008-timeline-declutter-delete.md).
+- **2026-07-09 — Pinned step photo (opt-in card background).** A user can pin ONE uploaded photo per
+  **stay** as that card's timeline background: a warm dark "media island" (theme-independent light ink)
+  under a text-anchored scrim whose floor alpha (~0.82) guarantees WCAG AA (~10.8:1 title / ~8.7:1 dates
+  over even a pure-white photo) in both themes. Desaturated ("muted") by default so the photo reads as a
+  calm backdrop, not a competing picture. Travel legs never get one; nothing is automatic. Amends the §8
+  "no full-bleed hero on every step" rule to allow this scrimmed, opt-in exception (the §2 Polarsteps
+  "cover + scrim" move). See [`docs/implementations/0010-pinned-step-photo.md`](docs/implementations/0010-pinned-step-photo.md).
 
