@@ -321,6 +321,7 @@ function activityCardHTML(a, rate, slug) {
       (eurEquiv(act, a.cost_ccy, rate) ? ' <span class="muted">' + esc(eurEquiv(act, a.cost_ccy, rate)) + "</span>" : "") + "</span>"
     : '<span class="add-actual">+ actual</span>';
   const actHTML = editable(actDisplay, { entity: "activities", list: "activities", id: a.id, field: "cost_actual", input: "decimal", value: act });
+  const costHTML = (a.included === "1") ? '<span class="chip included-chip">' + icon("link") + "included</span>" : estHTML + actHTML;
   const flag = a.needs_advance === "yes" ? '<span class="flag">' + icon("link") + "book ahead</span>" : "";
   const mu = mapsUrl(a);
   const maplink = mu ? '<a class="maplink" href="' + esc(mu) + '" target="_blank" rel="noopener">' + icon("pin") + "Map</a>" : "";
@@ -332,7 +333,7 @@ function activityCardHTML(a, rate, slug) {
     '<span class="sub-marker" aria-hidden="true"></span>' +
     '<div class="act-card">' +
       '<div class="act-head">' + titleHTML + chip + flag + "</div>" +
-      '<div class="act-meta">' + estHTML + actHTML + maplink + "</div>" +
+      '<div class="act-meta">' + costHTML + maplink + "</div>" +
     "</div></li>";
 }
 
@@ -506,7 +507,9 @@ function stepCardHTML(s, rate, acts, slug) {
       (eurEquiv(act, s.cost_ccy, rate) ? ' <span class="muted">' + esc(eurEquiv(act, s.cost_ccy, rate)) + "</span>" : "") + "</span>"
     : '<span class="add-actual">+ actual</span>';
   const actHTML = editable(actDisplay, { entity: "steps", list: "flow", id: s.id, field: "cost_actual", input: "decimal", value: act });
-  const costHTML = estHTML + actHTML;
+  // "included in another cost" -> hide the est/actual editors, show a chip instead (excluded from budget too).
+  const costHTML = (s.included === "1") ? '<span class="chip included-chip">' + icon("link") + "included</span>" : estHTML + actHTML;
+  const detailHref = "#/trip/" + encodeURIComponent(slug || "") + "/step/" + encodeURIComponent(s.id);
   const mu = mapsUrl(s);
   const maplink = mu ? '<a class="maplink" href="' + esc(mu) + '" target="_blank" rel="noopener">' + icon("pin") + "Map</a>" : "";
   const bl = safeUrl(s.booking_url);
@@ -527,7 +530,7 @@ function stepCardHTML(s, rate, acts, slug) {
     return '<li class="step travel">' +
       '<span class="marker travel" aria-hidden="true">' + icon(mode) + "</span>" +
       '<div class="leg">' +
-        '<div class="leg-top"><span class="leg-title">' + esc(s.title || s.location) + "</span>" + chip + "</div>" +
+        '<div class="leg-top"><a class="leg-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + chip + "</div>" +
         '<div class="leg-sub">' + (s.carrier ? '<span class="mono">' + esc(s.carrier) + "</span> " : "") + when + "</div>" +
         '<div class="step-meta">' + costHTML + maplink + booklink + "</div>" +
         attachmentsHTML("step", s.id, slug, { compact: true }) +
@@ -543,7 +546,7 @@ function stepCardHTML(s, rate, acts, slug) {
   return '<li class="step stay">' +
     '<span class="marker stay" aria-hidden="true"></span>' +
     '<div class="step-card">' +
-      '<div class="step-head">' + icon("stay", "step-kind") + '<span class="step-title">' + esc(s.title || s.location) + "</span>" + chip + "</div>" +
+      '<div class="step-head">' + icon("stay", "step-kind") + '<a class="step-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + chip + "</div>" +
       '<div class="step-sub">' + nights + (s.accom_name ? ' <span>· ' + esc(s.accom_name) + "</span>" : "") + "</div>" +
       '<div class="step-meta">' + costHTML + maplink + booklink + "</div>" +
       attachmentsHTML("step", s.id, slug, { compact: true }) +
@@ -750,11 +753,17 @@ async function viewActivity(slug, id) {
   const booklink = bl ? '<a class="maplink" href="' + esc(bl) + '" target="_blank" rel="noopener">' + icon("link") + "Booking</a>" : "";
   const actionsHTML = (flag || maplink || booklink) ? '<div class="detail-actions">' + flag + maplink + booklink + "</div>" : "";
 
+  const incVal = (a.included === "1") ? "yes" : "no";
+  const incCtrl = editable('<span class="chip' + (incVal === "yes" ? " included-chip" : " muted") + '">' + (incVal === "yes" ? "included elsewhere" : "not included") + "</span>",
+    { entity: "activities", list: "activities", id: a.id, field: "included", input: "select", value: incVal, options: "no|yes" });
+  const costRows = (a.included === "1") ? "" :
+    '<div class="mrow"><span class="mlabel">Estimated</span><span class="mval">' + estHTML + "</span></div>" +
+    '<div class="mrow"><span class="mlabel">Actual</span><span class="mval">' + actCtrl + "</span></div>";
   const meta = '<div class="detail-meta">' +
     '<div class="mrow"><span class="mlabel">Day</span><span class="mval">' + dayHTML + "</span></div>" +
     '<div class="mrow"><span class="mlabel">Status</span><span class="mval">' + statusCtrl + "</span></div>" +
-    '<div class="mrow"><span class="mlabel">Estimated</span><span class="mval">' + estHTML + "</span></div>" +
-    '<div class="mrow"><span class="mlabel">Actual</span><span class="mval">' + actCtrl + "</span></div>" +
+    '<div class="mrow"><span class="mlabel">Included</span><span class="mval">' + incCtrl + "</span></div>" +
+    costRows +
     actionsHTML + "</div>";
 
   const noteVal = a.note;
@@ -772,6 +781,100 @@ async function viewActivity(slug, id) {
       meta + notes + photos +
     "</div></div>";
   motion(an => an.animate(".detail-meta, .notes, .photos", { opacity: [0, 1], translateY: [8, 0], delay: an.stagger(60), duration: 340, ease: "out(3)" }));
+}
+
+// Step detail: a focused page for one stay or travel leg. Mirrors viewActivity; all fields inline-
+// editable (entity="steps"). A stay lists its nested activities (with the add-activity affordance);
+// a travel leg shows its transport/carrier/times. Cost hidden when the step is "included elsewhere".
+async function viewStep(slug, id) {
+  markActive(null);
+  view().innerHTML = '<div class="panel"><p class="muted">Loading…</p></div>';
+  const { trip, steps, activities } = await loadTrip(slug);
+  const back = "#/trip/" + encodeURIComponent(slug);
+  const tripTitle = (trip && (trip.title || trip.slug)) || slug;
+  const head = '<div class="sheet-head"><a class="back" href="' + esc(back) + '">' +
+    '<span class="chev" aria-hidden="true">‹</span> ' + esc(tripTitle) + "</a></div>";
+  const s = (steps || []).find(x => String(x.id) === String(id));
+  if (!s) {
+    view().innerHTML = '<div class="sheet">' + head +
+      '<div class="panel detail"><h1>Step not found</h1>' +
+      '<p class="muted"><a href="' + esc(back) + '">← Back to ' + esc(tripTitle) + "</a></p></div></div>";
+    return;
+  }
+  const rate = trip && trip.thb_per_eur;
+  const isTravel = s.kind === "travel";
+
+  // inline-edit builders bound to this step
+  const E = (field, disp, opts) => editable(disp, Object.assign({ entity: "steps", list: "flow", id: s.id, field: field }, opts || {}));
+  const eText = (field, val, ph) => E(field, (val != null && val !== "") ? esc(val) : '<span class="add-actual">+ ' + ph + "</span>", { input: "text", value: val });
+  const eDate = (field, val, empty) => E(field, (val != null && val !== "") ? esc(fmtDate(val)) : '<span class="add-actual">' + empty + "</span>", { input: "date", value: val });
+  const eTime = (field, val, empty) => E(field, (val != null && val !== "") ? '<span class="mono">' + esc(val) + "</span>" : '<span class="add-actual">' + empty + "</span>", { input: "time", value: val });
+
+  const stt = s.booking_status || "Idea";
+  const statusCtrl = E("booking_status", '<span class="chip status-' + esc(stt) + '">' + esc(stt) + "</span>",
+    { input: "select", value: stt, options: "Idea|Planned|Booked|Confirmed" });
+  const estDisplay = (s.cost_est != null && s.cost_est !== "") ? '<span class="cost mono est muted">' + esc(money(s.cost_est, s.cost_ccy)) + "</span>" : '<span class="add-actual">+ est</span>';
+  const estCtrl = E("cost_est", estDisplay, { input: "decimal", value: s.cost_est });
+  const act = s.cost_actual;
+  const actDisplay = (act != null && act !== "") ? '<span class="cost mono">' + esc(money(act, s.cost_ccy)) +
+      (eurEquiv(act, s.cost_ccy, rate) ? ' <span class="muted">' + esc(eurEquiv(act, s.cost_ccy, rate)) + "</span>" : "") + "</span>" : '<span class="add-actual">+ actual</span>';
+  const actCtrl = E("cost_actual", actDisplay, { input: "decimal", value: act });
+  const incVal = (s.included === "1") ? "yes" : "no";
+  const incCtrl = E("included", '<span class="chip' + (incVal === "yes" ? " included-chip" : " muted") + '">' + (incVal === "yes" ? "included elsewhere" : "not included") + "</span>",
+    { input: "select", value: incVal, options: "no|yes" });
+  const costRows = (s.included === "1") ? "" :
+    '<div class="mrow"><span class="mlabel">Estimated</span><span class="mval">' + estCtrl + "</span></div>" +
+    '<div class="mrow"><span class="mlabel">Actual</span><span class="mval">' + actCtrl + "</span></div>";
+
+  const mu = mapsUrl(s);
+  const maplink = mu ? '<a class="maplink" href="' + esc(mu) + '" target="_blank" rel="noopener">' + icon("pin") + "Map</a>" : "";
+  const bl = safeUrl(s.booking_url);
+  const booklink = bl ? '<a class="maplink" href="' + esc(bl) + '" target="_blank" rel="noopener">' + icon("link") + "Booking</a>" : "";
+  const actionsHTML = (maplink || booklink) ? '<div class="detail-actions">' + maplink + booklink + "</div>" : "";
+
+  let rows;
+  if (isTravel) {
+    const transDisplay = s.transport ? '<span class="mono">' + esc(s.transport) + "</span>" : '<span class="add-actual">+ transport</span>';
+    const transCtrl = E("transport", transDisplay, { input: "select", value: s.transport || "", options: "plane|train|bus|ferry|car|other" });
+    rows = '<div class="mrow"><span class="mlabel">Transport</span><span class="mval">' + transCtrl + "</span></div>" +
+      '<div class="mrow"><span class="mlabel">Carrier</span><span class="mval">' + eText("carrier", s.carrier, "carrier") + "</span></div>" +
+      '<div class="mrow"><span class="mlabel">Depart</span><span class="mval">' + eDate("depart", s.depart, "+ date") + " " + eTime("depart_time", s.depart_time, "+ time") + "</span></div>" +
+      '<div class="mrow"><span class="mlabel">Arrive</span><span class="mval">' + eDate("arrive", s.arrive, "+ date") + " " + eTime("arrive_time", s.arrive_time, "+ time") + "</span></div>";
+  } else {
+    rows = '<div class="mrow"><span class="mlabel">Accommodation</span><span class="mval">' + eText("accom_name", s.accom_name, "name") + "</span></div>" +
+      '<div class="mrow"><span class="mlabel">Check-in</span><span class="mval">' + eDate("arrive", s.arrive, "+ date") + " " + eTime("arrive_time", s.arrive_time, "+ time") + "</span></div>" +
+      '<div class="mrow"><span class="mlabel">Check-out</span><span class="mval">' + eDate("depart", s.depart, "+ date") + " " + eTime("depart_time", s.depart_time, "+ time") + "</span></div>";
+  }
+  const meta = '<div class="detail-meta">' + rows +
+    '<div class="mrow"><span class="mlabel">Status</span><span class="mval">' + statusCtrl + "</span></div>" +
+    '<div class="mrow"><span class="mlabel">Included</span><span class="mval">' + incCtrl + "</span></div>" +
+    costRows + actionsHTML + "</div>";
+
+  const noteVal = s.note;
+  const noteDisplay = (noteVal != null && String(noteVal).trim() !== "")
+    ? '<span class="note-text">' + esc(noteVal).replace(/\n/g, "<br>") + "</span>"
+    : '<span class="note-empty muted">Add notes…</span>';
+  const noteCtrl = E("note", noteDisplay, { input: "textarea", value: noteVal });
+  const notes = '<section class="notes"><h2>Notes</h2><div class="notes-body">' + noteCtrl + "</div></section>";
+
+  // A stay shows its activities (+ the add-activity affordance); travel legs don't nest activities.
+  let actsSection = "";
+  if (!isTravel) {
+    const kids = (activities || []).filter(a => String(a.step_id) === String(s.id));
+    const list = kids.length ? '<ul class="acts">' + kids.map(a => activityCardHTML(a, rate, slug)).join("") + "</ul>" : '<p class="muted">No activities yet.</p>';
+    const addBtn = '<button type="button" class="insert-btn add-act" data-add-activity="' + esc(s.id) + '">' + icon("plus") + "add activity</button>";
+    actsSection = '<section class="step-acts"><h2>Activities</h2>' + list + addBtn + "</section>";
+  }
+  const photos = attachmentsHTML("step", s.id, slug, {});
+  const kindLabel = isTravel ? "Travel" : "Stay";
+
+  view().innerHTML = '<div class="sheet">' + head +
+    '<div class="panel detail">' +
+      '<h1 class="detail-title" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</h1>" +
+      '<div class="detail-context muted">' + esc(kindLabel) + "</div>" +
+      meta + notes + actsSection + photos +
+    "</div></div>";
+  motion(an => an.animate(".detail-meta, .notes, .step-acts, .photos", { opacity: [0, 1], translateY: [8, 0], delay: an.stagger(60), duration: 340, ease: "out(3)" }));
 }
 
 // ---- packing (M8): a shared checklist scoped by owner (Mine / Partner / Shared) ----
@@ -1363,6 +1466,7 @@ function route() {
   if (parts[0] === "whats-new") return viewWhatsNew();
   if (parts[0] === "trip" && parts[1]) {
     if (parts[2] === "activity" && parts[3]) return viewActivity(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
+    if (parts[2] === "step" && parts[3]) return viewStep(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
     if (parts[2] === "budget") return viewBudget(decodeURIComponent(parts[1]));
     if (parts[2] === "packing") return viewPacking(decodeURIComponent(parts[1]));
     if (parts[2] === "trash") return viewTrash(decodeURIComponent(parts[1]));
