@@ -177,6 +177,11 @@ a.step-title:hover, a.leg-title:hover { color: var(--accent-ink); text-decoratio
 .leg-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .leg-title { font-weight: 600; }
 .leg-sub { font-size: var(--text-sm); margin-top: 1px; color: var(--ink-2); }
+/* the whole step line opens its detail on tap (bindStepNav); the ‘›’ is the visible affordance */
+.step .leg, .step .step-card { cursor: pointer; }
+.step-open { margin-left: auto; flex: 0 0 auto; color: var(--ink-3); font-size: 1.5em; line-height: 1;
+  text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; padding: 0 2px 0 6px; }
+.step-open:hover { color: var(--accent-ink); text-decoration: none; }
 
 .cost { font-weight: 600; }
 .cost.est { font-weight: 500; }
@@ -264,6 +269,18 @@ a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-u
 .detail-meta .mval { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
 .detail-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: var(--space-3); }
 .detail-actions .maplink { min-height: 44px; }
+
+/* destructive "Delete step" at the foot of the detail — soft-delete, recoverable from Trash */
+.detail-danger { margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--line-hair); }
+.danger-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; cursor: pointer;
+  font: inherit; font-size: var(--text-sm); font-weight: 600;
+  color: var(--danger); background: var(--paper-1);
+  border: 1px solid var(--line-hair); border-radius: var(--radius-sm);
+}
+.danger-btn .ico { width: 15px; height: 15px; flex: 0 0 auto; }
+.danger-btn:hover { border-color: var(--danger); background: var(--danger-bg); }
+.danger-btn:disabled { opacity: .5; cursor: default; }
 
 /* notes block */
 .notes h2 { font-size: var(--text-lg); margin: 0 0 var(--space-2); }
