@@ -1209,12 +1209,18 @@ async function createStepFromWizard(slug, insertIndex, steps, st) {
   const ll = parseLatLng(st.coords);
   if (ll) { body.lat = ll.lat; body.lng = ll.lng; }
 
-  const res = await api("steps/" + encodeURIComponent(slug) + "/flow", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
-  });
+  // Idempotent on retry: POST once, remember the new id on the wizard state. If a later reposition
+  // PATCH fails and the user re-submits, we skip the POST (no duplicate step) and only redo the PATCH.
+  if (!st._createdId) {
+    const res = await api("steps/" + encodeURIComponent(slug) + "/flow", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+    });
+    st._createdId = res && res.row && res.row.id;
+  }
   // Reposition only when inserting before the end. New row appended at MAX+10; slot it between neighbors
-  // with an integer midpoint, re-spacing the whole list if the gap is exhausted. (Skipped in demo: no id.)
-  const newId = res && res.row && res.row.id;
+  // with an integer midpoint, re-spacing the whole list if the gap is exhausted. (In demo the PATCH is a
+  // no-op, so the row stays at the end — non-persistent preview only.)
+  const newId = st._createdId;
   if (newId && insertIndex < steps.length) {
     const prevS = insertIndex > 0 ? Number(steps[insertIndex - 1].sort_order) : 0;
     const nextS = Number(steps[insertIndex].sort_order);
@@ -1287,9 +1293,12 @@ async function createActivityFromWizard(slug, stepId, st) {
   if (st.note) body.note = st.note;
   const ll = parseLatLng(st.coords);
   if (ll) { body.lat = ll.lat; body.lng = ll.lng; }
-  await api("activities/" + encodeURIComponent(slug) + "/activities", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
-  });
+  if (!st._createdId) {                                     // idempotent on retry — never double-create
+    const res = await api("activities/" + encodeURIComponent(slug) + "/activities", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+    });
+    st._createdId = (res && res.row && res.row.id) || true;
+  }
   invalidateTrip(slug);
   vt(route);
 }
