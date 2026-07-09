@@ -223,6 +223,12 @@ Drive/Dropbox/PDF/app deep-links — do *not* enforce strict `.url()`).
   the worker's `/mcp` URL. Complete the Access email one-time-PIN once. The connector then **syncs to
   the iOS and Android Claude apps and Desktop** automatically — after that, both of you just talk to
   Claude from your phones.
+- **Prerequisite (one-time, by the account owner):** the worker's Access app must allowlist the Claude
+  callback — **Managed OAuth → "Allowed redirect URIs" → `https://claude.ai/api/mcp/auth_callback`**.
+  Without it, claude.ai's Dynamic Client Registration is rejected (*"Couldn't register with … sign-in
+  service"*) so **neither web nor phone can connect** — even though Claude Code CLI still works (it uses a
+  loopback redirect Access allows by default). This is what makes R2 (2nd user on her phone) actually
+  work. See `ai-first_project_initialisation.md` §8.6 and `docs/implementations/0006-*`.
 - Both emails go on the **Cloudflare Access allow-list** (free ≤ 50). For MCP, each person needs
   their **own Claude account**; **use personal accounts** — work Google Workspace accounts often have
   connectors admin-disabled. Claude Code CLI (`claude mcp add --transport http …`) and Claude Code web

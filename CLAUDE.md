@@ -118,6 +118,11 @@ Then ask Claude to manage trips, steps, activities, packing and photos — `crea
 `set_included`, `set_map_url`, `get_trip_overview`, `get_budget`, and the packing/attachment tools.
 All are thin wrappers over `shared/core.js` (the same rules the browser API uses).
 
+**On phones / the claude.ai app:** add a *custom connector* to the same `/mcp` URL instead of the CLI.
+This requires `https://claude.ai/api/mcp/auth_callback` on the Access app's Managed OAuth **Allowed
+redirect URIs** — without it, claude.ai's Dynamic Client Registration fails ("Couldn't register…"),
+though the CLI still works via a loopback redirect. See `docs/implementations/0006-mcp-connector-redirect-uri.md`.
+
 ## Verified stack versions (mid-2026)
 
 `agents@^0.17.0`, `@modelcontextprotocol/sdk@^1.29.0` (use `registerTool`, not the deprecated
