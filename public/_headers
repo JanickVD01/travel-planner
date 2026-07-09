@@ -1,0 +1,22 @@
+# Cloudflare Pages headers. Applied to every deployment (production + previews).
+# CSP is deliberately last in the build (M11): a wrong CSP bricks the SPA.
+# - script-src 'self'      : all JS is self-hosted (app.js, theme-init.js, vendor/anime.min.js). No inline scripts.
+# - style-src 'self' 'unsafe-inline' : inline style ATTRIBUTES are used (view-transition-name); esc() covers all
+#                            dynamic content, so style injection is not a real vector. Dynamic bar widths use el.style (CSSOM).
+# - img-src 'self' data: blob: : KV-served photos are same-origin; data: is the demo placeholder.
+# - connect-src 'self'     : all fetch() hits /api/* and /data/*. Map links are <a> navigations (not restricted here).
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(), camera=(), microphone=(), payment=(), usb=(), interest-cohort=()
+
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
