@@ -44,6 +44,9 @@ export function cleanMoney(v)  { const n = Number(v); return (v == null || v ===
 function coordNum(v, min, max) { const n = Number(v); return (v == null || v === "" || !Number.isFinite(n) || n < min || n > max) ? null : String(n); }
 export function cleanLat(v) { return coordNum(v, -90, 90); }
 export function cleanLng(v) { return coordNum(v, -180, 180); }
+// map_url is the PRIMARY location now (a real Google Maps link, or a coord-derived one). http(s) only
+// -> a stored link can never carry a javascript:/data: scheme into an href. Garbage -> null.
+export function cleanMapUrl(v) { return (v && /^https?:\/\//i.test(String(v))) ? String(v) : null; }
 // enums: default to the safe/first value on anything unexpected (like cleanStatus).
 export function cleanKind(v) { return String(v) === "travel" ? "travel" : "stay"; }            // default stay
 const TRANSPORTS = ["plane", "train", "bus", "ferry", "car", "other"];
@@ -101,7 +104,7 @@ const FLAT_SPECS = {
       { name: "kind", clean: cleanKind },
       { name: "title" },
       { name: "location" },
-      { name: "map_url", nullable: true },
+      { name: "map_url", clean: cleanMapUrl, nullable: true },
       { name: "lat", clean: cleanLat, nullable: true },
       { name: "lng", clean: cleanLng, nullable: true },
       { name: "arrive", clean: cleanDate, nullable: true },
@@ -128,7 +131,7 @@ const FLAT_SPECS = {
       { name: "step_id" },
       { name: "title" },
       { name: "location", nullable: true },
-      { name: "map_url", nullable: true },
+      { name: "map_url", clean: cleanMapUrl, nullable: true },
       { name: "lat", clean: cleanLat, nullable: true },
       { name: "lng", clean: cleanLng, nullable: true },
       { name: "day", clean: cleanDate, nullable: true },
@@ -429,11 +432,14 @@ export function toEur(amt, ccy, rate) {
   if (amt == null || amt === "") return null;
   return ccy === "EUR" ? Number(amt) : Number(amt) / Number(rate);
 }
-// Build an "open in maps" link from lat/lng (Google Maps), else fall back to the row's map_url. Mirrors public/app.js.
+// "Open in maps" link: the stored map_url (a real Google Maps place link) wins; if absent we derive a
+// coordinate search link from lat/lng as a best-estimate fallback. map_url is cleanMapUrl'd (http(s)).
+// Mirrors public/app.js.
 function rowMapsUrl(row) {
+  if (row.map_url) return row.map_url;
   if (row.lat != null && row.lat !== "" && row.lng != null && row.lng !== "")
     return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(row.lat + "," + row.lng);
-  return row.map_url || null;
+  return null;
 }
 // Read-only trip snapshot: the trip config, its steps (timeline order), activities grouped by
 // step_id, and an "unassigned" bucket for activities whose step_id matches no live step. Each step
@@ -475,6 +481,11 @@ export function setBooking(env, { target, space, list, id, booking_status, booki
 export function setIncluded(env, { target, space, list, id, included }, actor) {
   const spec = target === "step" ? FLAT_SPECS.steps : FLAT_SPECS.activities;
   return flatPatch(env, spec, { space, list, id, included }, actor);
+}
+// Set the PRIMARY location link (a real Google Maps URL). cleanMapUrl rejects non-http(s).
+export function setMapUrl(env, { target, space, list, id, map_url }, actor) {
+  const spec = target === "step" ? FLAT_SPECS.steps : FLAT_SPECS.activities;
+  return flatPatch(env, spec, { space, list, id, map_url }, actor);
 }
 
 // -- budget (M7): the single source of truth for all money math -------------

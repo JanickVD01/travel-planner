@@ -77,9 +77,11 @@ function eurEquiv(amt, ccy, rate) {
 // Only http(s) URLs may be rendered into an href (esc() does NOT neutralize a javascript:/data: scheme).
 function safeUrl(u) { return /^https?:\/\//i.test(String(u == null ? "" : u)) ? String(u) : ""; }
 function mapsUrl(row) {
+  const u = safeUrl(row.map_url);                          // stored Google Maps link wins (http(s) only)
+  if (u) return u;
   if (row.lat != null && row.lat !== "" && row.lng != null && row.lng !== "")
     return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(row.lat + "," + row.lng);
-  return safeUrl(row.map_url);
+  return "";
 }
 function fmtDate(d) { if (!d) return ""; const p = String(d).split("-"); if (p.length !== 3) return String(d);
   const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return (+p[2]) + " " + (m[(+p[1]) - 1] || p[1]); }
@@ -1199,6 +1201,16 @@ function parseLatLng(text) {
   }
   return null;
 }
+// Turn a pasted "Location" value into a stored map_url: a pasted http(s) link is kept verbatim (the
+// real Google Maps place link); bare "lat,lng" (or a link we can only read coords from) becomes a
+// coordinate search link as the best estimate. Returns a URL string or null.
+function toMapUrl(text) {
+  const s = String(text == null ? "" : text).trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  const ll = parseLatLng(s);
+  return ll ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(ll.lat + "," + ll.lng) : null;
+}
 
 function selIn(name, opts, cur) {
   return '<select class="wz-in" name="' + esc(name) + '">' +
@@ -1310,7 +1322,7 @@ function openStepWizard(slug, insertIndex, steps) {
       wzField("Estimated cost", wzText("cost_est", st.cost_est, "0") + " " + selIn("cost_ccy", CCYS_UI, st.cost_ccy || "EUR")) +
       wzField("Booking status", selIn("booking_status", BOOKINGS_UI, st.booking_status || "Idea")) +
       wzField("Booking link", wzText("booking_url", st.booking_url, "https://…")) +
-      wzField("Location", wzText("coords", st.coords, "paste a Google Maps link or lat, lng"), '<span class="field-hint"> · powers the map link</span>') +
+      wzField("Location", wzText("coords", st.coords, "paste a Google Maps link or lat, lng"), '<span class="field-hint"> · saved as a map link</span>') +
       wzField("Note", '<textarea class="wz-in" name="note" rows="3">' + esc(st.note || "") + "</textarea>"),
     read: (el, st) => { readInputs(el, st); return null; }
   };
@@ -1327,8 +1339,8 @@ function openStepWizard(slug, insertIndex, steps) {
       }
       if (st.cost_est && String(st.cost_est).trim()) add("Cost", String(st.cost_est).trim() + " " + (st.cost_ccy || "EUR"));
       add("Status", st.booking_status);
-      const ll = parseLatLng(st.coords);
-      if (st.coords) add("Location", ll ? (ll.lat + ", " + ll.lng) : "⚠ couldn’t read coordinates — paste a full link or lat, lng");
+      const mapUrl = toMapUrl(st.coords);
+      if (st.coords) add("Location", mapUrl ? "map link ✓" : "⚠ couldn’t read it — paste a full Google Maps link or lat, lng");
       add("Note", st.note);
       return '<div class="rev">' + (rows.join("") || '<p class="muted">Nothing to review.</p>') + "</div>";
     }
@@ -1363,8 +1375,8 @@ async function createStepFromWizard(slug, insertIndex, steps, st) {
   if (st.cost_est && String(st.cost_est).trim() !== "") body.cost_est = String(st.cost_est).trim();
   if (st.booking_url) body.booking_url = st.booking_url;
   if (st.note) body.note = st.note;
-  const ll = parseLatLng(st.coords);
-  if (ll) { body.lat = ll.lat; body.lng = ll.lng; }
+  const mapUrl = toMapUrl(st.coords);                       // store a Google Maps link (map_url is primary now)
+  if (mapUrl) body.map_url = mapUrl;
 
   // Idempotent on retry: POST once, remember the new id on the wizard state. If a later reposition
   // PATCH fails and the user re-submits, we skip the POST (no duplicate step) and only redo the PATCH.
@@ -1408,7 +1420,7 @@ function openActivityWizard(slug, stepId) {
   const optPane = {
     title: "Optional extras",
     html: (st) =>
-      wzField("Location", wzText("coords", st.coords, "paste a Google Maps link or lat, lng"), '<span class="field-hint"> · powers the map link</span>') +
+      wzField("Location", wzText("coords", st.coords, "paste a Google Maps link or lat, lng"), '<span class="field-hint"> · saved as a map link</span>') +
       wzField("Estimated cost", wzText("cost_est", st.cost_est, "0") + " " + selIn("cost_ccy", CCYS_UI, st.cost_ccy || "EUR")) +
       wzField("Book ahead?", selIn("needs_advance", YESNO_UI, st.needs_advance || "no")) +
       wzField("Booking status", selIn("booking_status", BOOKINGS_UI, st.booking_status || "Idea")) +
@@ -1424,8 +1436,8 @@ function openActivityWizard(slug, stepId) {
       add("Title", st.title); add("Day", st.day);
       if (st.cost_est && String(st.cost_est).trim()) add("Cost", String(st.cost_est).trim() + " " + (st.cost_ccy || "EUR"));
       add("Book ahead", st.needs_advance === "yes" ? "Yes" : ""); add("Status", st.booking_status);
-      const ll = parseLatLng(st.coords);
-      if (st.coords) add("Location", ll ? (ll.lat + ", " + ll.lng) : "⚠ couldn’t read coordinates — paste a full link or lat, lng");
+      const mapUrl = toMapUrl(st.coords);
+      if (st.coords) add("Location", mapUrl ? "map link ✓" : "⚠ couldn’t read it — paste a full Google Maps link or lat, lng");
       add("Note", st.note);
       return '<div class="rev">' + (rows.join("") || '<p class="muted">Nothing to review.</p>') + "</div>";
     }
@@ -1448,8 +1460,8 @@ async function createActivityFromWizard(slug, stepId, st) {
   if (st.cost_est && String(st.cost_est).trim() !== "") body.cost_est = String(st.cost_est).trim();
   if (st.booking_url) body.booking_url = st.booking_url;
   if (st.note) body.note = st.note;
-  const ll = parseLatLng(st.coords);
-  if (ll) { body.lat = ll.lat; body.lng = ll.lng; }
+  const mapUrl = toMapUrl(st.coords);                       // store a Google Maps link (map_url is primary now)
+  if (mapUrl) body.map_url = mapUrl;
   if (!st._createdId) {                                     // idempotent on retry — never double-create
     const res = await api("activities/" + encodeURIComponent(slug) + "/activities", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)

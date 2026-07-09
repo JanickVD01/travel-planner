@@ -21,7 +21,8 @@ const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCA
   const step = (i, o) => S.steps.push(base(Object.assign({ id: "st-demo-" + i, sort_order: i * 10, cost_ccy: "THB", booking_status: "Idea" }, o)));
   step(1, { kind: "travel", title: "Fly Brussels → Bangkok", location: "BRU → BKK", transport: "plane", carrier: "Thai Airways TG935",
     arrive: "2026-11-03", arrive_time: "15:40", cost_est: "620", cost_actual: "598", cost_ccy: "EUR", booking_status: "Confirmed", booking_url: "https://example.com/ticket" });
-  step(2, { kind: "stay", title: "Bangkok", location: "Bangkok", accom_name: "Riva Surya Bangkok", lat: "13.7590", lng: "100.4940",
+  step(2, { kind: "stay", title: "Bangkok", location: "Bangkok", accom_name: "Riva Surya Bangkok",
+    map_url: "https://www.google.com/maps/search/?api=1&query=Riva+Surya+Bangkok", lat: "13.7590", lng: "100.4940",
     arrive: "2026-11-03", depart: "2026-11-07", cost_est: "12000", cost_actual: "11800", booking_status: "Booked", booking_url: "https://example.com/hotel" });
   step(3, { kind: "travel", title: "Overnight train Bangkok → Chiang Mai", location: "BKK → CNX", transport: "train", carrier: "SRT #13 Sleeper",
     depart: "2026-11-07", depart_time: "18:40", arrive: "2026-11-08", arrive_time: "07:15", cost_est: "1650", booking_status: "Booked", booking_url: "https://example.com/train" });
@@ -33,7 +34,8 @@ const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCA
     arrive: "2026-11-12", depart: "2026-11-18", cost_est: "24000", booking_status: "Idea" });
 
   const act = (i, o) => S.activities.push(base(Object.assign({ id: "ac-demo-" + i, sort_order: i * 10, cost_ccy: "THB", booking_status: "Idea", needs_advance: "no" }, o)));
-  act(1, { step_id: "st-demo-2", title: "Grand Palace & Wat Phra Kaew", location: "Bangkok", lat: "13.7500", lng: "100.4914",
+  act(1, { step_id: "st-demo-2", title: "Grand Palace & Wat Phra Kaew", location: "Bangkok",
+    map_url: "https://www.google.com/maps/search/?api=1&query=Grand+Palace+Bangkok", lat: "13.7500", lng: "100.4914",
     day: "2026-11-04", cost_est: "500", needs_advance: "no", booking_status: "Idea" });
   act(2, { step_id: "st-demo-4", title: "Elephant Nature Park day visit", location: "Chiang Mai", lat: "19.2100", lng: "98.8590",
     day: "2026-11-09", cost_est: "2500", needs_advance: "yes", booking_status: "Confirmed", booking_url: "https://example.com/elephants" });
@@ -51,9 +53,10 @@ const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCA
 
 // Mirror core.js decorate (maps_url + eur) so the demo /overview shape matches production.
 function mapsUrl(r) {
+  if (r.map_url) return r.map_url;                          // stored Google Maps link wins (mirrors core.js)
   if (r.lat != null && r.lat !== "" && r.lng != null && r.lng !== "")
     return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(r.lat + "," + r.lng);
-  return r.map_url || null;
+  return null;
 }
 function toEur(amt, ccy, rate) { return (amt == null || amt === "") ? null : (ccy === "EUR" ? Number(amt) : Number(amt) / Number(rate)); }
 function mockOverview() {
