@@ -205,7 +205,16 @@ function openEditor(btn) {
   if (d.input === "select") {
     ctrl = document.createElement("select");
     ctrl.className = "edit-select";
-    (d.options || "").split("|").filter(Boolean).forEach(o => {
+    const opts = (d.options || "").split("|").filter(Boolean);
+    // If the stored value isn't one of the options (e.g. an unset field like transport), prepend a
+    // neutral placeholder so the browser doesn't auto-select option[0] — otherwise picking that first
+    // option fires no `change` event and the edit is silently dropped (select commits on change only).
+    if (opts.indexOf(cur) < 0) {
+      const ph = document.createElement("option");
+      ph.value = cur; ph.textContent = "—"; ph.disabled = true; ph.selected = true;
+      ctrl.appendChild(ph);
+    }
+    opts.forEach(o => {
       const op = document.createElement("option");
       op.value = o; op.textContent = o; if (o === cur) op.selected = true;
       ctrl.appendChild(op);
