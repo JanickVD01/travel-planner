@@ -1,8 +1,8 @@
 # 0011 — Pinned photo: a contained text plate (stop darkening the whole image)
 
-> **Status:** 🚧 In progress (2026-07-09). A live-feedback visual refinement of [0010](0010-pinned-step-photo.md)
-> (as [0009](0009-mobile-card-polish.md) refined 0008). CSS-only — no schema/migration/worker. Updated
-> in place as milestones land. See [`README.md`](README.md) for the index.
+> **Status:** ✅ Shipped 2026-07-09 (PR #42). A live-feedback visual refinement of [0010](0010-pinned-step-photo.md)
+> (as [0009](0009-mobile-card-polish.md) refined 0008). CSS-only — no schema/migration/worker.
+> Owner picks: **frosted glass, hug-text, α 0.72**. See [`README.md`](README.md) for the index.
 
 ## Context
 
@@ -28,14 +28,18 @@ material; readability still needs the panel opaque enough for **WCAG AA (4.5:1 /
 
 ## Milestones
 
-- **M1 — Record** *(this)*: create record + index row before code. — 🚧
+- **M1 — Record** *(this)*: created record + index row before code. — ✅
 - **M2 — Preview** (throwaway `public/design/pin-plate-preview.html` + external `pin-plate-preview.js`):
-  Bangkok-style card over a vivid photo; toggles for shape (hug-box ↔ inset bar), style (solid ↔
-  frosted), an alpha slider with a live worst-case-contrast readout, and theme. **Sign-off gate.** — ⬜
-- **M3 — Implement**: apply the chosen plate to `public/styles.css` + `public/tokens.css`. — ⬜
-- **M4 — Reconcile**: delete preview; finalize this record + index; refine DESIGN.md §8 note + decision
-  log (pinned exception is now a *contained scrim panel*, photo left vivid); add a forward pointer in
-  the 0010 record. — ⬜
+  card over a vivid photo; toggles for shape (hug ↔ inset bar), style (solid ↔ frosted), alpha slider
+  with a live worst-case-contrast readout, and theme. Owner chose **frosted / hug / 0.72**. — ✅ (PR #42)
+- **M3 — Implement**: `public/styles.css` — removed the `.pin-media` filter + the full-card `::before`
+  scrim (photo now vivid), turned `.pin-body` into a hug-content rounded plate (`align-items:flex-start`,
+  `margin: --pin-plate-inset`, `border-radius: --radius`, `rgb(--media-scrim / --pin-plate-alpha)`,
+  hairline border + soft shadow); frosted `backdrop-filter` gated to `prefers-reduced-transparency`.
+  `public/tokens.css` — replaced `--pin-floor`/`--pin-peak` with `--pin-plate-alpha` (.72) +
+  `--pin-plate-inset` (12px). No markup change. — ✅
+- **M4 — Reconcile**: deleted the preview; finalized this record + index; refined DESIGN.md §8 row +
+  added a decision-log entry; forward pointer added to the 0010 record. — ✅
 
 ## Verification
 
@@ -49,4 +53,8 @@ material; readability still needs the panel opaque enough for **WCAG AA (4.5:1 /
 
 ## Outcome
 
-_Pending._
+Shipped via PR #42 (CSS + docs only; Pages deploy on merge, no migration/worker). The pinned stay card
+now shows the photo vivid with the text on a small rounded frosted plate (hug-text, α 0.72). Verified:
+preview served locally (photo vivid, plate hugs the text, contrast readout ≥AA across the range, both
+themes) and the candidate CSS was ported verbatim into `styles.css`/`tokens.css`; `validate-data` green.
+Owner confirmed the look at the preview sign-off.
