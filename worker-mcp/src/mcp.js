@@ -11,7 +11,7 @@ import {
   listActivities, createActivity, patchActivity, deleteActivity, restoreActivity, purgeActivity,
   listPacking, createPacking, patchPacking, deletePacking, restorePacking, purgePacking, filterPacking,
   listAttachments, patchAttachment, deleteAttachment, purgeAttachment,
-  setCoordinate, setBooking, tripOverview, getBudget
+  setCoordinate, setBooking, setIncluded, tripOverview, getBudget
 } from "../../shared/core.js";
 
 const SPACE = z.string().default("home").describe("Which trip/space, e.g. 'tokyo-2026'");
@@ -30,7 +30,9 @@ const STEP_FIELDS = {
   depart: z.string().optional().describe("ISO YYYY-MM-DD"), depart_time: z.string().optional().describe("HH:MM"),
   accom_name: z.string().optional(), transport: TRANSPORT.optional(), carrier: z.string().optional(),
   cost_est: z.number().optional(), cost_actual: z.number().optional(), cost_ccy: CCY.optional(),
-  booking_status: BOOKING.optional(), booking_url: z.string().optional(), note: z.string().optional()
+  booking_status: BOOKING.optional(), booking_url: z.string().optional(),
+  included: z.boolean().optional().describe("Cost is covered by another ticket: hidden on the card + excluded from the budget"),
+  note: z.string().optional()
 };
 const TARGET = z.enum(["step", "activity"]).describe("Which entity: a timeline 'step' or an 'activity'");
 // Reusable optional activity fields (used by add_activity / edit_activity).
@@ -40,7 +42,9 @@ const ACTIVITY_FIELDS = {
   day: z.string().optional().describe("ISO YYYY-MM-DD"),
   needs_advance: z.enum(["yes", "no"]).optional().describe("Book/reserve ahead?"),
   cost_est: z.number().optional(), cost_actual: z.number().optional(), cost_ccy: CCY.optional(),
-  booking_status: BOOKING.optional(), booking_url: z.string().optional(), note: z.string().optional()
+  booking_status: BOOKING.optional(), booking_url: z.string().optional(),
+  included: z.boolean().optional().describe("Cost is covered by another ticket: hidden on the card + excluded from the budget"),
+  note: z.string().optional()
 };
 
 export class AppMCP extends McpAgent {
@@ -211,6 +215,9 @@ export class AppMCP extends McpAgent {
     this.server.registerTool("set_booking",
       { description: "Set the booking status (and optional URL) of a step or an activity by id.", inputSchema: { slug: SLUG, target: TARGET, id: z.string(), booking_status: BOOKING, booking_url: z.string().optional() } },
       (a) => self.run(() => setBooking(env, { target: a.target, space: a.slug, list: a.target === "step" ? "flow" : "activities", id: a.id, booking_status: a.booking_status, booking_url: a.booking_url }, self.actor)));
+    this.server.registerTool("set_included",
+      { description: "Mark whether a step/activity's cost is covered by another ticket. When true the cost is hidden on the card and excluded from the budget.", inputSchema: { slug: SLUG, target: TARGET, id: z.string(), included: z.boolean() } },
+      (a) => self.run(() => setIncluded(env, { target: a.target, space: a.slug, list: a.target === "step" ? "flow" : "activities", id: a.id, included: a.included }, self.actor)));
     this.server.registerTool("get_trip_overview",
       { description: "Read-only trip snapshot: config, steps in order, activities grouped by step, and unassigned activities. Each row carries maps_url + eur.", inputSchema: { slug: SLUG } },
       (a) => self.run(() => tripOverview(env, { space: a.slug }, self.actor)));

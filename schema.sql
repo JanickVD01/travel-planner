@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS steps (
   cost_ccy       TEXT NOT NULL DEFAULT 'THB',      -- governs both est & actual
   booking_status TEXT NOT NULL DEFAULT 'Idea',     -- Idea|Planned|Booked|Confirmed
   booking_url    TEXT,
+  included       TEXT NOT NULL DEFAULT '0',       -- '1' = cost covered by another ticket (hidden + excluded from budget)
   note           TEXT,
   deleted        TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -102,6 +103,7 @@ CREATE TABLE IF NOT EXISTS activities (
   cost_ccy       TEXT NOT NULL DEFAULT 'THB',      -- governs both est & actual
   booking_status TEXT NOT NULL DEFAULT 'Idea',     -- Idea|Planned|Booked|Confirmed
   booking_url    TEXT,
+  included       TEXT NOT NULL DEFAULT '0',       -- '1' = cost covered by another ticket (hidden + excluded from budget)
   note           TEXT,
   deleted        TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,

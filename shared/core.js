@@ -116,6 +116,7 @@ const FLAT_SPECS = {
       { name: "cost_ccy", clean: cleanCcy },
       { name: "booking_status", clean: cleanBooking },
       { name: "booking_url", nullable: true },
+      { name: "included", clean: cleanBool },
       { name: "note", nullable: true }
     ]
   },
@@ -137,6 +138,7 @@ const FLAT_SPECS = {
       { name: "cost_ccy", clean: cleanCcy },
       { name: "booking_status", clean: cleanBooking },
       { name: "booking_url", nullable: true },
+      { name: "included", clean: cleanBool },
       { name: "note", nullable: true }
     ]
   },
@@ -444,7 +446,8 @@ export async function tripOverview(env, { space }, actor) {
   const { rows: acts } = await listActivities(env, { space, list: "activities" }, actor);
   const decorate = (r) => {
     const amt = (r.cost_actual != null && r.cost_actual !== "") ? r.cost_actual : r.cost_est;
-    return Object.assign({}, r, { maps_url: rowMapsUrl(r), eur: toEur(amt, r.cost_ccy, rate) });
+    const eur = (r.included === "1" || r.included === 1) ? 0 : toEur(amt, r.cost_ccy, rate);   // included -> not counted
+    return Object.assign({}, r, { maps_url: rowMapsUrl(r), eur });
   };
   const liveIds = new Set(steps.map(s => s.id));
   const activitiesByStep = {}, unassigned = [];
@@ -468,29 +471,38 @@ export function setBooking(env, { target, space, list, id, booking_status, booki
   if (booking_url !== undefined) p.booking_url = booking_url;
   return flatPatch(env, spec, p, actor);
 }
+// Mark a step/activity's cost as "included in another cost" (hidden on the card + dropped from budget).
+export function setIncluded(env, { target, space, list, id, included }, actor) {
+  const spec = target === "step" ? FLAT_SPECS.steps : FLAT_SPECS.activities;
+  return flatPatch(env, spec, { space, list, id, included }, actor);
+}
 
 // -- budget (M7): the single source of truth for all money math -------------
 // PURE. Given the trip's FX rate + target and the step/activity rows, compute every euro figure the
 // UI shows. The UI must NEVER recompute money — it renders these numbers verbatim. All amounts are
 // stored full-precision (cost_est/cost_actual as TEXT in cost_ccy); we convert to EUR via toEur and
 // round ONLY at the very end so intermediate sums don't accumulate rounding error.
+// Default party size for the per-person figures. TEMPORARY hard-code — a real per-trip `travellers`
+// field is a future add; until then every total is split two ways.
+const PEOPLE = 2;
 export function computeBudget(rate, target, steps, activities) {
   const r = Number(rate);
   if (!isFinite(r) || r <= 0) throw new ServiceError(422, "no FX rate set", "no_rate");   // before any division
   const stepRows = Array.isArray(steps) ? steps : [];
   const actRows = Array.isArray(activities) ? activities : [];
   let totalEst = 0, totalActual = 0, estOfUnspent = 0;      // running EUR sums (non-null only)
-  let accommodation = 0, transport = 0, activitiesCat = 0;  // estimated EUR by category
+  const catEst = { accommodation: 0, transport: 0, activities: 0 };   // estimated EUR by category
+  const catAct = { accommodation: 0, transport: 0, activities: 0 };   // actual EUR by category
   const acc = (row, isStep) => {
+    if (row.included === "1" || row.included === 1) return;  // "included in another cost" -> excluded entirely
     const est = toEur(row.cost_est, row.cost_ccy, r);        // null when the source amount is null/''
     const act = toEur(row.cost_actual, row.cost_ccy, r);
     if (est != null) totalEst += est;
     if (act != null) totalActual += act;
     if (est != null && act == null) estOfUnspent += est;     // still-to-spend, valued at estimate
-    if (isStep) {
-      if (row.kind === "stay" && est != null) accommodation += est;
-      if (row.kind === "travel" && est != null) transport += est;
-    } else if (est != null) { activitiesCat += est; }
+    const bucket = isStep ? (row.kind === "travel" ? "transport" : "accommodation") : "activities";
+    if (est != null) catEst[bucket] += est;
+    if (act != null) catAct[bucket] += act;
   };
   stepRows.forEach(row => acc(row, true));
   actRows.forEach(row => acc(row, false));
@@ -501,12 +513,15 @@ export function computeBudget(rate, target, steps, activities) {
   const pct = t ? Math.round(projectedSpend / t * 100) : null;
   const over = t != null && projectedSpend > t;
   const r2 = (x) => (x == null ? null : Math.round(x * 100) / 100);   // round to 2dp at the end
+  const cat = (o) => ({ accommodation: r2(o.accommodation), transport: r2(o.transport), activities: r2(o.activities) });
   return {
     rate: r, target: r2(t), home_ccy: null,
     totalEst: r2(totalEst), totalActual: r2(totalActual), estOfUnspent: r2(estOfUnspent),
     projectedSpend: r2(projectedSpend), remaining: r2(remaining), projected: r2(projected),
     pct, over,
-    byCategory: { accommodation: r2(accommodation), transport: r2(transport), activities: r2(activitiesCat) }
+    people: PEOPLE,
+    perPersonEst: r2(totalEst / PEOPLE), perPersonActual: r2(totalActual / PEOPLE), perPersonProjected: r2(projectedSpend / PEOPLE),
+    byCategory: cat(catEst), byCategoryActual: cat(catAct)
   };
 }
 // DB-backed budget for a trip: resolve the trip config, read its steps + activities, run the pure
