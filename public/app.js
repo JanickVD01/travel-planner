@@ -180,7 +180,10 @@ function invalidateTrip(slug) { delete state.trip[slug]; }
 // is ALREADY-escaped display markup; `o.value` is the raw current value (esc'd into an attr).
 function editable(displayHTML, o) {
   o = o || {};
-  return '<button type="button" class="editable"' +
+  // A <span role=button>, NOT a <button>: buttons suppress text selection + the iOS Copy callout, so
+  // values rendered as buttons can't be long-pressed to copy. The span stays tappable-to-edit (see
+  // bindEditable) but its text is selectable/copyable.
+  return '<span class="editable" role="button" tabindex="0"' +
     ' data-entity="' + esc(o.entity) + '"' +
     ' data-list="'   + esc(o.list)   + '"' +
     (o.space ? ' data-space="' + esc(o.space) + '"' : "") +  // override the URL space (trips live at space='app', not the slug)
@@ -189,7 +192,7 @@ function editable(displayHTML, o) {
     ' data-input="'  + esc(o.input)  + '"' +
     ' data-value="'  + esc(o.value == null ? "" : o.value) + '"' +
     (o.options ? ' data-options="' + esc(Array.isArray(o.options) ? o.options.join("|") : o.options) + '"' : "") +
-    ' aria-label="Edit ' + esc(o.field || "value") + '">' + displayHTML + "</button>";
+    ' aria-label="Edit ' + esc(o.field || "value") + '">' + displayHTML + "</span>";
 }
 function tripSlugFromHash() {
   const parts = (location.hash.replace(/^#/, "") || "/").split("/").filter(Boolean);
@@ -279,9 +282,21 @@ let _editableBound = false;
 function bindEditable() {                                // attach the ONE delegated listener once
   if (_editableBound) return; _editableBound = true;
   document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".editable");
-    if (!btn || document.querySelector(".edit-input, .edit-select")) return;
-    openEditor(btn);
+    const el = e.target.closest(".editable");
+    if (!el || document.querySelector(".edit-input, .edit-select")) return;
+    // Long-press to copy: if the tap lands on an active text selection inside the value, the user is
+    // copying (native callout up), not editing — leave it. A quick tap keeps the selection collapsed.
+    const sel = window.getSelection && window.getSelection();
+    if (sel && !sel.isCollapsed && sel.anchorNode && el.contains(sel.anchorNode)) return;
+    openEditor(el);
+  });
+  // It's a <span role="button">, not a native <button>, so Enter/Space don't activate it for free.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+    const el = e.target.closest && e.target.closest(".editable");
+    if (!el || document.querySelector(".edit-input, .edit-select")) return;
+    e.preventDefault();
+    openEditor(el);
   });
 }
 
