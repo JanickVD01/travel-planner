@@ -13,6 +13,25 @@ map in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 |---|---|---|---|---|
 | [0001](0001-ui-design-brief.md) | UI design brief — `DESIGN.md` taste contract | 2026-07-08 | ✅ Shipped | #5 |
 | [0002](0002-design-directions.md) | Three design directions → **Direction C** chosen | 2026-07-08 | ✅ Decided (mockups throwaway) | #6 (closed unmerged) |
-| [0003](0003-feature-expansion.md) | Feature expansion — the 12-milestone build (Direction C) | 2026-07-08 | 🚧 In progress | M1 = this PR |
+| [0003](0003-feature-expansion.md) | Feature expansion — the 12-milestone build (Direction C) | 2026-07-08 | ✅ Shipped (M1–M12) | #7–#17 |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
+
+**0003 build summary:** all 12 milestones merged — design foundation (tokens/fonts/anime, light-primary),
+trips + metro Timeline, inline editing, activities + nesting + coordinates, activity detail + notes,
+Budget page, Packing list (owner filters), photo attachments (KV), Trash (restore/delete-forever),
+and a strict CSP. One optional one-time step remains to switch photo uploads on:
+
+## Enabling photo uploads (Workers KV) — one-time, ~2 min
+
+Photo/screenshot attachments (M9) store image **bytes** in a Workers KV namespace. The code is live
+and guarded; until KV is bound, uploads return a friendly "photo uploads aren't set up yet" (503) and
+everything else works normally. To turn uploads on ($0 — KV is on the free Workers plan, no card):
+
+1. From the repo root: `npx --yes wrangler@4 kv namespace create IMAGES_KV` → copy the returned `id`.
+2. In `wrangler.jsonc`, inside **`env.production`** only (NOT `preview`), add:
+   `"kv_namespaces": [ { "binding": "IMAGES_KV", "id": "<paste-id>" } ]`
+3. In `worker-mcp/wrangler.jsonc`, add the **same** binding at top level (so MCP purges delete the bytes).
+4. Open a normal `code/` PR and merge to redeploy. Uploads now work.
+
+(Both wrangler files already contain a commented stub showing exactly where to paste.)
