@@ -114,6 +114,27 @@ CREATE TABLE IF NOT EXISTS activities_audit (
   op TEXT NOT NULL, detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
 );
 
+-- packing: the packing list, one row per item. space=<slug>, list='packing'. owner = 'shared' or a
+-- person's email (lowercased); packed = '0'|'1'; qty = int>=1 or NULL. Replaces the old to-do checklist.
+CREATE TABLE IF NOT EXISTS packing (
+  space TEXT NOT NULL, list TEXT NOT NULL, packing_id TEXT NOT NULL,
+  title          TEXT NOT NULL DEFAULT '',
+  owner          TEXT NOT NULL DEFAULT 'shared',   -- 'shared' | person's email
+  packed         TEXT NOT NULL DEFAULT '0',         -- '0' | '1'
+  category       TEXT,
+  qty            TEXT,                              -- integer >= 1 or NULL
+  note           TEXT,
+  deleted        TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT,
+  PRIMARY KEY (space, list, packing_id)
+);
+CREATE INDEX IF NOT EXISTS idx_packing ON packing (space, list, sort_order);
+CREATE TABLE IF NOT EXISTS packing_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, space TEXT NOT NULL, list TEXT NOT NULL, packing_id TEXT,
+  op TEXT NOT NULL, detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
+);
+
 -- OPTIONAL roles layer: who may edit, plus an audit. Super-admin comes from env (SUPER_ADMIN_EMAIL).
 CREATE TABLE IF NOT EXISTS role_members (
   role_key TEXT NOT NULL, email TEXT NOT NULL, added_by TEXT, added_at TEXT,
