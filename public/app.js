@@ -355,10 +355,13 @@ function activityCardHTML(a, rate, slug) {
   const href = "#/trip/" + encodeURIComponent(slug || "") + "/activity/" + encodeURIComponent(a.id);
   const titleHTML = '<a class="act-title" href="' + esc(href) + '" style="view-transition-name:' + esc(vtName(a.id)) + '">' +
     esc(a.title || a.location) + "</a>";
+  const del = '<button type="button" class="act-del" data-act="activity-del" data-slug="' + esc(slug || "") +
+    '" data-id="' + esc(a.id) + '" data-step="' + esc(a.step_id || "") + '" aria-label="Delete activity" title="Delete activity">' +
+    icon("trash") + "</button>";
   return '<li class="activity">' +
     '<span class="sub-marker" aria-hidden="true"></span>' +
     '<div class="act-card">' +
-      '<div class="act-head">' + titleHTML + chip + flag + "</div>" +
+      '<div class="act-head">' + titleHTML + chip + flag + del + "</div>" +
       '<div class="act-meta">' + costHTML + maplink + "</div>" +
     "</div></li>";
 }
@@ -846,12 +849,15 @@ async function viewActivity(slug, id) {
   const noteCtrl = editable(noteDisplay, { entity: "activities", list: "activities", id: a.id, field: "note", input: "textarea", value: noteVal });
   const notes = '<section class="notes"><h2>Notes</h2><div class="notes-body">' + noteCtrl + "</div></section>";
   const photos = attachmentsHTML("activity", a.id, slug, {});
+  const danger = '<div class="detail-danger"><button type="button" class="danger-btn" data-act="activity-del"' +
+    ' data-slug="' + esc(slug) + '" data-id="' + esc(a.id) + '" data-step="' + esc(a.step_id || "") + '">' +
+    icon("trash") + "Delete activity</button></div>";
 
   view().innerHTML = '<div class="sheet">' + head +
     '<div class="panel detail">' +
       '<h1 class="detail-title" style="view-transition-name:' + esc(vtName(a.id)) + '">' + esc(a.title || a.location) + "</h1>" +
       '<div class="detail-context muted">in ' + esc(parentTitle) + "</div>" +
-      meta + notes + photos +
+      meta + notes + photos + danger +
     "</div></div>";
   motion(an => an.animate(".detail-meta, .notes, .photos", { opacity: [0, 1], translateY: [8, 0], delay: an.stagger(60), duration: 340, ease: "out(3)" }));
 }
@@ -1593,6 +1599,31 @@ function bindStepDelete() {                               // the "Delete step" b
     } catch { btn.disabled = false; }
   });
 }
+let _actDelBound = false;
+function bindActivityDelete() {                           // "Delete activity" — activity card + activity detail
+  if (_actDelBound) return; _actDelBound = true;
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-act='activity-del']");
+    if (!btn) return;
+    e.preventDefault();
+    const slug = btn.dataset.slug, id = btn.dataset.id, step = btn.dataset.step;
+    if (!slug || !id) return;
+    if (!confirm("Delete this activity?\n\nYou can restore it from Trash.")) return;
+    btn.disabled = true;
+    try {
+      await api("activities/" + encodeURIComponent(slug) + "/activities/" + encodeURIComponent(id), { method: "DELETE" });
+      invalidateTrip(slug);
+      // From the activity's OWN detail page -> leave it (go to the parent step, or the trip if unassigned).
+      // From a step's activity list -> just re-render so the row drops.
+      if (/\/activity\//.test(location.hash)) {
+        location.hash = step ? ("#/trip/" + encodeURIComponent(slug) + "/step/" + encodeURIComponent(step))
+                             : ("#/trip/" + encodeURIComponent(slug));
+      } else {
+        vt(route);
+      }
+    } catch { btn.disabled = false; }
+  });
+}
 
 // ---- boot ------------------------------------------------------------------
 function setTheme(t) { document.documentElement.setAttribute("data-theme", t); try { localStorage.setItem("app-theme", t); } catch {} }
@@ -1610,6 +1641,7 @@ window.addEventListener("hashchange", () => vt(route));
   bindPhotos();
   bindStepNav();
   bindStepDelete();
+  bindActivityDelete();
   bindWizards();
   route();
 })();
