@@ -167,6 +167,9 @@ a.card:hover { border-color: var(--accent); text-decoration: none; }
 .step-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .step-kind { color: var(--ink-2); }
 .step-title { font-family: var(--f-disp); font-weight: 600; font-size: var(--text-lg); letter-spacing: -.01em; }
+/* step titles are links to the step detail (keep them looking like titles, not links) */
+a.step-title, a.leg-title { color: var(--ink-0); }
+a.step-title:hover, a.leg-title:hover { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 3px; }
 .step-sub { color: var(--ink-2); font-size: var(--text-sm); margin-top: 3px; }
 .step-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 8px; }
 
@@ -685,3 +688,10 @@ a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-u
 .rev-row { display: flex; gap: var(--space-3); padding: 6px 0; border-bottom: 1px solid var(--line-hair); }
 .rev-k { flex: 0 0 34%; color: var(--ink-2); font-size: var(--text-sm); }
 .rev-v { flex: 1 1 auto; color: var(--ink-0); word-break: break-word; }
+
+/* ---- included-cost chip + step detail activities (0005) ---- */
+.included-chip { color: var(--ink-2); background: var(--paper-2); gap: 4px; }
+.included-chip .ico { width: 13px; height: 13px; }
+.step-acts { margin-top: var(--space-5); }
+.step-acts h2 { font-size: var(--text-lg); margin-bottom: var(--space-3); }
+.step-acts .acts { margin-bottom: var(--space-3); }
