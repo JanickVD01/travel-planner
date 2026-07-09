@@ -14,6 +14,7 @@ map in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0001](0001-ui-design-brief.md) | UI design brief — `DESIGN.md` taste contract | 2026-07-08 | ✅ Shipped | #5 |
 | [0002](0002-design-directions.md) | Three design directions → **Direction C** chosen | 2026-07-08 | ✅ Decided (mockups throwaway) | #6 (closed unmerged) |
 | [0003](0003-feature-expansion.md) | Feature expansion — the 12-milestone build (Direction C) | 2026-07-08 | ✅ Shipped (M1–M12) | #7–#17 |
+| [0004](0004-ui-editing-and-creation.md) | In-app editing & creation — feedback refinements (Google Maps, tap-to-edit, wizards, KV) | 2026-07-09 | 🚧 In progress | — |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
 
