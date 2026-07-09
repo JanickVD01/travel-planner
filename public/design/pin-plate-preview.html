@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Pinned photo — text-plate preview (0011)</title>
+  <meta name="theme-color" content="#fcfcfa" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)" />
+
+  <!-- THROWAWAY preview (effort 0011). Links the REAL tokens.css + styles.css, then OVERRIDES the
+       shipped 0010 dark treatment with the candidate "contained plate": photo stays vivid, only the
+       text sits on a small rounded darkened box. Deleted before the change merges. -->
+  <link rel="stylesheet" href="../tokens.css" />
+  <link rel="stylesheet" href="../styles.css" />
+
+  <style>
+    /* ================= CANDIDATE 0011 PLATE (destined for tokens.css + styles.css) ================= *
+     * This <style> loads AFTER styles.css, so equal-specificity selectors here win — that's how it
+     * overrides the shipped 0010 rules. Everything under "PREVIEW CHROME" is page-only.             */
+    :root { --pin-plate-alpha: .72; --pin-plate-inset: 12px; }
+
+    .step-card.pinned .pin-media { filter: none; }        /* vivid photo — undo the 0010 desaturate/darken */
+    .step-card.pinned::before { display: none; }          /* remove the 0010 full-card scrim */
+    .step-card.pinned { align-items: flex-start; }        /* let the plate hug the text width */
+
+    /* .pin-body becomes a contained rounded plate (overrides the 0010 full-width bottom gradient) */
+    .step-card.pinned .pin-body {
+      align-self: flex-start;                              /* hug content; .shape-bar stretches it */
+      margin: var(--pin-plate-inset);
+      padding: 10px 12px; gap: 3px;
+      border-radius: var(--radius);
+      background: rgb(var(--media-scrim) / var(--pin-plate-alpha));
+      border: 1px solid rgb(255 255 255 / .12);
+      box-shadow: 0 2px 10px rgb(0 0 0 / .28);
+    }
+    .step-card.pinned.shape-bar .pin-body { align-self: stretch; }   /* full-width inset bar variant */
+    .step-card.pinned.frosted .pin-body {                            /* frosted-glass variant */
+      backdrop-filter: blur(6px) saturate(1.1);
+      -webkit-backdrop-filter: blur(6px) saturate(1.1);
+    }
+
+    /* ============================= PREVIEW CHROME (not shipped) ============================= */
+    body { min-height: 100vh; }
+    .pp-wrap { max-width: 900px; margin: 0 auto; padding: 0 var(--space-4) var(--space-8); }
+    .pp-lede { padding: var(--space-6) 0 var(--space-2); }
+    .pp-lede h1 { font-family: var(--f-disp); font-size: var(--text-2xl); letter-spacing: -.02em; margin: 0 0 6px; color: var(--ink-0); }
+    .pp-lede p { color: var(--ink-2); max-width: 66ch; margin: 4px 0; font-size: var(--text-sm); }
+    .pp-throwaway { display: inline-block; font-size: var(--text-xs); font-weight: 700; letter-spacing: .04em;
+      text-transform: uppercase; color: var(--accent-ink); background: var(--accent-wash);
+      border-radius: var(--radius-pill); padding: 3px 10px; margin-bottom: 8px; }
+
+    .pp-bar { position: sticky; top: 0; z-index: 50;
+      background: color-mix(in srgb, var(--paper-0) 90%, transparent);
+      backdrop-filter: saturate(1.3) blur(10px); -webkit-backdrop-filter: saturate(1.3) blur(10px);
+      border-bottom: 1px solid var(--line-hair); }
+    .pp-bar-in { max-width: 900px; margin: 0 auto; padding: 10px var(--space-4);
+      display: flex; flex-wrap: wrap; gap: var(--space-4) var(--space-5); align-items: center; }
+    .pp-ctrl { display: flex; flex-direction: column; gap: 3px; }
+    .pp-ctrl > span.lbl { font-size: var(--text-xs); font-weight: 600; color: var(--ink-2); }
+    .pp-seg { display: inline-flex; border: 1px solid var(--line-hair); border-radius: var(--radius-pill); overflow: hidden; }
+    .pp-seg button { font: inherit; font-size: var(--text-sm); border: 0; background: transparent; color: var(--ink-1); padding: 6px 12px; min-height: 34px; cursor: pointer; }
+    .pp-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-contrast); }
+    .pp-ctrl input[type="range"] { width: 150px; accent-color: var(--accent); }
+    .pp-readout { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-xs); color: var(--ink-2); }
+    .pp-readout b { color: var(--ink-0); }
+    .pp-pass { color: var(--ok); font-weight: 700; }
+    .pp-fail { color: var(--danger); font-weight: 700; }
+
+    .pp-sec { margin-top: var(--space-6); }
+    .pp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--space-5); }
+    .pp-cell > .cap { font-size: var(--text-xs); font-weight: 600; color: var(--ink-3); margin: 0 0 6px; text-transform: uppercase; letter-spacing: .03em; }
+    .pp-cell .tl { padding-left: 0; }
+
+    .pp-legend { margin-top: var(--space-7); border: 1px solid var(--line-hair); border-radius: var(--radius); padding: var(--space-4) var(--space-5); background: var(--paper-1); }
+    .pp-legend h3 { font-family: var(--f-disp); margin: 0 0 6px; color: var(--ink-0); font-size: var(--text-lg); }
+    .pp-legend ul { margin: 0; padding-left: 1.2em; color: var(--ink-1); font-size: var(--text-sm); }
+    .pp-legend li { margin: 4px 0; }
+    .pp-legend code { font-family: var(--f-mono); font-size: .95em; background: var(--paper-2); padding: 1px 5px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <div class="pp-bar">
+    <div class="pp-bar-in">
+      <div class="pp-ctrl">
+        <span class="lbl">Theme</span>
+        <div class="pp-seg" id="pp-theme" role="group" aria-label="Theme">
+          <button type="button" data-theme="light" aria-pressed="true">Light</button>
+          <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+          <button type="button" data-theme="system" aria-pressed="false">System</button>
+        </div>
+      </div>
+      <div class="pp-ctrl">
+        <span class="lbl">Plate shape</span>
+        <div class="pp-seg" id="pp-shape" role="group" aria-label="Plate shape">
+          <button type="button" data-shape="hug" aria-pressed="true">Hug text</button>
+          <button type="button" data-shape="bar" aria-pressed="false">Inset bar</button>
+        </div>
+      </div>
+      <div class="pp-ctrl">
+        <span class="lbl">Style</span>
+        <div class="pp-seg" id="pp-style" role="group" aria-label="Plate style">
+          <button type="button" data-style="solid" aria-pressed="true">Solid</button>
+          <button type="button" data-style="frosted" aria-pressed="false">Frosted</button>
+        </div>
+      </div>
+      <div class="pp-ctrl">
+        <span class="lbl">Plate darkness — alpha <b id="pp-a-val">0.72</b></span>
+        <input id="pp-alpha" type="range" min="50" max="90" value="72" aria-label="Plate alpha, percent" />
+      </div>
+      <div class="pp-readout" aria-live="polite">
+        <span>Worst-case contrast (over a white photo):</span>
+        <span>Title <b id="pp-c-title">–</b> <span id="pp-c-title-v"></span></span>
+        <span>Dates <b id="pp-c-dim">–</b> <span id="pp-c-dim-v"></span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pp-wrap">
+    <div class="pp-lede">
+      <span class="pp-throwaway">Throwaway preview · effort 0011</span>
+      <h1>Pinned photo — the view stays vivid, only the text gets a plate</h1>
+      <p>Instead of darkening the whole card, the photo is shown at full vividness and the text sits on
+        a small rounded darkened box (a “scrim panel”). Use the toolbar to try the plate hugging the text
+        vs a full-width inset bar, solid vs frosted glass, and how dark the plate is — the readout keeps
+        it honest (light ink stays ≥AA over any photo).</p>
+    </div>
+    <section class="pp-sec"><div id="pp-grid" class="pp-grid"></div></section>
+    <div class="pp-legend">
+      <h3>Notes</h3>
+      <ul>
+        <li>The <b>photo is no longer filtered or scrimmed</b> — it renders at full vividness.</li>
+        <li>Only <code>.pin-body</code> (the text block) gets a darkened rounded background; everything
+          else is the untouched photo.</li>
+        <li>Readability is still guaranteed: the plate tint alone (ignoring the photo) clears AA — the
+          readout shows the worst case, a pure-white photo behind the text.</li>
+        <li>Frosted glass is optional polish; the tint (not the blur) carries the contrast, and it’s
+          dropped automatically under “reduced transparency”.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script src="pin-plate-preview.js"></script>
+</body>
+</html>
