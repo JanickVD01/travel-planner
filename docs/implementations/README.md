@@ -20,6 +20,7 @@ map in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0007](0007-mobile-copy-values.md) | Mobile fix — long-press to copy a value (selectable span, not a button) | 2026-07-09 | ✅ Shipped | #34 |
 | [0008](0008-timeline-declutter-delete.md) | Timeline cards slimmed to title/dates/status + "Delete step" in detail | 2026-07-09 | ✅ Shipped | #35 |
 | [0009](0009-mobile-card-polish.md) | Mobile polish — "Lodging" label + stacked title/dates/status line | 2026-07-09 | ✅ Shipped | #37 |
+| [0010](0010-pinned-step-photo.md) | Pinned step photo — a chosen image as the card's background (readability-guaranteed) | 2026-07-09 | 🚧 In progress | — |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
 

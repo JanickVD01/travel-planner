@@ -82,6 +82,11 @@ git verbs; the server-side `protect-main` ruleset is the real backstop.)
 - **PR description = four lines:** `what/why` · `What's New? y/n` · `migration none/NNN` · `worker redeploy? y/n`.
 - **Conflicts in append-style files** (`releases.json`): keep BOTH entries, then
   `node scripts/validate-data.mjs`, commit the merge, push.
+- **Start every effort with its record.** Before writing any code, create the effort's numbered
+  `docs/implementations/NNNN-slug.md` (next ordinal) carrying the **milestone plan**, and add its
+  index row (status 🚧). Update the record **in place** as each milestone lands. The committed record —
+  not chat/memory — is the durable, trackable plan of record. (Front-of-effort companion to the
+  Reconcile rule below; convention since effort 0010.)
 - **Reconcile at the end of every effort.** An effort's final milestone re-aligns the "glue" docs —
   this file, `DESIGN.md`, the `MEMORY` journal, `README.md`, `public/data/app.json`, the
   `docs/implementations/` index, and the **GitHub About** — with what actually shipped, so the project's
