@@ -11,7 +11,7 @@ import {
   listActivities, createActivity, patchActivity, deleteActivity, restoreActivity, purgeActivity,
   listPacking, createPacking, patchPacking, deletePacking, restorePacking, purgePacking, filterPacking,
   listAttachments, patchAttachment, deleteAttachment, purgeAttachment,
-  setCoordinate, setBooking, setIncluded, tripOverview, getBudget
+  setCoordinate, setBooking, setIncluded, setMapUrl, tripOverview, getBudget
 } from "../../shared/core.js";
 
 const SPACE = z.string().default("home").describe("Which trip/space, e.g. 'tokyo-2026'");
@@ -209,8 +209,11 @@ export class AppMCP extends McpAgent {
       (a) => self.run(() => purgeAttachment(env, { space: a.slug, list: "attachments", id: a.id }, self.actor)));
 
     // ---- cross-entity routers + overview ----
+    this.server.registerTool("set_map_url",
+      { description: "Set the location of a step/activity to a real Google Maps place link (PRIMARY). Research the actual place and pass its Google Maps URL; the app opens this link directly. Prefer this over set_coordinate.", inputSchema: { slug: SLUG, target: TARGET, id: z.string(), map_url: z.string().describe("A Google Maps URL, e.g. https://www.google.com/maps/place/...") } },
+      (a) => self.run(() => setMapUrl(env, { target: a.target, space: a.slug, list: a.target === "step" ? "flow" : "activities", id: a.id, map_url: a.map_url }, self.actor)));
     this.server.registerTool("set_coordinate",
-      { description: "Set the lat/lng of a step or an activity by id.", inputSchema: { slug: SLUG, target: TARGET, id: z.string(), lat: z.number(), lng: z.number() } },
+      { description: "Set the lat/lng of a step or an activity (a best-estimate fallback used only when no real Google Maps link is available — prefer set_map_url).", inputSchema: { slug: SLUG, target: TARGET, id: z.string(), lat: z.number(), lng: z.number() } },
       (a) => self.run(() => setCoordinate(env, { target: a.target, space: a.slug, list: a.target === "step" ? "flow" : "activities", id: a.id, lat: a.lat, lng: a.lng }, self.actor)));
     this.server.registerTool("set_booking",
       { description: "Set the booking status (and optional URL) of a step or an activity by id.", inputSchema: { slug: SLUG, target: TARGET, id: z.string(), booking_status: BOOKING, booking_url: z.string().optional() } },
