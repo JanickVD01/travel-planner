@@ -1,0 +1,27 @@
+name: migrate-included
+# THROWAWAY, one-shot. Applies migrations/001_included.sql to PROD D1 before effort 0005 merges.
+# Never merged to main. ADD COLUMN is non-idempotent — run once.
+on:
+  push:
+    branches: [migrate-included]
+  workflow_dispatch: {}
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply 001_included to remote D1
+        run: npx --yes wrangler@4 d1 execute travel-planner-db --remote --file=./migrations/001_included.sql
+      - name: Verify columns exist
+        run: |
+          npx --yes wrangler@4 d1 execute travel-planner-db --remote --json --command \
+            "SELECT COUNT(*) AS steps_included FROM pragma_table_info('steps') WHERE name='included';"
+          npx --yes wrangler@4 d1 execute travel-planner-db --remote --json --command \
+            "SELECT COUNT(*) AS activities_included FROM pragma_table_info('activities') WHERE name='included';"
