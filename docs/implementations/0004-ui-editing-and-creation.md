@@ -1,7 +1,7 @@
 # 0004 — In-app editing & creation (feedback refinements)
 
-> **Status:** 🚧 In progress (started 2026-07-09). One numbered record per effort — see
-> [`README.md`](README.md) for the index. This record is updated in place as each milestone PR merges.
+> **Status:** ✅ Shipped 2026-07-09 (PRs #19–#23). One numbered record per effort — see
+> [`README.md`](README.md) for the index.
 
 ## Context
 
@@ -55,13 +55,13 @@ activities** — all still $0, no payment method, business logic still only in `
 
 | # | Branch | Lands | Dep | Worker | Status |
 |---|---|---|---|---|---|
-| M1 | `content/plan-0004` | This record + README index row | — | n | 🚧 |
-| M2 | `code/ui-polish` | Google Maps links · single-tap status (`showPicker`) · editable `cost_est` · editable activity `day` · inline-editable step dates/times · date+time on travel legs | — | y | ⏳ |
-| M3 | `code/enable-kv` | Create `IMAGES_KV` namespace + bind → photo uploads go live | — | y | ⏳ |
-| M4 | *ops* (throwaway CI branch, not merged) | Fix France travel-leg dates + seed France packing list | M2 | — | ⏳ |
-| M5 | `code/step-wizard` | Timeline "+ insert step" affordances + guided step wizard | M2 | n | ⏳ |
-| M6 | `code/activity-wizard` | "+ add activity" + guided activity wizard | M5 | n | ⏳ |
-| M7 | `content/release-notes` | `releases.json` v0.4.0 + README status → ✅ + MEMORY journal | ALL | n | ⏳ |
+| M1 | `content/plan-0004` | This record + README index row | — | n | ✅ #19 |
+| M2 | `code/ui-polish` | Google Maps links · single-tap status (`showPicker`) · editable `cost_est` · editable activity `day` · inline-editable step dates/times · date+time on travel legs | — | y | ✅ #20 |
+| M3 | `code/enable-kv` | Create `IMAGES_KV` namespace + bind → photo uploads go live | — | y | ✅ #22 |
+| M4 | *ops* (throwaway CI branch, not merged) | Seed France packing list (travel-leg dates already present → M2 render alone fixed the display) | M2 | — | ✅ CI |
+| M5 | `code/step-wizard` | Timeline "+ insert step" affordances + guided step wizard | M2 | n | ✅ #21 |
+| M6 | `code/activity-wizard` | "+ add activity" + guided activity wizard (+ idempotent-create fix from review) | M5 | n | ✅ #23 |
+| M7 | `content/release-notes` | `releases.json` v0.4.0 + README status → ✅ + MEMORY journal | ALL | n | ✅ |
 
 Status legend: ✅ shipped · 🚧 in progress · ⏳ pending.
 
@@ -148,4 +148,22 @@ Status legend: ✅ shipped · 🚧 in progress · ⏳ pending.
 
 ## Outcome
 
-_(filled in at M7 as milestones land.)_
+Shipped 2026-07-09 across PRs #19–#23 (merge-commit only), each gated by CI `validate`.
+
+- **Delivered:** Google Maps map links (3 mirrors); single-tap status via `showPicker()`; inline-editable
+  cost estimates, activity dates, and step dates/times (new `date`/`time` editor inputs); date+time on
+  travel legs; a guided step wizard with insert-anywhere + `sort_order` repositioning + paste-a-Google-
+  Maps-link coordinates; a guided activity wizard; photo uploads switched on (KV bound in prod + MCP
+  worker); a France demo packing list (mine / partner / shared).
+- **Data note (M4):** the France travel legs already carried dates — the "time only" complaint was purely
+  a render gap that M2 fixed. So M4 reduced to seeding the packing list (11 rows) via a throwaway CI job.
+- **KV (M3):** the deploy token initially lacked Workers-KV permission (`kv namespace create` →
+  `Authentication error 10000`); the user broadened the token, then the namespace
+  (`a43ae5ff444c418f9eb8a604d50082b2`) was created via CI and bound. Both Pages + MCP worker redeployed
+  green.
+- **Quality gate:** an adversarial review workflow (4 dimensions → verify) ran over the whole client
+  diff. It cleared inline-edit, `parseLatLng`, escaping, and mock routing, and caught one real bug — the
+  wizard's non-atomic POST-then-PATCH could create a **duplicate** step if the reposition PATCH failed and
+  the user retried. Fixed by memoizing the created id on the wizard state (idempotent retry) before M6 merged.
+- **Not verifiable headlessly:** a real photo upload and the wizards' touch behaviour on a phone — to be
+  confirmed by the user on the Access-gated production site.
