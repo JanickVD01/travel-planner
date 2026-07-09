@@ -17,6 +17,7 @@ map in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0004](0004-ui-editing-and-creation.md) | In-app editing & creation — feedback refinements (Google Maps, tap-to-edit, wizards, KV) | 2026-07-09 | ✅ Shipped | #19–#25 |
 | [0005](0005-budget-detail-included-maps.md) | Budget depth, step detail, included-costs, map-URL-first & doc reconciliation | 2026-07-09 | ✅ Shipped | #26–#31 |
 | [0006](0006-mcp-connector-redirect-uri.md) | claude.ai web/mobile connector fix — Managed-OAuth redirect-URI allowlist | 2026-07-09 | 🚧 In progress | — |
+| [0007](0007-mobile-copy-values.md) | Mobile fix — long-press to copy a value (selectable span, not a button) | 2026-07-09 | 🚧 In progress | — |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
 

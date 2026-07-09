@@ -192,6 +192,12 @@ a.step-title:hover, a.leg-title:hover { color: var(--accent-ink); text-decoratio
   border-radius: 6px 6px 0 0; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px;
   min-height: 44px; padding: 2px 5px;                 /* >=44px touch target */
+  /* It's a <span role=button>, not a <button>: allow long-press text selection + the native Copy
+     callout (a <button> suppresses both on iOS), and keep the no-double-tap-zoom tuning it used to
+     inherit from the `button, a { touch-action: manipulation }` rule. */
+  -webkit-user-select: text; user-select: text;
+  -webkit-touch-callout: default;
+  touch-action: manipulation;
 }
 .editable:hover { background: var(--paper-2); border-bottom-color: var(--accent); text-decoration: none; }
 .add-actual { color: var(--accent-ink); font-size: var(--text-sm); font-weight: 600; }
