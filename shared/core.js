@@ -427,10 +427,10 @@ export function toEur(amt, ccy, rate) {
   if (amt == null || amt === "") return null;
   return ccy === "EUR" ? Number(amt) : Number(amt) / Number(rate);
 }
-// Build an "open in maps" link from lat/lng (OSM), else fall back to the row's map_url. Mirrors public/app.js.
+// Build an "open in maps" link from lat/lng (Google Maps), else fall back to the row's map_url. Mirrors public/app.js.
 function rowMapsUrl(row) {
   if (row.lat != null && row.lat !== "" && row.lng != null && row.lng !== "")
-    return "https://www.openstreetmap.org/?mlat=" + encodeURIComponent(row.lat) + "&mlon=" + encodeURIComponent(row.lng) + "#map=12/" + encodeURIComponent(row.lat) + "/" + encodeURIComponent(row.lng);
+    return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(row.lat + "," + row.lng);
   return row.map_url || null;
 }
 // Read-only trip snapshot: the trip config, its steps (timeline order), activities grouped by

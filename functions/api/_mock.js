@@ -52,7 +52,7 @@ const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCA
 // Mirror core.js decorate (maps_url + eur) so the demo /overview shape matches production.
 function mapsUrl(r) {
   if (r.lat != null && r.lat !== "" && r.lng != null && r.lng !== "")
-    return "https://www.openstreetmap.org/?mlat=" + encodeURIComponent(r.lat) + "&mlon=" + encodeURIComponent(r.lng) + "#map=12/" + encodeURIComponent(r.lat) + "/" + encodeURIComponent(r.lng);
+    return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(r.lat + "," + r.lng);
   return r.map_url || null;
 }
 function toEur(amt, ccy, rate) { return (amt == null || amt === "") ? null : (ccy === "EUR" ? Number(amt) : Number(amt) / Number(rate)); }
