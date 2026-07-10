@@ -23,6 +23,7 @@ map in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0010](0010-pinned-step-photo.md) | Pinned step photo — a chosen image as the card's background (readability-guaranteed) | 2026-07-09 | ✅ Shipped | #38, #39, #40 |
 | [0011](0011-pinned-photo-text-plate.md) | Pinned photo polish — contained text plate (vivid photo, darken only behind the text) | 2026-07-09 | ✅ Shipped | #42 |
 | [0012](0012-delete-activity-ui.md) | Delete an activity from the UI (card button + detail danger button; soft-delete → Trash) | 2026-07-10 | ✅ Shipped | #43 |
+| [0013](0013-step-duration-and-activity-back.md) | Timeline step duration badges + activity "back" returns to its parent step | 2026-07-10 | ✅ Shipped | #44 |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
 

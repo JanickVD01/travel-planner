@@ -85,6 +85,36 @@ function mapsUrl(row) {
 }
 function fmtDate(d) { if (!d) return ""; const p = String(d).split("-"); if (p.length !== 3) return String(d);
   const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return (+p[2]) + " " + (m[(+p[1]) - 1] || p[1]); }
+// Duration of a step (for the timeline badge). Stays -> nights (date span); travel -> travel time
+// (date+time span). Date math via Date.UTC so there's no timezone drift. "" when not computable.
+function nightsBetween(a, d) {
+  const pa = String(a || "").split("-"), pd = String(d || "").split("-");
+  if (pa.length !== 3 || pd.length !== 3) return 0;
+  const n = Math.round((Date.UTC(+pd[0], +pd[1] - 1, +pd[2]) - Date.UTC(+pa[0], +pa[1] - 1, +pa[2])) / 86400000);
+  return n > 0 ? n : 0;
+}
+function stepEpoch(date, time) {                 // "YYYY-MM-DD" (+ "HH:MM") -> epoch ms (UTC), or null
+  const p = String(date || "").split("-"); if (p.length !== 3) return null;
+  const t = time ? String(time).split(":") : ["0", "0"];
+  const ms = Date.UTC(+p[0], +p[1] - 1, +p[2], +t[0] || 0, +t[1] || 0);
+  return isNaN(ms) ? null : ms;
+}
+function fmtDur(mins) {                           // 115 -> "1h 55m"; 45 -> "45m"; 1620 -> "1d 3h"
+  if (mins < 60) return mins + "m";
+  if (mins < 1440) { const h = Math.floor(mins / 60), m = mins % 60; return m ? (h + "h " + m + "m") : (h + "h"); }
+  const d = Math.floor(mins / 1440), h = Math.round((mins % 1440) / 60);
+  return h ? (d + "d " + h + "h") : (d + "d");
+}
+function stepDuration(s) {
+  if (s.kind === "travel") {                      // needs both date+time to be meaningful
+    const dep = stepEpoch(s.depart, s.depart_time), arr = stepEpoch(s.arrive, s.arrive_time);
+    if (dep == null || arr == null || !s.depart_time || !s.arrive_time) return "";
+    const mins = Math.round((arr - dep) / 60000);
+    return mins > 0 ? fmtDur(mins) : "";
+  }
+  const n = nightsBetween(s.arrive, s.depart);    // stay -> nights
+  return n > 0 ? (n + " night" + (n === 1 ? "" : "s")) : "";
+}
 // A stable, CSS-ident-safe view-transition-name for an activity (shared by the timeline title + detail h1).
 function vtName(id) { return "act-" + String(id == null ? "" : id).replace(/[^A-Za-z0-9_-]/g, "-"); }
 // Format an ISO tombstone timestamp (the `deleted` column) into a short, human "9 Jul 2026, 14:05".
@@ -564,6 +594,8 @@ function stepCardHTML(s, rate, acts, slug) {
   // Overview lines are deliberately minimal — title, dates, status only. Cost, photos, map, carrier/
   // accommodation and activities all live in the step detail view (tap the line to open it).
   const openChev = '<a class="step-open" href="' + esc(detailHref) + '" aria-label="Open details">›</a>';
+  const dur = stepDuration(s);   // "4 nights" for a stay, "12h 35m" for a travel leg (empty if unknown)
+  const durHTML = dur ? '<span class="step-dur">' + esc(dur) + "</span>" : "";
   // Dates & times are tap-to-edit inline (native picker); empty -> a subtle affordance.
   const editDate = (field, val, empty) => editable(
     (val != null && val !== "") ? esc(fmtDate(val)) : '<span class="add-actual">' + empty + "</span>",
@@ -580,7 +612,7 @@ function stepCardHTML(s, rate, acts, slug) {
     return '<li class="step travel" data-href="' + esc(detailHref) + '">' +
       '<span class="marker travel" aria-hidden="true">' + icon(mode) + "</span>" +
       '<div class="leg">' +
-        '<div class="leg-top"><a class="leg-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + openChev + "</div>" +
+        '<div class="leg-top"><a class="leg-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + durHTML + openChev + "</div>" +
         '<div class="leg-sub">' + when + "</div>" +
         '<div class="step-status">' + chip + "</div>" +
       "</div></li>";
@@ -599,7 +631,7 @@ function stepCardHTML(s, rate, acts, slug) {
     '<span class="marker stay" aria-hidden="true"></span>' +
     '<div class="step-card' + (pin ? " pinned" : "") + '">' + media +
       '<div class="pin-body">' +
-        '<div class="step-head">' + icon("stay", "step-kind") + '<a class="step-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + openChev + "</div>" +
+        '<div class="step-head">' + icon("stay", "step-kind") + '<a class="step-title" href="' + esc(detailHref) + '" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</a>" + durHTML + openChev + "</div>" +
         '<div class="step-sub">' + nights + "</div>" +
         '<div class="step-status">' + chip + "</div>" +
       "</div>" +
@@ -791,20 +823,24 @@ async function viewActivity(slug, id) {
   markActive(null);
   view().innerHTML = '<div class="panel"><p class="muted">Loading…</p></div>';
   const { trip, steps, activities } = await loadTrip(slug);
-  const back = "#/trip/" + encodeURIComponent(slug);
+  const tripHome = "#/trip/" + encodeURIComponent(slug);
   const tripTitle = (trip && (trip.title || trip.slug)) || slug;
-  const head = '<div class="sheet-head"><a class="back" href="' + esc(back) + '">' +
-    '<span class="chev" aria-hidden="true">‹</span> ' + esc(tripTitle) + "</a></div>";
   const a = (activities || []).find(x => String(x.id) === String(id));
   if (!a) {
-    view().innerHTML = '<div class="sheet">' + head +
+    const nfHead = '<div class="sheet-head"><a class="back" href="' + esc(tripHome) + '">' +
+      '<span class="chev" aria-hidden="true">‹</span> ' + esc(tripTitle) + "</a></div>";
+    view().innerHTML = '<div class="sheet">' + nfHead +
       '<div class="panel detail"><h1>Activity not found</h1>' +
-      '<p class="muted"><a href="' + esc(back) + '">← Back to ' + esc(tripTitle) + "</a></p></div></div>";
+      '<p class="muted"><a href="' + esc(tripHome) + '">← Back to ' + esc(tripTitle) + "</a></p></div></div>";
     return;
   }
   const rate = trip && trip.thb_per_eur;
   const parent = steps.find(s => String(s.id) === String(a.step_id));
   const parentTitle = parent ? (parent.title || parent.location || "Stay") : "Unassigned";
+  // Back goes to WHERE the activity lives — its parent step's detail (or the trip home if unassigned).
+  const back = parent ? (tripHome + "/step/" + encodeURIComponent(parent.id)) : tripHome;
+  const head = '<div class="sheet-head"><a class="back" href="' + esc(back) + '">' +
+    '<span class="chev" aria-hidden="true">‹</span> ' + esc(parent ? parentTitle : tripTitle) + "</a></div>";
 
   const st = a.booking_status || "Idea";
   const statusCtrl = editable('<span class="chip status-' + esc(st) + '">' + esc(st) + "</span>",
