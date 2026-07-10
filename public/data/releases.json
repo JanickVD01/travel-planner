@@ -1,6 +1,15 @@
 {
   "releases": [
     {
+      "version": "v0.6.2",
+      "title": "See how long — and find your way back",
+      "date": "2026-07-10",
+      "notes": [
+        "Every timeline card now shows its duration at a glance — nights for a stay, travel time for a leg — so you can scan how long you’re spending where.",
+        "Opening an activity and tapping “back” now returns you to the step it belongs to, instead of jumping to the trip home."
+      ]
+    },
+    {
       "version": "v0.6.1",
       "title": "Remove an activity",
       "date": "2026-07-10",
