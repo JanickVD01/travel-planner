@@ -1,6 +1,6 @@
 # 0014 — `docs/implementations/` → one folder per effort
 
-> **Status:** 🚧 In progress (2026-07-11). A structural change to this folder: each effort becomes a
+> **Status:** ✅ Shipped 2026-07-11 (PR #45). A structural change to this folder: each effort becomes a
 > **folder** whose record is its `README.md`. Docs-only; no code, schema, migration, or worker change.
 > The top-level index — [`README.md`](../README.md) — stays put. See the data map in
 > [`CLAUDE.md`](../../../CLAUDE.md).

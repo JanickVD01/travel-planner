@@ -28,7 +28,7 @@ in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0011](0011-pinned-photo-text-plate/) | Pinned photo polish — contained text plate (vivid photo, darken only behind the text) | 2026-07-09 | ✅ Shipped | #42 |
 | [0012](0012-delete-activity-ui/) | Delete an activity from the UI (card button + detail danger button; soft-delete → Trash) | 2026-07-10 | ✅ Shipped | #43 |
 | [0013](0013-step-duration-and-activity-back/) | Timeline step duration badges + activity "back" returns to its parent step | 2026-07-10 | ✅ Shipped | #44 |
-| [0014](0014-docs-per-effort-folders/) | Docs reorg — one folder per effort (record = folder `README.md`) + "## Later changes" post-ship log | 2026-07-11 | 🚧 | — |
+| [0014](0014-docs-per-effort-folders/) | Docs reorg — one folder per effort (record = folder `README.md`) + "## Later changes" post-ship log | 2026-07-11 | ✅ Shipped | #45 |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
 
