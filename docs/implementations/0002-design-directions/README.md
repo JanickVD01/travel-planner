@@ -7,7 +7,7 @@
 
 ## Context
 
-[0001](0001-ui-design-brief.md) fixed the brand, but the *visual direction* was still open. We built
+[0001](../0001-ui-design-brief/) fixed the brand, but the *visual direction* was still open. We built
 three self-contained mockup pages, each rendering the **same** hardcoded Thailand itinerary
 (timeline + budget + checklist), so the user could compare them side-by-side on a phone.
 
@@ -28,7 +28,7 @@ Vendored the candidate variable fonts (OFL) and wrote three directions, each ful
   recorded in `DESIGN.md`'s decision log. **A and B rejected.**
 - Plus a concrete feature set (separate pages, screenshot uploads, coordinates, activity notes,
   soft-delete/trash, a packing list replacing the checklist) → carried into
-  [0003](0003-feature-expansion.md).
+  [0003](../0003-feature-expansion/).
 
 ## Outcome
 

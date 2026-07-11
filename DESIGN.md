@@ -309,23 +309,23 @@ Records the locked brand inputs and the final visual decision.
   the to-do checklist; one map coordinate per step + per activity (link-out); multiple captioned
   screenshots per step/activity (Workers KV); booking-status chips on steps + activities (no separate
   to-book view); soft-delete + trash. Full plan & milestones:
-  [`docs/implementations/0003-feature-expansion.md`](docs/implementations/0003-feature-expansion.md).
+  [`docs/implementations/0003-feature-expansion/`](docs/implementations/0003-feature-expansion/).
 - **2026-07-09 — Timeline cards slimmed + step delete.** Each timeline line shows only title, dates and
   the status chip; cost, photos, map/booking links, carrier/accommodation and the activity list move to
   the step **detail** view (tap a line to open it). Added a "Delete step" action (soft-delete → Trash) in
   that detail. Info-density feedback; supersedes Direction C's "activities as indented sub-stations" on
-  the timeline. See [`docs/implementations/0008-timeline-declutter-delete.md`](docs/implementations/0008-timeline-declutter-delete.md).
+  the timeline. See [`docs/implementations/0008-timeline-declutter-delete/`](docs/implementations/0008-timeline-declutter-delete/).
 - **2026-07-09 — Pinned step photo (opt-in card background).** A user can pin ONE uploaded photo per
   **stay** as that card's timeline background: a warm dark "media island" (theme-independent light ink)
   under a text-anchored scrim whose floor alpha (~0.82) guarantees WCAG AA (~10.8:1 title / ~8.7:1 dates
   over even a pure-white photo) in both themes. Desaturated ("muted") by default so the photo reads as a
   calm backdrop, not a competing picture. Travel legs never get one; nothing is automatic. Amends the §8
   "no full-bleed hero on every step" rule to allow this scrimmed, opt-in exception (the §2 Polarsteps
-  "cover + scrim" move). See [`docs/implementations/0010-pinned-step-photo.md`](docs/implementations/0010-pinned-step-photo.md).
+  "cover + scrim" move). See [`docs/implementations/0010-pinned-step-photo/`](docs/implementations/0010-pinned-step-photo/).
 - **2026-07-09 — Pinned photo refined to a text plate.** Live feedback: darkening the whole card read
   too dark. Reversed it — the **photo now renders vivid** (no filter, no full-card scrim); only the text
   sits on a small rounded **frosted-glass plate** (a contained scrim panel) that hugs the text, tint
   `--pin-plate-alpha` ≈ 0.72 (title ~7.4:1 / dates ~6.0:1 over a white photo; frosted blur is dropped
   under `prefers-reduced-transparency`, the tint carries the contrast). Supersedes the 0010 "media
-  island" darkening. See [`docs/implementations/0011-pinned-photo-text-plate.md`](docs/implementations/0011-pinned-photo-text-plate.md).
+  island" darkening. See [`docs/implementations/0011-pinned-photo-text-plate/`](docs/implementations/0011-pinned-photo-text-plate/).
 

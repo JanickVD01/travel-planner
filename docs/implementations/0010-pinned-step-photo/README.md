@@ -3,8 +3,8 @@
 > **Status:** ✅ Shipped 2026-07-09 (PR #38 kickoff+preview, #39 feature; #40 added the CI `migrate`
 > workflow). Migration `002_pinned.sql` applied to prod D1 via the `migrate` workflow before #39 merged;
 > Pages + MCP worker redeployed on merge. This record carries the full plan and was **updated in place**
-> as milestones landed (like [0003](0003-feature-expansion.md)). See [`README.md`](README.md) for the index.
-> **Visual treatment superseded by [0011](0011-pinned-photo-text-plate.md)** (same day): the photo is now
+> as milestones landed (like [0003](../0003-feature-expansion/)). See [`README.md`](../README.md) for the index.
+> **Visual treatment superseded by [0011](../0011-pinned-photo-text-plate/)** (same day): the photo is now
 > left vivid and only the text sits on a contained frosted plate, instead of darkening the whole card.
 >
 > **Sign-off decisions (owner, 2026-07-09):** travel legs get NO photo (stays only); default look =

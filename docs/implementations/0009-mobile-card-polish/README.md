@@ -1,8 +1,8 @@
 # 0009 — Mobile card polish: "Lodging" label + stacked title/dates/status
 
 > **Status:** ✅ Shipped 2026-07-09 (PR #37). Live mobile feedback follow-up to
-> [0008](0008-timeline-declutter-delete.md). One numbered record per effort — see
-> [`README.md`](README.md) for the index.
+> [0008](../0008-timeline-declutter-delete/). One numbered record per effort — see
+> [`README.md`](../README.md) for the index.
 
 ## Context
 

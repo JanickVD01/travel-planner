@@ -2,7 +2,7 @@
 
 - **Status:** ✅ Shipped — PR #5, merged 2026-07-08.
 - **Date:** 2026-07-08.
-- **Artifact:** [`DESIGN.md`](../../DESIGN.md) (repo root).
+- **Artifact:** [`DESIGN.md`](../../../DESIGN.md) (repo root).
 
 ## Context
 
@@ -27,4 +27,4 @@ authored `DESIGN.md`.
 ## Outcome
 
 `DESIGN.md` merged (PR #5) and is pointed to from `CLAUDE.md`'s data map. Fed directly into
-[0002](0002-design-directions.md).
+[0002](../0002-design-directions/).

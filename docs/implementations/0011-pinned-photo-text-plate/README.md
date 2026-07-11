@@ -1,8 +1,8 @@
 # 0011 — Pinned photo: a contained text plate (stop darkening the whole image)
 
-> **Status:** ✅ Shipped 2026-07-09 (PR #42). A live-feedback visual refinement of [0010](0010-pinned-step-photo.md)
-> (as [0009](0009-mobile-card-polish.md) refined 0008). CSS-only — no schema/migration/worker.
-> Owner picks: **frosted glass, hug-text, α 0.72**. See [`README.md`](README.md) for the index.
+> **Status:** ✅ Shipped 2026-07-09 (PR #42). A live-feedback visual refinement of [0010](../0010-pinned-step-photo/)
+> (as [0009](../0009-mobile-card-polish/) refined 0008). CSS-only — no schema/migration/worker.
+> Owner picks: **frosted glass, hug-text, α 0.72**. See [`README.md`](../README.md) for the index.
 
 ## Context
 

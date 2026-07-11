@@ -1,14 +1,14 @@
 # 0013 — Timeline step duration + activity back-nav fix
 
 > **Status:** ✅ Shipped 2026-07-10 (PR #44). Two front-end tweaks from live feedback. `public/app.js` +
-> `public/styles.css` + docs only — no schema/migration/worker/core change. See [`README.md`](README.md).
+> `public/styles.css` + docs only — no schema/migration/worker/core change. See [`README.md`](../README.md).
 
 ## Context
 
 Two pieces of feedback:
 1. **Back-nav bug.** Opening an activity then hitting "back" returns to the **trip home**, not to where
    the activity lives. Activities are opened from their parent **step's detail**
-   ([public/app.js `activityCardHTML`](../../public/app.js)), so back should return there. In
+   ([public/app.js `activityCardHTML`](../../../public/app.js)), so back should return there. In
    `viewActivity` the `back` href is hard-coded to `#/trip/<slug>` regardless of the parent step.
 2. **Duration.** Each timeline card should show **how long** you're there, so the trip is scannable at a
    glance: a **stay** → nights (from arrive→depart dates); a **travel** leg → travel time (from the

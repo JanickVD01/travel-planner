@@ -2,7 +2,7 @@
 
 > **Status:** ✅ Shipped 2026-07-09 (PR #33). Docs reconciliation merged, and the owner has added the
 > Claude callback (`https://claude.ai/api/mcp/auth_callback`) to the Access app's Managed OAuth allowlist.
-> One numbered record per effort — see [`README.md`](README.md) for the index.
+> One numbered record per effort — see [`README.md`](../README.md) for the index.
 
 ## Context
 

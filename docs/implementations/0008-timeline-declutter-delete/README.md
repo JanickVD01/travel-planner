@@ -1,7 +1,7 @@
 # 0008 — Timeline declutter + Delete step
 
 > **Status:** ✅ Shipped 2026-07-09 (PR #35). Merged to main; the owner is validating the slimmed
-> timeline + delete-step live. One numbered record per effort — see [`README.md`](README.md).
+> timeline + delete-step live. One numbered record per effort — see [`README.md`](../README.md).
 
 ## Context
 

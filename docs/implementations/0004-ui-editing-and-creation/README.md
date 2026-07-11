@@ -1,11 +1,11 @@
 # 0004 — In-app editing & creation (feedback refinements)
 
 > **Status:** ✅ Shipped 2026-07-09 (PRs #19–#23). One numbered record per effort — see
-> [`README.md`](README.md) for the index.
+> [`README.md`](../README.md) for the index.
 
 ## Context
 
-The 12-milestone build ([`0003`](0003-feature-expansion.md)) shipped and the user then used the live
+The 12-milestone build ([`0003`](../0003-feature-expansion/)) shipped and the user then used the live
 app with a real dummy trip (France, 2 weeks, Paris + Provence). Hands-on feedback surfaced a batch of
 concrete gaps — some are one-line polish, some are missing data, one is an infra switch, and two are
 genuinely new features (building steps and activities **from the browser**, not only by talking to
