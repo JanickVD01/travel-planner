@@ -2,7 +2,7 @@
 
 > **Status:** ✅ Shipped 2026-07-09 (PR #34). Merged to main; the owner is validating the
 > long-press-to-copy behavior live. One numbered record per effort — see
-> [`README.md`](README.md) for the index.
+> [`README.md`](../README.md) for the index.
 
 ## Context
 

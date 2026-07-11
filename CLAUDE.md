@@ -20,7 +20,7 @@ MCP server, all fronted by Cloudflare Access and shipped through a hardened GitH
 | Demo-mode switch (mock only when `!DB && DEMO_API=1`) | `functions/api/_middleware.js`, `functions/api/_mock.js` |
 | SPA shell / router / views | `public/index.html`, `public/app.js`, `public/styles.css` |
 | Design language / taste contract (brand, fonts, palette, tokens thesis) — **read before any UI change** | `DESIGN.md` |
-| Implementation history — one numbered record per effort (plan · decisions · outcome) | `docs/implementations/` |
+| Implementation history — one folder per effort (`NNNN-slug/README.md`; plan · decisions · outcome · later-changes log) | `docs/implementations/` |
 | App metadata + release notes | `public/data/**` |
 | D1 schema (idempotent) | `schema.sql` |
 | One-off ALTERs | `migrations/NNN_*.sql` |
@@ -84,11 +84,15 @@ git verbs; the server-side `protect-main` ruleset is the real backstop.)
 - **PR description = four lines:** `what/why` · `What's New? y/n` · `migration none/NNN` · `worker redeploy? y/n`.
 - **Conflicts in append-style files** (`releases.json`): keep BOTH entries, then
   `node scripts/validate-data.mjs`, commit the merge, push.
-- **Start every effort with its record.** Before writing any code, create the effort's numbered
-  `docs/implementations/NNNN-slug.md` (next ordinal) carrying the **milestone plan**, and add its
-  index row (status 🚧). Update the record **in place** as each milestone lands. The committed record —
-  not chat/memory — is the durable, trackable plan of record. (Front-of-effort companion to the
-  Reconcile rule below; convention since effort 0010.)
+- **Start every effort with its record.** Before writing any code, create the effort's folder
+  `docs/implementations/NNNN-slug/` (next ordinal) with its `README.md` record carrying the **milestone
+  plan**, and add its index row (status 🚧). Update the record **in place** as each milestone lands. The
+  committed record — not chat/memory — is the durable, trackable plan of record. Research notes and
+  other per-effort artifacts live in the same folder. When a **shipped** effort is later changed by
+  something too small to warrant a new numbered effort, append a dated **`## Later changes`** section to
+  that effort's `README.md` (append-only) rather than editing its frozen Outcome — no separate file.
+  (Front-of-effort companion to the Reconcile rule below; folder layout since effort 0014, convention
+  since effort 0010.)
 - **Reconcile at the end of every effort.** An effort's final milestone re-aligns the "glue" docs —
   this file, `DESIGN.md`, the `MEMORY` journal, `README.md`, `public/data/app.json`, the
   `docs/implementations/` index, and the **GitHub About** — with what actually shipped, so the project's
@@ -128,7 +132,7 @@ All are thin wrappers over `shared/core.js` (the same rules the browser API uses
 **On phones / the claude.ai app:** add a *custom connector* to the same `/mcp` URL instead of the CLI.
 This requires `https://claude.ai/api/mcp/auth_callback` on the Access app's Managed OAuth **Allowed
 redirect URIs** — without it, claude.ai's Dynamic Client Registration fails ("Couldn't register…"),
-though the CLI still works via a loopback redirect. See `docs/implementations/0006-mcp-connector-redirect-uri.md`.
+though the CLI still works via a loopback redirect. See `docs/implementations/0006-mcp-connector-redirect-uri/`.
 
 ## Verified stack versions (mid-2026)
 

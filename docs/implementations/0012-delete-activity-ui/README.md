@@ -1,15 +1,15 @@
 # 0012 — Delete an activity from the UI
 
 > **Status:** ✅ Shipped 2026-07-10 (PR #43). Small missing-affordance fix. Front-end + docs only — no
-> schema/migration/worker/core change. See [`README.md`](README.md) for the index.
+> schema/migration/worker/core change. See [`README.md`](../README.md) for the index.
 
 ## Context
 
 Live feedback: **an activity ("action") can't be deleted from the UI.** The backend has supported it all
 along — `deleteActivity` in `shared/core.js`, the API `DELETE /api/activities/<slug>/activities/<id>`
-([functions/api/activities/[[path]].js:45-54](../../functions/api/activities/[[path]].js#L45-L54)),
+([functions/api/activities/[[path]].js:45-54](../../../functions/api/activities/[[path]].js#L45-L54)),
 the MCP `delete_activity` tool, and the **Trash** view already lists deleted activities
-([public/app.js:1123-1126](../../public/app.js#L1123-L1126)). Only the **front-end affordance** was
+([public/app.js:1123-1126](../../../public/app.js#L1123-L1126)). Only the **front-end affordance** was
 missing: a step can be deleted from its detail ("Delete step", 0008) but an activity had no delete
 button anywhere. Steps already model the pattern (`bindStepDelete`, `data-act="step-del"`).
 

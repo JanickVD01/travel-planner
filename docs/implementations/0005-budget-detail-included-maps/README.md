@@ -1,7 +1,7 @@
 # 0005 — Budget depth, step detail, included-costs, map links & doc reconciliation
 
 > **Status:** ✅ Shipped 2026-07-09 (PRs #26–#31). One numbered record per effort — see
-> [`README.md`](README.md) for the index.
+> [`README.md`](../README.md) for the index.
 
 ## Context
 
