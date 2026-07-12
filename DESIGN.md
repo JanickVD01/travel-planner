@@ -61,7 +61,8 @@ We **read and translate** these into hand-written vanilla CSS. We never copy ass
   **draw-on motion** (spine grows top→down, markers pop in sequence) — the "route unfurling" feeling,
   free in CSS.
 - **Leave:** the **live Mapbox map** (needs their SDK/tiles/keys — violates $0/no-deps; we render our
-  own CSS spine instead); reliance on **beautiful user photos at scale** (hold up text/data-first
+  own CSS spine, and — since **0015** — a self-hosted D3 vector atlas from public-domain Natural Earth
+  JSON, no tiles/keys/tracking, for the trip map, instead); reliance on **beautiful user photos at scale** (hold up text/data-first
   with a warm placeholder); the **chromeless viewer** UI (they *show* finished trips; we *edit*
   plans — we need visible chips, forms, budget bars, edit affordances they hide). Its coral stays a
   rare structural accent (spine / active step / CTA / over-budget), never a general UI color.

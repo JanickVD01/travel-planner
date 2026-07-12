@@ -1,0 +1,84 @@
+/* App-fidelity prototype: the faded map background layer + a few prototype-only bits.
+ * Everything else is inherited from the real tokens.css + styles.css. */
+
+/* Map palette — theme-aware; atlas.js reads these via getComputedStyle and re-reads on theme toggle. */
+:root {
+  --map-ocean: #A6C0C7; --map-land: #F2EDE2;
+  --map-border: rgba(104,92,72,.55); --map-region: rgba(104,92,72,.34); --map-grat: rgba(104,92,72,.16);
+  --map-opacity: .72;
+}
+:root[data-theme="dark"] {
+  --map-ocean: #0C1319; --map-land: #29313C;
+  --map-border: rgba(188,178,158,.38); --map-region: rgba(188,178,158,.22); --map-grat: rgba(188,178,158,.12);
+  --map-opacity: .74;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --map-ocean: #0C1319; --map-land: #29313C;
+    --map-border: rgba(188,178,158,.38); --map-region: rgba(188,178,158,.22); --map-grat: rgba(188,178,158,.12);
+    --map-opacity: .74;
+  }
+}
+
+/* Faded map: fixed, full-bleed, BEHIND the grid (grid is body::before z-1) and content. Non-interactive. */
+#trip-map { position: fixed; inset: 0; z-index: -2; pointer-events: none; overflow: hidden; }
+#trip-map svg { display: block; }
+/* Fade the GROUND (ocean/land/borders/labels) so it recedes — but keep the PINS full-strength. */
+#trip-map .map-ocean, #trip-map .map-ground, #trip-map .atlas-labels { opacity: var(--map-opacity); filter: saturate(.9); }
+/* gentle vignette so the map recedes toward the edges and text stays legible */
+#trip-map::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(140% 110% at 50% 40%, transparent 55%, var(--paper-0) 100%); opacity: .32; }
+
+/* Readable beige "sheet" behind the timeline section so the text stays legible over the map.
+   The map remains a soft backdrop through the sheet + in the margins, and goes full in Map view.
+   (No backdrop-filter here on purpose — it would create a stacking context that hides the sticky
+   sub-nav in Map view.) */
+.view {
+  background: color-mix(in srgb, var(--paper-1) 80%, transparent);
+  border: 1px solid var(--line-hair); border-radius: var(--radius);
+  padding: var(--space-4) var(--space-4) var(--space-6);
+  box-shadow: var(--shadow-float);
+}
+/* Timeline items are solid cards on the sheet; travel legs get the same card treatment as stays. */
+.step-card, .leg { background: var(--paper-0); border: 1px solid var(--line-hair); border-radius: var(--radius); padding: 11px 14px; }
+
+/* Prototype-only trip toggle in the topbar. */
+.proto-ctl { display: inline-flex; gap: 4px; }
+.proto-ctl button {
+  font: inherit; font-size: var(--text-xs); font-weight: 600; color: var(--ink-2);
+  background: var(--paper-1); border: 1px solid var(--line-hair); border-radius: var(--radius-pill);
+  padding: 3px 10px; min-height: 30px; cursor: pointer;
+}
+.proto-ctl button.here { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+@media (max-width: 720px) { .who { display: none; } }
+
+/* Map element colours — theme-aware via --map-* / --accent (SVG recolours on theme toggle). */
+#trip-map .map-ocean { fill: var(--map-ocean); }
+#trip-map .map-land { fill: var(--map-land); }
+#trip-map .map-border { fill: none; stroke: var(--map-border); }
+#trip-map .map-region { fill: none; stroke: var(--map-region); }
+#trip-map .map-grat { fill: none; stroke: var(--map-grat); }
+#trip-map .map-leg { fill: none; stroke: var(--accent-ink); opacity: .85; }
+#trip-map .map-dot { fill: var(--accent); stroke: var(--paper-0); }
+
+/* Atlas labels (constant-size, halo for legibility). */
+.atlas-labels text { pointer-events: none; }
+.atlas-label { paint-order: stroke; stroke: var(--paper-0); stroke-width: 3px; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke; text-anchor: middle; fill: var(--ink-2); font-family: var(--f-body); }
+.atlas-label.country { font-family: var(--f-disp); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; fill: var(--ink-3); }
+.atlas-label.region { font-size: 10.5px; fill: var(--ink-3); }
+/* stop labels: shown only in Map view (redundant with the timeline titles in the background). */
+.atlas-label.stop { font-family: var(--f-disp); font-weight: 600; font-size: 12px; fill: var(--accent-ink); display: none; }
+
+/* Sub-nav sits on the sheet (transparent → no standalone white box); kept sticky + z-index
+   from styles.css so it also floats above the map in Map view to toggle back. */
+.subnav { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* ---- Map view: full, interactive foreground map of all stops ---- */
+body.map-view { overflow: hidden; }
+body.map-view #trip-map { z-index: 5; pointer-events: auto; }
+body.map-view #trip-map::after { display: none; }
+body.map-view #trip-map .map-ocean,
+body.map-view #trip-map .map-ground,
+body.map-view #trip-map .atlas-labels { opacity: 1; filter: none; }
+body.map-view #trip-map .atlas-label.stop { display: block; }

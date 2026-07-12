@@ -3,24 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Travel Planner</title>
-  <!-- Theme-before-paint (externalized for a strict CSP; blocking so it runs before first paint). -->
+  <title>Trip map — app-fidelity prototype</title>
   <script src="theme-init.js"></script>
-  <meta name="theme-color" content="#fcfcfa" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Travel Planner" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
   <link rel="preload" href="fonts/space-grotesk.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="tokens.css" />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="proto-app.css" />
 </head>
 <body>
-  <div id="demo-banner" class="demo-banner" hidden>Demo data — edits here are not saved.</div>
-
-  <!-- Faded trip map layer (behind everything). Populated by map.js only on trip views; inert otherwise. -->
+  <!-- Faded map background layer (fixed, behind the app). atlas.js mounts the SVG here. -->
   <div id="trip-map" aria-hidden="true"></div>
 
   <header class="topbar">
@@ -32,7 +24,11 @@
       <span id="brand-title">Travel Planner</span>
     </a>
     <div class="spacer"></div>
-    <span id="who" class="who" title="Signed-in user"></span>
+    <div class="proto-ctl" role="group" aria-label="Prototype trip">
+      <button data-trip="thailand">Thailand</button>
+      <button data-trip="world">World</button>
+    </div>
+    <span id="who" class="who" title="Signed-in user">you@example.com</span>
     <button id="theme-toggle" class="icon-btn" aria-label="Toggle light/dark theme">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg>
     </button>
@@ -40,15 +36,15 @@
 
   <div class="layout">
     <aside id="side" class="side">
-      <nav id="nav" class="nav"><!-- filled by app.js --></nav>
+      <nav id="nav" class="nav"><!-- built by proto-app.js --></nav>
     </aside>
-    <main id="view" class="view"><!-- rendered by the hash router --></main>
+    <main id="view" class="view"><!-- built by proto-app.js --></main>
   </div>
 
-  <script src="vendor/anime.min.js"></script>
   <script src="vendor/d3.min.js"></script>
   <script src="vendor/topojson-client.min.js"></script>
-  <script src="map.js"></script>
-  <script src="app.js"></script>
+  <script src="data.js"></script>
+  <script src="atlas.js"></script>
+  <script src="proto-app.js"></script>
 </body>
 </html>

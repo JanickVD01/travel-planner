@@ -205,6 +205,63 @@ async function loadTrip(slug) {
 }
 function invalidateTrip(slug) { delete state.trip[slug]; }
 
+// ---- background trip map (faded atlas behind the itinerary) ----------------
+// A single controller lives in the shell (#trip-map) and persists across routes (map.js owns the SVG),
+// so it stays put through the timeline↔detail View Transition. The atlas shows only when a trip has ≥1
+// located stay (numeric lat/lng); otherwise body.map-bg is off and the timeline renders on plain paper.
+// The map is coloured via CSS classes (var(--map-*)), so it re-tints with the theme — no JS recolour.
+let _mapCtl = null, _mapReady = null, _mapGen = 0, _mapSig = "";
+function ensureMap() {
+  if (_mapCtl) return Promise.resolve(_mapCtl);
+  if (!window.TripMap) return Promise.resolve(null);
+  if (!_mapReady) {
+    // onSelect fires only from the interactive Map view (the backdrop is pointer-events:none): a pin tap
+    // opens that stop's step detail.
+    _mapReady = window.TripMap.setup(document.getElementById("trip-map"), {
+      onSelect: (stop) => {
+        const slug = tripSlugFromHash();
+        if (slug && stop && stop.stepId != null) location.hash = "#/trip/" + encodeURIComponent(slug) + "/step/" + encodeURIComponent(stop.stepId);
+      }
+    }).then(c => (_mapCtl = c)).catch(() => { _mapReady = null; return null; });   // allow a retry on the next navigation
+  }
+  return _mapReady;
+}
+// True when a step carries a usable numeric coordinate (D1 stores lat/lng as TEXT).
+function stepHasCoords(s) {
+  return !!s && s.lat != null && s.lat !== "" && s.lng != null && s.lng !== "" &&
+    isFinite(Number(s.lat)) && isFinite(Number(s.lng));
+}
+// A trip's located stays, in order: kind 'stay' with valid coordinates.
+function tripMapStops(slug) {
+  const b = state.trip[slug];
+  if (!b) return [];
+  const out = [];
+  (b.steps || []).forEach(s => {
+    if (s.deleted || s.kind === "travel" || !stepHasCoords(s)) return;
+    out.push({ lat: Number(s.lat), lng: Number(s.lng), title: s.title || s.location || "", stepId: s.id });
+  });
+  return out;
+}
+function hideTripMap() { document.body.classList.remove("map-bg", "map-view"); _mapGen++; }
+// A signature of a trip's located stops — changes only when a pin's position/label/set changes, so we
+// rebuild the (expensive) map geometry just once per trip and skip it on plain timeline↔detail navigation.
+function stopsSig(stops) { return stops.map(s => s.stepId + "@" + s.lat + "," + s.lng + "#" + s.title).join("|"); }
+// Drive the persistent atlas behind an itinerary surface: show it only when the trip has located stays,
+// framed to the whole trip, STATIC (no fly, no per-stop focus). It only moves in the interactive Map view.
+async function syncTripMap(slug) {
+  const stops = tripMapStops(slug);
+  document.body.classList.toggle("map-bg", stops.length > 0);
+  if (!stops.length) return;                         // no coords → plain timeline; the map stays inert
+  const gen = ++_mapGen;
+  const ctl = await ensureMap();
+  if (!ctl || gen !== _mapGen) return;               // failed to load, or superseded by a later navigation
+  const sig = slug + "::" + stopsSig(stops);
+  if (sig === _mapSig) return;                       // same trip already framed on the backdrop — leave it
+  _mapSig = sig;
+  ctl.setTrip(stops);                                // rebuild (also reflects coordinate/title edits)
+  ctl.fitAll(false);                                 // frame the whole trip instantly — a still backdrop
+}
+
 // ---- inline edit (field-driven; whitelist grows in later milestones) -------
 // Render a tappable control that swaps to an <input>/<select> on click. `displayHTML`
 // is ALREADY-escaped display markup; `o.value` is the raw current value (esc'd into an attr).
@@ -644,6 +701,7 @@ function renderSubnav(slug, active) {
   const s = encodeURIComponent(slug);
   const tabs = [
     { key: "timeline", label: "Timeline", href: "#/trip/" + s },
+    { key: "map",      label: "Map",      href: "#/trip/" + s + "/map" },
     { key: "budget",   label: "Budget",   href: "#/trip/" + s + "/budget" },
     { key: "packing",  label: "Packing",  href: "#/trip/" + s + "/packing" }
   ];
@@ -656,7 +714,7 @@ async function viewTimeline(slug) {
   markActive(null);
   view().innerHTML = '<div class="panel"><p class="muted">Loading trip…</p></div>';
   const { trip, steps, byStep, unassigned } = await loadTrip(slug);
-  if (!trip) { view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
+  if (!trip) { hideTripMap(); view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
   const rate = trip.thb_per_eur;
   const title = trip.title || slug;
   const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
@@ -681,6 +739,42 @@ async function viewTimeline(slug) {
     '<div class="panel tl-panel">' + hint + body + unassignedHTML + "</div>";
   // signature entrance: stagger the markers in (reduced-motion + no-anime safe).
   motion(a => a.animate(".tl .step", { opacity: [0, 1], translateY: [8, 0], delay: a.stagger(45), duration: 380, ease: "out(3)" }));
+  syncTripMap(slug);   // still backdrop: frame the whole trip behind the timeline (only if it has located stays)
+}
+
+// Map view: a full, interactive foreground map of all located stops (drag to pan, wheel/pinch to zoom).
+// When the trip has no coordinates yet, show a paper empty-state instead of an empty world.
+async function viewMap(slug) {
+  markActive(null);
+  view().innerHTML = '<div class="panel"><p class="muted">Loading map…</p></div>';
+  const { trip } = await loadTrip(slug);
+  if (!trip) { hideTripMap(); view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
+  const title = trip.title || slug;
+  const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
+  const hero =
+    '<div class="trip-hero"><div class="hero-top">' +
+      '<a class="back" href="#/">' + icon("pin") + "All trips</a>" +
+      '<a class="trash-link" href="#/trip/' + encodeURIComponent(slug) + '/trash">' + icon("trash") + "Trash</a>" +
+    "</div><h1>" + esc(title) + "</h1>" + (range ? '<div class="muted mono">' + esc(range) + "</div>" : "") + "</div>";
+  const stops = tripMapStops(slug);
+  if (!stops.length) {                       // no coordinates yet -> plain paper empty-state (no foreground map)
+    hideTripMap();
+    view().innerHTML = hero + renderSubnav(slug, "map") +
+      '<div class="panel"><div class="map-empty">' + icon("pin") +
+      "<p>Your trip isn’t on the map yet.</p>" +
+      '<p class="muted">Add a stay with coordinates — paste a Google Maps link, or ask Claude to set coordinates — and your stops will show here.</p>' +
+      "</div></div>";
+    return;
+  }
+  view().innerHTML = hero + renderSubnav(slug, "map");
+  document.body.classList.add("map-view");
+  document.body.classList.remove("map-bg");
+  const gen = ++_mapGen;
+  const ctl = await ensureMap();
+  if (!ctl || gen !== _mapGen) return;       // failed to load, or navigated away while loading
+  const sig = slug + "::" + stopsSig(stops);
+  if (sig !== _mapSig) { _mapSig = sig; ctl.setTrip(stops); }   // reuse the geometry if it's already this trip
+  ctl.fitAll(!prefersReducedMotion());       // frame all stops for the interactive view
 }
 
 let budgetBasis = "est";   // "Where it goes" breakdown basis: 'est' | 'actual' (module state, like the packing filter)
@@ -896,6 +990,7 @@ async function viewActivity(slug, id) {
       meta + notes + photos + danger +
     "</div></div>";
   motion(an => an.animate(".detail-meta, .notes, .photos", { opacity: [0, 1], translateY: [8, 0], delay: an.stagger(60), duration: 340, ease: "out(3)" }));
+  syncTripMap(slug);   // keep the map present behind the detail (pans to a stop only via a card's pin button)
 }
 
 // Step detail: a focused page for one stay or travel leg. Mirrors viewActivity; all fields inline-
@@ -994,6 +1089,7 @@ async function viewStep(slug, id) {
       meta + notes + actsSection + photos + danger +
     "</div></div>";
   motion(an => an.animate(".detail-meta, .notes, .step-acts, .photos", { opacity: [0, 1], translateY: [8, 0], delay: an.stagger(60), duration: 340, ease: "out(3)" }));
+  syncTripMap(slug);   // keep the map present behind the detail; it only pans to a stop via a card's pin button
 }
 
 // ---- packing (M8): a shared checklist scoped by owner (Mine / Partner / Shared) ----
@@ -1470,6 +1566,8 @@ async function createStepFromWizard(slug, insertIndex, steps, st) {
   if (st.note) body.note = st.note;
   const mapUrl = toMapUrl(st.coords);                       // store a Google Maps link (map_url is primary now)
   if (mapUrl) body.map_url = mapUrl;
+  const coords = parseLatLng(st.coords);                    // + capture lat/lng when the pasted link carries them,
+  if (coords) { body.lat = coords.lat; body.lng = coords.lng; }   // so the stop pins on the trip map (0015)
 
   // Idempotent on retry: POST once, remember the new id on the wizard state. If a later reposition
   // PATCH fails and the user re-submits, we skip the POST (no duplicate step) and only redo the PATCH.
@@ -1555,6 +1653,8 @@ async function createActivityFromWizard(slug, stepId, st) {
   if (st.note) body.note = st.note;
   const mapUrl = toMapUrl(st.coords);                       // store a Google Maps link (map_url is primary now)
   if (mapUrl) body.map_url = mapUrl;
+  const coords = parseLatLng(st.coords);                    // + capture lat/lng when the pasted link carries them,
+  if (coords) { body.lat = coords.lat; body.lng = coords.lng; }   // so the stop pins on the trip map (0015)
   if (!st._createdId) {                                     // idempotent on retry — never double-create
     const res = await api("activities/" + encodeURIComponent(slug) + "/activities", {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
@@ -1591,11 +1691,20 @@ function bindWizards() {
 function route() {
   const hash = location.hash.replace(/^#/, "") || "/";
   const parts = hash.split("/").filter(Boolean);   // "/" -> [], "/trip/x" -> ["trip","x"]
+  // The faded atlas lives only on itinerary surfaces (timeline + step/activity detail + Map view); those
+  // views drive it themselves via syncTripMap. Everywhere else (Home, What's New, Budget, Packing, Trash)
+  // it's hidden so the plain paper look is untouched.
+  const mapSurface = parts[0] === "trip" && parts[1] &&
+    (parts.length === 2 || parts[2] === "step" || parts[2] === "activity" || parts[2] === "map");
+  if (!mapSurface) hideTripMap();
+  // Leave Map view whenever we navigate off the /map route (viewMap re-adds it if the trip has stops).
+  if (!(parts[0] === "trip" && parts[2] === "map")) document.body.classList.remove("map-view");
   if (parts.length === 0) return viewHome();
   if (parts[0] === "whats-new") return viewWhatsNew();
   if (parts[0] === "trip" && parts[1]) {
     if (parts[2] === "activity" && parts[3]) return viewActivity(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
     if (parts[2] === "step" && parts[3]) return viewStep(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
+    if (parts[2] === "map") return viewMap(decodeURIComponent(parts[1]));
     if (parts[2] === "budget") return viewBudget(decodeURIComponent(parts[1]));
     if (parts[2] === "packing") return viewPacking(decodeURIComponent(parts[1]));
     if (parts[2] === "trash") return viewTrash(decodeURIComponent(parts[1]));
@@ -1666,6 +1775,15 @@ function setTheme(t) { document.documentElement.setAttribute("data-theme", t); t
 $("#theme-toggle").addEventListener("click", () => setTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light"));
 $("#menu-toggle").addEventListener("click", () => $("#side").classList.toggle("collapsed"));
 window.addEventListener("hashchange", () => vt(route));
+
+// The map SVG is sized to the viewport at build time; on resize, rebuild it at the new size (debounced).
+let _mapResizeT = null;
+window.addEventListener("resize", () => {
+  _mapSig = "";                                            // force a rebuild at the new size on the next sync
+  if (!_mapCtl || !(document.body.classList.contains("map-bg") || document.body.classList.contains("map-view"))) return;
+  clearTimeout(_mapResizeT);
+  _mapResizeT = setTimeout(() => { _mapCtl.onResize(); _mapCtl.fitAll(false); }, 150);
+});
 
 (async function boot() {
   try { state.app = await fetchJSON("data/app.json"); } catch { state.app = { title: "Travel Planner" }; }
