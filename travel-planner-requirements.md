@@ -11,10 +11,10 @@
 
 ## 1. Context
 
-You and your girlfriend want to plan a trip to Thailand together. You have a Samsung (Android
-Chrome) and she has an Apple device (iOS Safari); you build with VS Code + Claude Code; and you
-want the whole thing to stay inside this project's hard constraints — **$0 forever, two users, an
-MCP server as the primary (but not only) interface.**
+Two users want to plan a trip to Thailand together. One uses an Android device (Chrome) and the
+other an Apple device (iOS Safari); the project is built with VS Code + Claude Code; and the whole
+thing must stay inside this project's hard constraints — **$0 forever, two users, an MCP server as
+the primary (but not only) interface.**
 
 The existing repo is a deliberately generic, verifiable scaffold: a no-build static SPA + `/api/*`
 Pages Functions + a single domain core (`shared/core.js`) + a Cloudflare D1 database + a remote MCP
@@ -237,8 +237,8 @@ Drive/Dropbox/PDF/app deep-links — do *not* enforce strict `.url()`).
   N DB reads internally) to conserve the per-email rate budget.
 
 ### 5.3 Example transcript (NL → tool)
-1. "Set our trip: 21 days, budget €4000, 39 baht to the euro." → `set_trip`
-2. "Add a 4-night stay in Chiang Mai arriving Nov 8th, hotel Tamarind Village ~8000 baht." → `add_stay`
+1. "Set our trip: 21 days, budget €3000, 40 baht to the euro." → `set_trip`
+2. "Add a 4-night stay in Chiang Mai arriving Nov 8th, hotel Riverside Inn ~8000 baht." → `add_stay`
 3. "Ferry Krabi→Ko Lanta on the 14th, about €25." → `add_travel`
 4. "In Chiang Mai add an elephant sanctuary — 2500 baht, needs booking ahead." → `add_activity`
 5. "What's our total so far and how much is left?" → `get_budget`

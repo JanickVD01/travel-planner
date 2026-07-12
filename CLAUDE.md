@@ -144,5 +144,9 @@ though the CLI still works via a loopback redirect. See `docs/implementations/00
 
 - **Never attach a payment method to Cloudflare.** Free tier errors instead of billing.
 - **Never commit a secret.** The only secret is the Cloudflare API token; it lives only in GitHub
-  repo secrets. Identity values (`TEAM_DOMAIN`, `POLICY_AUD`, account id, D1 id) are not secrets.
+  repo secrets. Identity values (`TEAM_DOMAIN`, `POLICY_AUD`, account id, and the D1 / KV /
+  Durable-Object / rate-limit namespace ids) are not secrets.
+- **Never commit personal data.** No real names or emails (yours, a partner's, or a colleague's) and no
+  real trip data in tracked files, seed `.sql`, or fixtures — the repo is public. Use `example.com`
+  addresses and fabricated data (as `functions/api/_mock.js` does); keep real trips only in the live D1.
 - **Previews never get a `DB` binding** — they must run on demo data.
