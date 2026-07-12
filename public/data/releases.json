@@ -1,6 +1,17 @@
 {
   "releases": [
     {
+      "version": "v0.7.0",
+      "title": "See your trip on the map",
+      "date": "2026-07-12",
+      "notes": [
+        "Your itinerary now has a map: a soft world atlas sits behind the timeline with a pin on every stay, so you can see the shape of the trip at a glance.",
+        "A new Map tab opens the whole trip full-screen — drag to pan, pinch or scroll to zoom, and tap any pin to jump straight to that stay’s details.",
+        "The map appears once a stay has a location: paste a Google Maps link with coordinates when adding a stay (or ask Claude to set them) and its pin shows up.",
+        "It’s all self-hosted and private — no map provider, no tracking, no extra cost — and it re-tints for light and dark automatically."
+      ]
+    },
+    {
       "version": "v0.6.2",
       "title": "See how long — and find your way back",
       "date": "2026-07-10",

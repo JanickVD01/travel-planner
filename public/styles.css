@@ -822,3 +822,96 @@ a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-u
 .step-acts { margin-top: var(--space-5); }
 .step-acts h2 { font-size: var(--text-lg); margin-bottom: var(--space-3); }
 .step-acts .acts { margin-bottom: var(--space-3); }
+
+/* ============================================================================
+   Trip map (0015) — a faded vector atlas behind the itinerary + a full-screen
+   Map view. The SVG is built by map.js in #trip-map (a shell layer that persists
+   across routes). It shows only when a trip has located stays (body.map-bg) or
+   in Map view (body.map-view). Colours come from CSS classes, so the map
+   re-tints automatically when data-theme flips — no JS recolour.
+   ============================================================================ */
+
+/* Theme-aware map palette (consumed by the SVG element classes below). */
+:root {
+  --map-ocean: #A6C0C7; --map-land: #F2EDE2;
+  --map-border: rgba(104,92,72,.55); --map-region: rgba(104,92,72,.34); --map-grat: rgba(104,92,72,.16);
+  --map-opacity: .72;
+}
+:root[data-theme="dark"] {
+  --map-ocean: #0C1319; --map-land: #29313C;
+  --map-border: rgba(188,178,158,.38); --map-region: rgba(188,178,158,.22); --map-grat: rgba(188,178,158,.12);
+  --map-opacity: .74;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --map-ocean: #0C1319; --map-land: #29313C;
+    --map-border: rgba(188,178,158,.38); --map-region: rgba(188,178,158,.22); --map-grat: rgba(188,178,158,.12);
+    --map-opacity: .74;
+  }
+}
+
+/* Shell layer: fixed, full-bleed, BEHIND the grid (body::before is z-index:-1) and all content. Inert
+   (empty + non-interactive) until map.js populates it on a trip surface. */
+#trip-map { position: fixed; inset: 0; z-index: -2; pointer-events: none; overflow: hidden; }
+#trip-map svg { display: block; }
+
+/* SVG element colours — theme-aware via --map-* / --accent. */
+#trip-map .map-ocean { fill: var(--map-ocean); }
+#trip-map .map-land { fill: var(--map-land); }
+#trip-map .map-border { fill: none; stroke: var(--map-border); }
+#trip-map .map-region { fill: none; stroke: var(--map-region); }
+#trip-map .map-grat { fill: none; stroke: var(--map-grat); }
+#trip-map .map-leg { fill: none; stroke: var(--accent-ink); opacity: .85; }
+#trip-map .map-dot { fill: var(--accent); stroke: var(--paper-0); }
+
+/* Atlas labels (constant-size, halo for legibility). Stop labels are Map-view only. */
+.atlas-labels text { pointer-events: none; }
+.atlas-label { paint-order: stroke; stroke: var(--paper-0); stroke-width: 3px; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke; text-anchor: middle; fill: var(--ink-2); font-family: var(--f-body); }
+.atlas-label.country { font-family: var(--f-disp); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; fill: var(--ink-3); }
+.atlas-label.region { font-size: 10.5px; fill: var(--ink-3); }
+.atlas-label.stop { font-family: var(--f-disp); font-weight: 600; font-size: 12px; fill: var(--accent-ink); display: none; }
+
+/* ---- Background mode: the faded atlas behind the itinerary (body.map-bg) ---- */
+/* Fade the GROUND (ocean/land/borders/labels) so it recedes; PINS stay full-strength. */
+body.map-bg #trip-map .map-ocean,
+body.map-bg #trip-map .map-ground,
+body.map-bg #trip-map .atlas-labels { opacity: var(--map-opacity); filter: saturate(.9); }
+/* Gentle vignette so the map recedes toward the edges and text stays legible. */
+body.map-bg #trip-map::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(140% 110% at 50% 40%, transparent 55%, var(--paper-0) 100%); opacity: .32; }
+
+/* A readable beige "sheet" carries the itinerary text over the map. NO backdrop-filter here on purpose:
+   it would create a stacking context that traps the sticky sub-nav below the foreground map in Map view. */
+body.map-bg #view {
+  background: color-mix(in srgb, var(--paper-1) 80%, transparent);
+  border: 1px solid var(--line-hair); border-radius: var(--radius);
+  padding: var(--space-4) var(--space-4) var(--space-6);
+  box-shadow: var(--shadow-float);
+}
+/* On the sheet, travel legs read as cards too (matching the stay cards). */
+body.map-bg .step .leg { background: var(--paper-1); border: 1px solid var(--line-hair); border-radius: var(--radius); padding: 11px 14px; }
+/* Sub-nav sits directly on the sheet: drop its frosted bar so there's no standalone box over the map. */
+body.map-bg .subnav { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Detail back-header ("‹ Trip") likewise floats on the beige sheet — no standalone white box. */
+body.map-bg .sheet-head { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* ---- Map view: a full, interactive foreground map of all stops (body.map-view) ---- */
+body.map-view { overflow: hidden; }                       /* lock page scroll — the map pans instead */
+body.map-view #trip-map { z-index: 5; pointer-events: auto; cursor: grab; }   /* foreground + interactive (top-bar z40 / sub-nav z20 stay above) */
+body.map-view #trip-map:active { cursor: grabbing; }
+body.map-view #trip-map .map-dot { cursor: pointer; }     /* pins are clickable → open the step detail */
+body.map-view .trip-hero { display: none; }               /* maximise the map; "All trips" lives in the top-bar */
+body.map-view .atlas-label.stop { display: block; cursor: pointer; }   /* show + click stop (stay) labels */
+/* Clean chrome over the vivid map: no opaque bars/boxes. The top-bar becomes a soft top-scrim (keeps its
+   text legible without a hard black bar); the sub-nav pills float directly on the map. */
+body.map-view .topbar {
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--paper-0) 78%, transparent), transparent);
+  -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom: none;
+}
+body.map-view .subnav { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+
+/* Map view empty-state (a trip with no coordinates yet). */
+.map-empty { text-align: center; padding: var(--space-7) var(--space-4); }
+.map-empty .ico { width: 28px; height: 28px; color: var(--ink-3); }
+.map-empty p { margin: var(--space-2) auto 0; max-width: 42ch; }

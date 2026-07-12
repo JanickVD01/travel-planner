@@ -5,9 +5,11 @@ no-build static SPA + `/api/*` Pages Functions + a shared domain core + a D1 dat
 MCP server, all fronted by Cloudflare Access and shipped through a hardened GitHub flow built for
 **safe parallel sessions**. Full rationale lives in `ai-first_project_initialisation.md`.
 
-> **Status:** live (v0.5), in active use. The data model is real (see **Data model** below): a **trip**
+> **Status:** live (v0.7), in active use. The data model is real (see **Data model** below): a **trip**
 > owns a metro **timeline** of `steps` (travel legs + stays), each stay nests `activities`, plus a
-> `packing` list and photo `attachments`. The generic `entries` list still exists but is now only the
+> `packing` list and photo `attachments`. A stay's `lat`/`lng` now also drive a **visual trip map**
+> (self-hosted vector atlas): a still backdrop behind the timeline + an interactive **Map view** whose
+> pins open a stay's detail (effort 0015). The generic `entries` list still exists but is now only the
 > MCP smoke-test fixture. Full history in `docs/implementations/`.
 
 ## Data map (where things live)
@@ -19,6 +21,7 @@ MCP server, all fronted by Cloudflare Access and shipped through a hardened GitH
 | Auth gate (require Access identity, fail-closed) | `functions/_middleware.js` |
 | Demo-mode switch (mock only when `!DB && DEMO_API=1`) | `functions/api/_middleware.js`, `functions/api/_mock.js` |
 | SPA shell / router / views | `public/index.html`, `public/app.js`, `public/styles.css` |
+| Trip map — self-hosted vector atlas (timeline backdrop + interactive Map view) | `public/map.js` (+ vendored `public/vendor/d3.min.js`, `topojson-client.min.js`, `vendor/geo/*` Natural Earth JSON) |
 | Design language / taste contract (brand, fonts, palette, tokens thesis) — **read before any UI change** | `DESIGN.md` |
 | Implementation history — one folder per effort (`NNNN-slug/README.md`; plan · decisions · outcome · later-changes log) | `docs/implementations/` |
 | App metadata + release notes | `public/data/**` |
