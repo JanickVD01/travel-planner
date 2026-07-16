@@ -71,6 +71,8 @@ button, a { touch-action: manipulation; }
   cursor: pointer; font-size: 15px; line-height: 1;
 }
 .icon-btn:hover { border-color: var(--accent); background: var(--paper-2); }
+/* .icon-btn sets display, which would override the [hidden] UA rule — restore it for the feedback button (0016). */
+#feedback-btn[hidden] { display: none; }
 
 /* ---- layout ---- */
 .layout { display: flex; gap: var(--space-4); max-width: var(--maxw); margin: 0 auto; padding: var(--space-4); }
