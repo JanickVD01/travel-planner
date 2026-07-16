@@ -4,8 +4,9 @@
 > research complete, approach decided. **Phase 2 — core integration shipped in PR** (2026-07-16,
 > milestones 2–6): PostHog EU account created; `*.posthog.com` allow-listed in the CSP; the library +
 > `analytics.js` load; manual `$pageview` on the hash router; the two users identified from `/api/me`;
-> error tracking on. **Still open (deliberate opt-ins):** session replay (M7, needs `worker-src` CSP +
-> masking), feature-flag/usage-event/survey wiring (M8), and the final reconcile (M9). See the index —
+> error tracking on. **Session replay added** (2026-07-16, M7): `worker-src 'self' blob:` added to the
+> CSP, recording on with form inputs masked (page text visible). **Still open (deliberate opt-ins):**
+> feature-flag/usage-event/survey wiring (M8) and the final reconcile (M9). See the index —
 > [`README.md`](../README.md) — and the data map in [`CLAUDE.md`](../../../CLAUDE.md).
 
 ## Context
@@ -40,7 +41,7 @@ consent banner), `respect_dnt`, `identified_only`, and masked replay text.
 | Host | **PostHog Cloud EU** (Frankfurt), free tier, **no card**. Region is permanent at signup → must be EU from the start. Self-host rejected (not $0/no-card; impossible on Cloudflare). |
 | CSP approach | **(B) Allow-list `*.posthog.com`** (owner's choice — simplest). Add `https://*.posthog.com` to `script-src` + `connect-src` in [`public/_headers`](../../../public/_headers). Approach **(A) same-origin reverse-proxy** (keeps CSP pure `'self'`) is documented in [`research.md`](research.md) §2 as the alternative if CSP purity is ever reprioritised. |
 | No inline scripts | The app has **no `'unsafe-inline'`** for scripts, so PostHog's inline snippet is **not** used. Load `array.js` from `eu-assets.i.posthog.com` via an external `<script src>` (now allowed) and `posthog.init()` from our own `public/analytics.js`. |
-| Session replay | Opt-in; requires one extra directive **`worker-src 'self' blob:`** (rrweb's blob-URL compression worker) + **`maskAllText`/`ph-no-capture`** on itinerary content (replay does *not* mask page text by default). |
+| Session replay | **Enabled (M7, 2026-07-16).** Adds **`worker-src 'self' blob:`** (rrweb's blob-URL compression worker). Masking: **form inputs masked** (PostHog default; passwords always), **page text visible** — owner's choice so replays are useful for self-debugging. Tighten later via `maskTextSelector:'*'` / `ph-no-capture` if desired. |
 | Privacy | EU Cloud + self-serve DPA; **`persistence:'memory'`** (no consent banner); **`respect_dnt:true`**; **`person_profiles:'identified_only'`**; identify the 2 known emails from `/api/me`. |
 | Governance | One **`code/`** branch + PR (touches `public/**` + `_headers`). **No migration**, **no MCP-worker redeploy** (browser-only). Owner-only prerequisite: PostHog EU signup + public token + $0 billing limits. |
 
@@ -64,9 +65,12 @@ consent banner), `respect_dnt`, `identified_only`, and masked replay text.
    every hash navigation).
 6. **Error tracking on** — ✅ 2026-07-16 (via `capture_exceptions:true`; **zero extra CSP**). *Follow-up:*
    wire a PostHog alert (email/Slack) for new issues — a UI-only step in the PostHog app.
-7. **(Opt-in) Session replay** — ⏳ pending owner call. Add `worker-src 'self' blob:` to
-   [`public/_headers`](../../../public/_headers); flip `disable_session_recording:false` + enable
-   `maskAllText`/`ph-no-capture` on itinerary content.
+7. **(Opt-in) Session replay** — ✅ 2026-07-16. Added `worker-src 'self' blob:` to
+   [`public/_headers`](../../../public/_headers); `disable_session_recording:false` +
+   `session_recording:{ maskAllInputs:true }` in [`public/analytics.js`](../../../public/analytics.js).
+   **Masking posture:** form inputs masked (passwords always), **page text left visible** so the owners
+   can see their own sessions when debugging — owner's choice for testing. Tighten later with
+   `maskTextSelector:'*'` or `ph-no-capture` on sensitive nodes if desired.
 8. **(Opt-in) Feature flags + a few manual usage events + one survey** — ⏳ pending (`Analytics.capture(...)`
    helper is already in place for the events).
 9. **Verify + reconcile** — 🔧 partial (this PR: [`CLAUDE.md`](../../../CLAUDE.md) data map). Final reconcile
@@ -90,6 +94,7 @@ _Phase 1 (research + decision) and the Phase 2 **core integration** shipped 2026
 PostHog (EU Cloud) via an external `<script>` + a guarded `analytics.js`, sends a manual `$pageview` per
 hash-route, identifies the two signed-in users (real prod sessions only — demo/previews are skipped), and
 captures unhandled JS exceptions for error tracking — all with the CSP widened only by
-`https://*.posthog.com` on `script-src` + `connect-src` (no `'unsafe-inline'`, no `worker-src` yet).
-Session replay, feature-flag/usage-event/survey wiring, and the final doc reconcile remain as deliberate
-follow-ups (M7–M9 above). This section will be finalised when the effort closes._
+`https://*.posthog.com` on `script-src` + `connect-src` (no `'unsafe-inline'`). **Session replay** (M7)
+followed the same day — `worker-src 'self' blob:` added, recording on with form inputs masked and page
+text visible. Feature-flag/usage-event/survey wiring (M8) and the final doc reconcile (M9) remain
+deliberate follow-ups. This section will be finalised when the effort closes._

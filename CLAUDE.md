@@ -22,7 +22,7 @@ MCP server, all fronted by Cloudflare Access and shipped through a hardened GitH
 | Demo-mode switch (mock only when `!DB && DEMO_API=1`) | `functions/api/_middleware.js`, `functions/api/_mock.js` |
 | SPA shell / router / views | `public/index.html`, `public/app.js`, `public/styles.css` |
 | Trip map — self-hosted vector atlas (timeline backdrop + interactive Map view) | `public/map.js` (+ vendored `public/vendor/d3.min.js`, `topojson-client.min.js`, `vendor/geo/*` Natural Earth JSON) |
-| Analytics / error tracking (PostHog Cloud EU; opt-in telemetry, real prod sessions only) — effort 0016 | `public/analytics.js` (guarded `window.Analytics`; loads `array.full.js` from PostHog's EU assets host; CSP allow-lists `*.posthog.com` in `public/_headers`) |
+| Analytics / error tracking / session replay (PostHog Cloud EU; opt-in telemetry, real prod sessions only) — effort 0016 | `public/analytics.js` (guarded `window.Analytics`; loads `array.full.js` from PostHog's EU assets host; CSP allow-lists `*.posthog.com` on `script-src`/`connect-src` + `worker-src 'self' blob:` for replay, in `public/_headers`) |
 | Design language / taste contract (brand, fonts, palette, tokens thesis) — **read before any UI change** | `DESIGN.md` |
 | Implementation history — one folder per effort (`NNNN-slug/README.md`; plan · decisions · outcome · later-changes log) | `docs/implementations/` |
 | App metadata + release notes | `public/data/**` |

@@ -8,11 +8,11 @@
 #                            dynamic content, so style injection is not a real vector. Dynamic bar widths use el.style (CSSOM).
 # - img-src 'self' data: blob: : KV-served photos are same-origin; data: is the demo placeholder.
 # - connect-src 'self' https://*.posthog.com : app fetch() hits /api/* and /data/*; PostHog sends events
-#                            direct to eu.i.posthog.com (effort 0016). Map links are <a> navigations (not restricted here).
-# NOTE: enabling PostHog Session Replay later also requires adding `worker-src 'self' blob:` (its
-#       compression runs in a blob-URL Web Worker) — deliberately deferred; replay is off for now.
+#                            + session recordings direct to eu.i.posthog.com (effort 0016). Map links are <a> navigations.
+# - worker-src 'self' blob: : PostHog Session Replay compresses recordings in a blob-URL Web Worker
+#                            (effort 0016 M7). Without this the worker falls back to script-src 'self' and is blocked.
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://*.posthog.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://*.posthog.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://*.posthog.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://*.posthog.com; worker-src 'self' blob:; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
