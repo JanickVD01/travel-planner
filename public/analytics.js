@@ -12,8 +12,8 @@
 
    PostHog's library (array.full.js) is loaded by a plain <script src> from the EU assets host in
    index.html (allowed by script-src 'self' https://*.posthog.com — no inline snippet, so no
-   'unsafe-inline'). Session replay is intentionally OFF here (it needs a worker-src CSP change + text
-   masking for personal trip data — a deliberate follow-up). */
+   'unsafe-inline'). Session replay is ON (effort 0016 M7): it needs `worker-src 'self' blob:` in
+   _headers and records with form inputs masked (page text visible — see session_recording below). */
 
 window.Analytics = {
   KEY: "phc_D65xJQ7NVMdx2ZjhQguWwm7bjUzWJSRhSBeceq8Knkjn",
@@ -32,7 +32,13 @@ window.Analytics = {
         capture_pageview: false,                   // hash router → we send $pageview manually (see app.js route())
         capture_pageleave: true,
         capture_exceptions: true,                  // error tracking: unhandled errors + promise rejections
-        disable_session_recording: true,           // replay is a deliberate follow-up (CSP worker-src + masking)
+        disable_session_recording: false,          // session replay ON (effort 0016 M7; needs worker-src 'self' blob: in _headers)
+        session_recording: {
+          // Privacy posture: form inputs masked (passwords always), page TEXT left visible so replays are
+          // useful for the owners debugging their own sessions. To tighten later: maskTextSelector: '*'
+          // (mask all text) or add class="ph-no-capture" to any sensitive node.
+          maskAllInputs: true,
+        },
       });
       posthog.identify(me.email, { email: me.email });
       this.ready = true;
