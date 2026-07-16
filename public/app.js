@@ -1690,6 +1690,7 @@ function bindWizards() {
 // ---- router ----------------------------------------------------------------
 function route() {
   const hash = location.hash.replace(/^#/, "") || "/";
+  if (window.Analytics) Analytics.pageview(hash);  // hash router: send a manual $pageview per navigation (0016)
   const parts = hash.split("/").filter(Boolean);   // "/" -> [], "/trip/x" -> ["trip","x"]
   // The faded atlas lives only on itinerary surfaces (timeline + step/activity detail + Map view); those
   // views drive it themselves via syncTripMap. Everywhere else (Home, What's New, Budget, Packing, Trash)
@@ -1790,6 +1791,7 @@ window.addEventListener("resize", () => {
   $("#brand-title").textContent = (state.app && state.app.title) || "Travel Planner";
   document.title = $("#brand-title").textContent;
   await loadMe();
+  if (window.Analytics) Analytics.init(state.me);  // PostHog init + identify (real prod sessions only) (0016)
   buildNav();
   bindEditable();
   bindPhotos();
