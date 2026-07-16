@@ -49,6 +49,11 @@
   <script src="vendor/d3.min.js"></script>
   <script src="vendor/topojson-client.min.js"></script>
   <script src="map.js"></script>
+  <!-- PostHog (effort 0016): library from the EU assets host + our own deferred init (analytics.js).
+       External <script src> (not the inline snippet) so no 'unsafe-inline' is needed; allowed by CSP
+       script-src 'self' https://*.posthog.com. Init is gated to real prod sessions inside analytics.js. -->
+  <script src="https://eu-assets.i.posthog.com/static/array.full.js"></script>
+  <script src="analytics.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
