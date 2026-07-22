@@ -25,6 +25,9 @@ desktop.ini
 *.token
 .secrets/
 
-# local-only working notes (reverse-engineering / reference docs about other projects;
-# not part of this repo, and this repo is public)
+# local-only working notes / drafts (personal data + reference docs about other projects;
+# not part of this repo, and this repo is public — keep these out of git)
 command-center-mcp-security-recipe.md
+MEMORY.md
+DESIGNv0.1.md
+ai-first_sibling_project_initialisation.md

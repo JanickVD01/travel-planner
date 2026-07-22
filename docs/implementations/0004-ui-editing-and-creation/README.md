@@ -100,7 +100,7 @@ Status legend: ✅ shipped · 🚧 in progress · ⏳ pending.
   `arrive`/`depart` **dates** (keep existing times) so date+time renders.
 - `INSERT` a dummy packing list (`space='france-2026'`, `list='packing'`, `deleted=NULL`,
   `sort_order` in tens): shared (adapter, first-aid, sunscreen, guidebook), mine
-  (`janick.vandamme@verity.global`: passport, meds, camera, running shoes), partner
+  (`you@example.com`: passport, meds, camera, running shoes), partner
   (`partner@example.com`: passport, makeup bag, paperback). Vary category/qty/packed.
 
 ### M5 — `code/step-wizard` (build steps from the browser)
@@ -159,7 +159,7 @@ Shipped 2026-07-09 across PRs #19–#23 (merge-commit only), each gated by CI `v
   a render gap that M2 fixed. So M4 reduced to seeding the packing list (11 rows) via a throwaway CI job.
 - **KV (M3):** the deploy token initially lacked Workers-KV permission (`kv namespace create` →
   `Authentication error 10000`); the user broadened the token, then the namespace
-  (`a43ae5ff444c418f9eb8a604d50082b2`) was created via CI and bound. Both Pages + MCP worker redeployed
+  (`<kv-namespace-id>`) was created via CI and bound. Both Pages + MCP worker redeployed
   green.
 - **Quality gate:** an adversarial review workflow (4 dimensions → verify) ran over the whole client
   diff. It cleared inline-edit, `parseLatLng`, escaping, and mock routing, and caught one real bug — the

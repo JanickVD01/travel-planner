@@ -14,7 +14,7 @@ connector means no phone access at all.
 
 ## Root cause (diagnosed from live probes + vendor docs)
 
-The worker (`travel-planner-mcp.janickvandamme.workers.dev`) is fronted by a **Cloudflare Access
+The worker (`travel-planner-mcp.<subdomain>.workers.dev`) is fronted by a **Cloudflare Access
 "Managed OAuth"** self-hosted app. The OAuth discovery chain is healthy — verified live:
 
 - `GET/POST /mcp` → `401` with `WWW-Authenticate: Bearer … resource_metadata="…/.well-known/cloudflare-access-protected-resource/mcp"`
@@ -51,7 +51,7 @@ CLI uses loopback).
 ## The fix (owner, one-time, ~1 min)
 
 Zero Trust → **Access controls → Applications** → the `…MCP` app for
-`travel-planner-mcp.janickvandamme.workers.dev` → **Edit → Advanced settings → Managed OAuth** →
+`travel-planner-mcp.<subdomain>.workers.dev` → **Edit → Advanced settings → Managed OAuth** →
 **Allowed redirect URIs** → add `https://claude.ai/api/mcp/auth_callback` → **Save**. (Optional IaC:
 `PATCH` the access app's `oauth_configuration.dynamic_client_registration.allowed_uris` via the
 Cloudflare API using the existing `CLOUDFLARE_API_TOKEN`; never commit the token.)
@@ -60,10 +60,9 @@ Cloudflare API using the existing `CLOUDFLARE_API_TOKEN`; never commit the token
 
 1. **Web:** claude.ai → Connectors → Add custom connector (URL `…/mcp`, OAuth fields blank) → passes DCR
    → Access email one-time-PIN → **Connected** (no "Couldn't register").
-2. **Tools:** a new chat lists the Travel Planner tools; "list my trips" returns **France 2026** +
-   **Thailand 2026**.
-3. **Phone (mandatory):** Claude iOS/Android app (same account) → connector synced → "show my Thailand
-   trip" returns the itinerary.
+2. **Tools:** a new chat lists the Travel Planner tools; "list my trips" returns the trip records.
+3. **Phone (mandatory):** Claude iOS/Android app (same account) → connector synced → "show my trip"
+   returns the itinerary.
 4. **Regression:** Claude Code CLI still authenticates (loopback untouched).
 
 ## Outcome
