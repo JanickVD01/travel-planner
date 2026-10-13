@@ -272,6 +272,7 @@ async function syncTripMap(slug) {
   ctl.setTopPad(protoTopPad());                       // 0020 PROTOTYPE: a map in a pane needs little top room
   if (sig === _mapSig) {                             // same trip already framed on the backdrop — leave it,
     if (ctl.focusedRegion()) ctl.focusRegion(null, false);   // unless the Map view left a region focused (0019)
+    else if (ctl.needsResize()) ctl.fitAll(false);           // 0020 PROTOTYPE: back from the full-screen Map tab into the pane
     return;
   }
   _mapSig = sig;
@@ -2419,9 +2420,68 @@ async function protoGlanceHTML(slug) {
       '<p class="muted">estimated · €' + Math.round(act).toLocaleString("en-US") + ' spent · <a href="#/trip/' + s + '/budget">Budget ›</a></p>';
   }
   const packing = packRows.length ? '<p><strong class="mono">' + packed + " / " + packRows.length + '</strong> packed · <a href="#/trip/' + s + '/packing">Packing ›</a></p>' : '<p class="muted">No packing list yet.</p>';
-  return '<h2 class="proto-h">At a glance</h2>' + facts +
+  return '<h2 class="proto-h">At a glance</h2>' + facts + await protoTodosHTML(slug) +
     sec("To book", toBook.length, bookList) + sec("Unplanned", gaps.length || null, gapList) + sec("Budget", null, money) + sec("Packing", null, packing);
 }
+// A free-form trip to-do list (owner, 2026-10-13): add, tick off, rename (tap the text), delete; done items
+// fold away under "N done". Not tied to steps. Prototype: demo-backed; the real build adds a `todos` list in core.
+async function protoTodosHTML(slug) {
+  let rows = [];
+  try { const d = await api("todos/" + encodeURIComponent(slug) + "/todos"); rows = ((d && d.rows) || []).filter(r => !r.deleted); } catch {}
+  rows.sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
+  const open = rows.filter(r => r.done !== "1"), done = rows.filter(r => r.done === "1");
+  const item = (r) => {
+    const isDone = r.done === "1";
+    return '<li class="todo' + (isDone ? " done" : "") + '">' +
+      '<button type="button" class="todo-check" role="checkbox" aria-checked="' + isDone + '" data-todo-toggle="' + esc(r.id) + '" data-done="' + (isDone ? "1" : "0") +
+        '" aria-label="' + esc((isDone ? "Mark not done: " : "Mark done: ") + (r.title || "")) + '">' + (isDone ? icon("check") : "") + "</button>" +
+      '<span class="todo-title">' + editable(esc(r.title || ""), { entity: "todos", list: "todos", id: r.id, field: "title", input: "text", value: r.title }) + "</span>" +
+      '<button type="button" class="todo-del" data-todo-del="' + esc(r.id) + '" aria-label="' + esc("Delete " + (r.title || "to-do")) + '">×</button></li>';
+  };
+  return '<section class="proto-sec proto-todos"><h3>To-do <span class="mono muted">' + open.length + "</span></h3>" +
+    '<form class="todo-add" autocomplete="off"><input class="todo-in" name="title" placeholder="Add a to-do…" aria-label="New to-do" maxlength="200">' +
+      '<button type="submit" class="btn">Add</button></form>' +
+    (open.length ? '<ul class="todo-list">' + open.map(item).join("") + "</ul>" : '<p class="muted">Nothing to do — add something above.</p>') +
+    (done.length ? '<details class="todo-done"><summary>' + done.length + " done</summary>" + '<ul class="todo-list">' + done.map(item).join("") + "</ul></details>" : "") +
+    "</section>";
+}
+async function protoRefreshGlance(slug, keepFocus) {
+  const { paneBody } = protoEls();
+  if (protoChoice() !== "b" || !paneBody.querySelector(".proto-todos")) return;
+  const open = paneBody.querySelector(".todo-done") && paneBody.querySelector(".todo-done").open;
+  paneBody.innerHTML = await protoGlanceHTML(slug);
+  const det = paneBody.querySelector(".todo-done"); if (det && open) det.open = true;
+  if (keepFocus) { const i = paneBody.querySelector(".todo-in"); if (i) i.focus(); }
+}
+function bindProtoTodos() {
+  document.addEventListener("submit", async (e) => {
+    const f = e.target.closest(".todo-add"); if (!f) return;
+    e.preventDefault();
+    const slug = tripSlugFromHash(), inp = f.querySelector(".todo-in"), title = (inp.value || "").trim();
+    if (!slug || !title) return;
+    inp.disabled = true;
+    try {
+      await api("todos/" + encodeURIComponent(slug) + "/todos", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, done: "0" }) });
+      track("todo_added");
+      await protoRefreshGlance(slug, true);
+    } catch { inp.disabled = false; }
+  });
+  document.addEventListener("click", async (e) => {
+    const slug = tripSlugFromHash(); if (!slug) return;
+    const tg = e.target.closest("[data-todo-toggle]"), del = e.target.closest("[data-todo-del]");
+    if (!tg && !del) return;
+    e.preventDefault();
+    const id = (tg || del).dataset[tg ? "todoToggle" : "todoDel"], url = "todos/" + encodeURIComponent(slug) + "/todos/" + encodeURIComponent(id);
+    (tg || del).disabled = true;
+    try {
+      if (tg) { const done = tg.dataset.done === "1" ? "0" : "1";
+        await api(url, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ done }) }); track(done === "1" ? "todo_done" : "todo_reopened"); }
+      else { await api(url, { method: "DELETE" }); track("todo_deleted"); }
+      await protoRefreshGlance(slug);
+    } catch { (tg || del).disabled = false; }
+  });
+}
+
 // The map follows the timeline (A/B): frame the region whose block crosses the upper third of the screen.
 function protoFollow() {
   const p = protoActive(); if (!(p === "a" || p === "b") || !_mapCtl || !document.querySelector("#view #tl-tree")) return;
@@ -2456,7 +2516,7 @@ function bindProto() {
 
 (async function boot() {
   trackTopbar();
-  applyProto(); bindProto();                        // 0020 PROTOTYPE
+  applyProto(); bindProto(); bindProtoTodos();      // 0020 PROTOTYPE
   try { state.app = await fetchJSON("data/app.json"); } catch { state.app = { title: "Travel Planner" }; }
   $("#brand-title").textContent = (state.app && state.app.title) || "Travel Planner";
   document.title = $("#brand-title").textContent;

@@ -178,6 +178,9 @@ window.TripMap = {
       labelDefs.forEach(function (d) { if (d.kind === "trip") d.el.classList.toggle("is-focus", !!focusId && d.regions.indexOf(focusId) >= 0); });
     }
     // Frame scene-space points (+ optional extra [[x0,y0],[x1,y1]] boxes), padding out the sticky chrome.
+    // 0020 PROTOTYPE: the container can change size (side pane <-> full-screen Map tab) without a window
+    // resize — redraw at the new size before projecting anything.
+    function ensureSize() { if (mapEl.clientWidth && mapEl.clientHeight && (mapEl.clientWidth !== W || mapEl.clientHeight !== H)) build(); }
     function frame(pts, boxes, animate, maxK) {
       if (!pts.length && !(boxes && boxes.length)) return;
       var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -202,10 +205,10 @@ window.TripMap = {
       // Set / swap the trip's located stays ({lat,lng,title,stepId,regionId?,regionTitle?}, in trip order) and rebuild.
       setTrip: function (newStays) { stays = newStays || []; focusId = null; indexTrip(); build(); },
       // Frame ALL stops (overview / Map view). Pads for the sticky top-bar + sub-nav.
-      fitAll: function (animate) { frame(stays.map(xy), null, animate); },
+      fitAll: function (animate) { ensureSize(); frame(stays.map(xy), null, animate); },
       // Emphasise one trip region (its provinces + label) and frame it; null = the whole trip again (0019).
       focusRegion: function (id, animate) {
-        focusId = id || null; applyFocus();
+        ensureSize(); focusId = id || null; applyFocus();
         if (!focusId) { frame(stays.map(xy), null, animate); return; }
         var pts = stays.filter(function (s) { return s.regionId === focusId; }).map(xy);
         var boxes = tripAreas.filter(function (a) { return a.regions.indexOf(focusId) >= 0; }).map(function (a) { return path.bounds(a.f); });
@@ -216,6 +219,8 @@ window.TripMap = {
       // chips); 0 = the default (top bar + sub-nav).
       setTopPad: function (px) { extraTop = Math.max(0, Number(px) || 0); },
       onResize: function () { build(); },
+      // 0020 PROTOTYPE: has the container changed size since the last draw?
+      needsResize: function () { return !!(mapEl.clientWidth && mapEl.clientHeight) && (mapEl.clientWidth !== W || mapEl.clientHeight !== H); },
       // 0020 PROTOTYPE: emphasise one stop's pin (a hovered timeline card); null clears.
       highlightStop: function (stepId) {
         dots.forEach(function (c, i) { c.classList.toggle("is-hot", stepId != null && String(stays[i].stepId) === String(stepId)); });

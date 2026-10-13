@@ -1180,4 +1180,26 @@ body.map-view .subnav { background: transparent; -webkit-backdrop-filter: none; 
   body.proto-b .proto-pane :is(.notes h2, .step-acts h2, .rg-steps h2) { font-size: var(--text-sm); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); margin-bottom: var(--space-2); }
   body.proto-b .proto-pane .rg-member { min-height: 42px; padding: 3px 4px; }
 }
+/* 0020 PROTOTYPE — the free-form to-do list at the top of At a glance */
+.proto-todos .todo-add { display: flex; gap: 6px; margin: 0 0 var(--space-2); }
+.proto-todos .todo-in { flex: 1; min-width: 0; min-height: 40px; padding: 6px 10px; font: inherit; font-size: var(--text-sm); color: var(--ink-0);
+  background: var(--paper-0); border: 1px solid var(--line-hair); border-radius: var(--radius-sm); }
+.proto-todos .todo-in:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.proto-todos .todo-add .btn { min-height: 40px; }
+.todo-list { list-style: none; margin: 0; padding: 0; }
+.todo { display: flex; align-items: center; gap: 8px; min-height: 38px; border-bottom: 1px dashed var(--line-hair); }
+.todo-check { flex: 0 0 auto; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  background: var(--paper-0); border: 1.5px solid var(--ink-3); border-radius: 6px; cursor: pointer; color: var(--accent-contrast); }
+.todo-check:hover { border-color: var(--accent); }
+.todo-check:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.todo.done .todo-check { background: var(--accent); border-color: var(--accent); }
+.todo-check .ico { width: 14px; height: 14px; }
+.todo-title { flex: 1; min-width: 0; font-size: var(--text-sm); }
+.todo-title .editable { min-height: 32px; padding: 1px 4px; border-bottom-color: transparent; }
+.todo.done .todo-title { color: var(--ink-3); text-decoration: line-through; }
+.todo-del { flex: 0 0 auto; width: 32px; height: 32px; padding: 0; font-size: 1.1rem; line-height: 1; color: var(--ink-3); background: transparent; border: 0; border-radius: 6px; cursor: pointer; opacity: .5; }
+.todo:hover .todo-del, .todo-del:focus-visible { opacity: 1; }
+.todo-del:hover { color: var(--danger); background: var(--danger-bg); }
+.todo-done { margin-top: var(--space-2); }
+.todo-done summary { cursor: pointer; font-size: var(--text-xs); color: var(--ink-2); padding: 4px 0; }
 
