@@ -11,12 +11,13 @@ import {
   listRegions, createRegion, patchRegion, deleteRegion, restoreRegion, purgeRegionDeep, moveRegion, assignSteps,
   listActivities, createActivity, patchActivity, deleteActivity, restoreActivity, purgeActivity,
   listPacking, createPacking, patchPacking, deletePacking, restorePacking, purgePacking, filterPacking,
+  listTodos, createTodo, patchTodo, deleteTodo, restoreTodo, purgeTodo,
   listAttachments, patchAttachment, deleteAttachment, purgeAttachment, setPinned,
   setCoordinate, setBooking, setIncluded, setMapUrl, tripOverview, getBudget
 } from "../../shared/core.js";
 
 const SPACE = z.string().default("home").describe("Which trip/space, e.g. 'tokyo-2026'");
-const LIST = z.string().describe("Which list within the space, e.g. 'itinerary' or 'todos'");
+const LIST = z.string().describe("Which list within the space, e.g. 'itinerary' (generic entries; a trip's to-dos use the *_todo tools)");
 const STATUS = z.enum(["Open", "Doing", "Blocked", "Done"]);
 const SLUG = z.string().describe("Trip slug, e.g. 'thailand-2026'");
 const CCY = z.enum(["THB", "EUR"]);
@@ -231,6 +232,32 @@ export class AppMCP extends McpAgent {
     this.server.registerTool("purge_packing",
       { description: "Permanently delete a soft-deleted packing item by id. Cannot be undone.", inputSchema: { slug: SLUG, id: z.string() } },
       (a) => self.run(() => purgePacking(env, { space: a.slug, list: "packing", id: a.id }, self.actor)));
+
+    // ---- todos (a free-form trip to-do list, effort 0020 — not tied to steps; done = checked off) ----
+    this.server.registerTool("list_todos",
+      { description: "List a trip's to-dos (the free-form to-do list), in order. Each has id, title, done ('1' = checked off) and an optional note.", inputSchema: { slug: SLUG } },
+      (a) => self.run(() => listTodos(env, { space: a.slug, list: "todos" }, self.actor)));
+    this.server.registerTool("add_todo",
+      { description: "Add a to-do to a trip's to-do list (appended at the end).", inputSchema: { slug: SLUG, title: z.string(), done: z.boolean().optional(), note: z.string().optional() } },
+      (a) => self.run(() => createTodo(env, Object.assign({}, a, { space: a.slug, list: "todos" }), self.actor)));
+    this.server.registerTool("edit_todo",
+      { description: "Edit a to-do by id: title, note, done, or sort_order (to reorder).", inputSchema: { slug: SLUG, id: z.string(), title: z.string().optional(), note: z.string().optional(), done: z.boolean().optional(), sort_order: z.number().optional() } },
+      (a) => self.run(() => patchTodo(env, Object.assign({}, a, { space: a.slug, list: "todos" }), self.actor)));
+    this.server.registerTool("toggle_todo",
+      { description: "Check a to-do off (done: true) or reopen it (done: false) by id.", inputSchema: { slug: SLUG, id: z.string(), done: z.boolean() } },
+      (a) => self.run(() => patchTodo(env, { space: a.slug, list: "todos", id: a.id, done: a.done }, self.actor)));
+    this.server.registerTool("delete_todo",
+      { description: "Delete a to-do by id (soft-delete; recoverable via restore_todo or the app's Trash).", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => deleteTodo(env, { space: a.slug, list: "todos", id: a.id }, self.actor)));
+    this.server.registerTool("restore_todo",
+      { description: "Restore a soft-deleted to-do by id.", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => restoreTodo(env, { space: a.slug, list: "todos", id: a.id }, self.actor)));
+    this.server.registerTool("list_deleted_todos",
+      { description: "List a trip's soft-deleted (trashed) to-dos.", inputSchema: { slug: SLUG } },
+      (a) => self.run(() => listTodos(env, { space: a.slug, list: "todos", trash: true }, self.actor)));
+    this.server.registerTool("purge_todo",
+      { description: "Permanently delete a soft-deleted to-do by id. Cannot be undone.", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => purgeTodo(env, { space: a.slug, list: "todos", id: a.id }, self.actor)));
 
     // ---- attachments (photo METADATA; image BYTES are uploaded via the web UI only, never MCP) ----
     this.server.registerTool("list_attachments",

@@ -25,7 +25,7 @@ function payload(res) {
 const transport = new StreamableHTTPClientTransport(new URL(URL_), { requestInit: { headers } });
 const client = new Client({ name: "travel-planner-smoke", version: "1.0.0" });
 
-let createdId = null, regionId = null, stepId = null;
+let createdId = null, regionId = null, stepId = null, todoId = null;
 try {
   await client.connect(transport);
   const tools = await client.listTools();
@@ -65,6 +65,23 @@ try {
   stepId = null;
   console.log("• regions: purged (region + step) ✓");
 
+  // To-dos round-trip (effort 0020), self-cleaning: add -> list -> toggle -> delete -> purge.
+  const T = payload(await client.callTool({ name: "add_todo", arguments: { slug: SPACE, title: "smoke-todo" } }));
+  todoId = T && T.row && T.row.id;
+  if (!todoId || T.row.done !== "0") throw new Error("add_todo failed: " + JSON.stringify(T));
+  const TL = payload(await client.callTool({ name: "list_todos", arguments: { slug: SPACE } }));
+  if (!(TL.rows || []).some(r => r.id === todoId)) throw new Error("list_todos missing the new to-do");
+  const TT = payload(await client.callTool({ name: "toggle_todo", arguments: { slug: SPACE, id: todoId, done: true } }));
+  const TL2 = payload(await client.callTool({ name: "list_todos", arguments: { slug: SPACE } }));
+  const tRow = (TL2.rows || []).find(r => r.id === todoId);
+  if (!TT || !TT.ok || !tRow || tRow.done !== "1") throw new Error("toggle_todo failed: " + JSON.stringify(TT));
+  payload(await client.callTool({ name: "delete_todo", arguments: { slug: SPACE, id: todoId } }));
+  const TD = payload(await client.callTool({ name: "list_deleted_todos", arguments: { slug: SPACE } }));
+  if (!(TD.rows || []).some(r => r.id === todoId)) throw new Error("delete_todo didn't trash it");
+  payload(await client.callTool({ name: "purge_todo", arguments: { slug: SPACE, id: todoId } }));
+  todoId = null;
+  console.log("• todos: add + list + toggle + delete + purge ✓");
+
   // get_budget (best-effort): the dev DB may have no trips, so a 404/422 tool-error is acceptable.
   // We only assert the tool RESPONDS with content, and never let it fail the smoke.
   try {
@@ -84,6 +101,7 @@ try {
   if (createdId) console.error("  (leftover row may remain: " + createdId + ")");
   if (regionId) console.error("  (leftover region may remain in '" + SPACE + "': " + regionId + ")");
   if (stepId) console.error("  (leftover step may remain in '" + SPACE + "': " + stepId + ")");
+  if (todoId) console.error("  (leftover to-do may remain in '" + SPACE + "': " + todoId + ")");
   try { await client.close(); } catch {}
   process.exit(1);
 }

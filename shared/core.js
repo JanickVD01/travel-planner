@@ -173,6 +173,16 @@ const FLAT_SPECS = {
       { name: "note", nullable: true }
     ]
   },
+  // todos: a free-form trip to-do list (space=<slug>, list='todos') — effort 0020. Not tied to steps;
+  // done = '0'|'1'. Added / ticked off in the app (To-do tab, the wide-screen pane) and by Claude (MCP).
+  todos: {
+    table: "todos", audit: "todos_audit", idCol: "todo_id", prefix: "td", soft: true,
+    cols: [
+      { name: "title" },
+      { name: "done", clean: cleanBool },
+      { name: "note", nullable: true }
+    ]
+  },
   // attachments: photo metadata, one row per image (space=<slug>, list='attachments'). The bytes live
   // in KV (kv:true); parent_type+parent_id say which step/activity the photo belongs to. kv_key holds
   // the KV key (att/<slug>/<id>); it is rebuilt server-side, never trusted from a client.
@@ -384,6 +394,13 @@ export const seedPacking    = (env, a, who) => flatSeed(env, FLAT_SPECS.packing,
 // PURE ownership filter for packing rows. actor is the current user's email.
 //   scope 'mine'    -> rows this actor owns          scope 'partner' -> rows owned by some OTHER person (email, not shared)
 //   scope 'shared'  -> rows owned by 'shared'         else (all/undefined) -> every row
+// todos (a free-form trip to-do list, effort 0020).
+export const listTodos    = (env, a, who) => flatList(env, FLAT_SPECS.todos, a, who);
+export const createTodo   = (env, a, who) => flatCreate(env, FLAT_SPECS.todos, a, who);
+export const patchTodo    = (env, a, who) => flatPatch(env, FLAT_SPECS.todos, a, who);
+export const deleteTodo   = (env, a, who) => flatDelete(env, FLAT_SPECS.todos, a, who);
+export const restoreTodo  = (env, a, who) => flatRestore(env, FLAT_SPECS.todos, a, who);
+export const purgeTodo    = (env, a, who) => flatPurge(env, FLAT_SPECS.todos, a, who);
 // attachments (photo metadata; bytes are handled only by /api/image/**, never here).
 export const listAttachments    = (env, a, who) => flatList(env, FLAT_SPECS.attachments, a, who);
 export const createAttachment   = (env, a, who) => flatCreate(env, FLAT_SPECS.attachments, a, who);

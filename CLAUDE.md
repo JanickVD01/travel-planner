@@ -45,7 +45,7 @@ worker import it, so the UI and Claude can never disagree. Never duplicate logic
 
 Every row is scoped by two free-text keys: `space` and `list`. **`space` = a trip** (its slug, e.g.
 `france-2026`) and **`list` = the collection** within it: `flow` (timeline steps), `regions`, `activities`,
-`packing`, or `attachments`. Trip config rows themselves live at `space='app'`, `list='trips'`.
+`packing`, `todos`, or `attachments`. Trip config rows themselves live at `space='app'`, `list='trips'`.
 
 ## Data model (real entities — `FLAT_SPECS` in `shared/core.js` + `schema.sql`)
 
@@ -64,6 +64,8 @@ Every row is scoped by two free-text keys: `space` and `list`. **`space` = a tri
 - **activities** (`<slug>`/`activities`) — hung off a step via `step_id`; `day`, `needs_advance`,
   location/`map_url`, cost + booking + **`included`** + `note`.
 - **packing** (`<slug>`/`packing`) — `owner` (`'shared'` | email), `packed`, `category`, `qty`.
+- **todos** (`<slug>`/`todos`, effort 0020) — a free-form trip to-do list, **not tied to steps**: `title`,
+  `done` (`'0'`|`'1'`), `note`; ordered by `sort_order`. To-do tab + the wide-screen pane + MCP `*_todo` tools.
 - **attachments** (`<slug>`/`attachments`) — image metadata; bytes live in Workers KV (`IMAGES_KV`);
   **`pinned`** (`'1'` = this photo is its parent **stay**'s timeline-card background; ≤1 per parent,
   enforced by `setPinned` which un-pins siblings atomically).
@@ -146,8 +148,9 @@ Then ask Claude to manage trips, steps, activities, packing and photos — `crea
 `add_stay`/`add_travel`/`add_step`, `add_activity`, `edit_step`/`edit_activity`, `set_booking`,
 `set_included`, `set_map_url`, `get_trip_overview`, `get_budget`, the region tools (`list_regions`,
 `add_region`, `edit_region`, `move_region`, `assign_steps_to_region`, `delete_region` / `restore_region` /
-`purge_region`, and `region_id` on `add_stay` / `add_travel` / `add_step` / `edit_step`), and the
-packing/attachment tools.
+`purge_region`, and `region_id` on `add_stay` / `add_travel` / `add_step` / `edit_step`), the to-do tools
+(`list_todos`, `add_todo`, `edit_todo`, `toggle_todo`, `delete_todo` / `restore_todo` / `list_deleted_todos` /
+`purge_todo`), and the packing/attachment tools.
 All are thin wrappers over `shared/core.js` (the same rules the browser API uses).
 
 **On phones / the claude.ai app:** add a *custom connector* to the same `/mcp` URL instead of the CLI.

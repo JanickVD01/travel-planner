@@ -745,7 +745,8 @@ function renderSubnav(slug, active) {
     { key: "timeline", label: "Timeline", href: "#/trip/" + s },
     { key: "map",      label: "Map",      href: "#/trip/" + s + "/map" },
     { key: "budget",   label: "Budget",   href: "#/trip/" + s + "/budget" },
-    { key: "packing",  label: "Packing",  href: "#/trip/" + s + "/packing" }
+    { key: "packing",  label: "Packing",  href: "#/trip/" + s + "/packing" },
+    { key: "todos",    label: "To-do",    href: "#/trip/" + s + "/todos" }
   ];
   return '<nav class="subnav" aria-label="Trip sections">' +
     tabs.map(t => '<a href="' + t.href + '"' + (t.key === active ? ' aria-current="page"' : "") +
@@ -1544,7 +1545,8 @@ const TRASH_GROUPS = [
   { key: "regions",    label: "Regions",    entity: "regions",    list: "regions" },
   { key: "steps",      label: "Steps",      entity: "steps",      list: "flow" },
   { key: "activities", label: "Activities", entity: "activities", list: "activities" },
-  { key: "packing",    label: "Packing",    entity: "packing",    list: "packing" }
+  { key: "packing",    label: "Packing",    entity: "packing",    list: "packing" },
+  { key: "todos",      label: "To-dos",     entity: "todos",      list: "todos" }
 ];
 async function viewTrash(slug) {
   markActive(null);
@@ -1902,6 +1904,96 @@ function stepInserterHTML(index, regionId, label, keep) {
     (regionId ? ' data-region="' + esc(regionId) + '"' : "") + ">" + icon("plus") + esc(label || "add step") + "</button></li>";
 }
 
+// ---- to-dos (0020): a free-form trip to-do list ---------------------------------------------------
+// Not tied to steps: add, tick off, rename (tap the text), delete; done items fold under "N done". The same
+// list renders on the To-do tab and in the wide-screen pane; Claude edits it too (MCP *_todo tools). Rows come
+// from /api/todos (shared/core.js FLAT_SPECS.todos) — never cached across writes.
+async function loadTodos(slug) {
+  try { const d = await api("todos/" + encodeURIComponent(slug) + "/todos"); return ((d && d.rows) || []).filter(r => !r.deleted)
+    .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0)); } catch { return null; }
+}
+function todosSectionHTML(rows, opts) {
+  opts = opts || {};
+  if (rows == null) return '<section class="todos"><p class="muted">Couldn’t load the to-do list.</p></section>';
+  const open = rows.filter(r => r.done !== "1"), done = rows.filter(r => r.done === "1");
+  const item = (r) => {
+    const isDone = r.done === "1";
+    return '<li class="todo' + (isDone ? " done" : "") + '" data-id="' + esc(r.id) + '">' +
+      '<button type="button" class="todo-check" role="checkbox" aria-checked="' + isDone + '" data-todo-toggle="' + esc(r.id) + '" data-done="' + (isDone ? "1" : "0") +
+        '" aria-label="' + esc((isDone ? "Mark not done: " : "Mark done: ") + (r.title || "")) + '">' + (isDone ? icon("check") : "") + "</button>" +
+      '<span class="todo-title">' + editable(esc(r.title || ""), { entity: "todos", list: "todos", id: r.id, field: "title", input: "text", value: r.title }) + "</span>" +
+      '<button type="button" class="todo-del" data-todo-del="' + esc(r.id) + '" aria-label="' + esc("Delete " + (r.title || "to-do")) + '">×</button></li>';
+  };
+  const head = opts.heading ? '<h3 class="todos-h">To-do <span class="mono muted">' + open.length + "</span></h3>" : "";
+  return '<section class="todos" aria-label="To-do list">' + head +
+    '<form class="todo-add" autocomplete="off"><input class="todo-in" name="title" placeholder="Add a to-do…" aria-label="New to-do" maxlength="200">' +
+      '<button type="submit" class="btn">Add</button></form>' +
+    (open.length ? '<ul class="todo-list">' + open.map(item).join("") + "</ul>" : '<p class="muted todo-empty">Nothing to do — add something above.</p>') +
+    (done.length ? '<details class="todo-done"' + (opts.doneOpen ? " open" : "") + "><summary>" + done.length + " done</summary>" + '<ul class="todo-list">' + done.map(item).join("") + "</ul></details>" : "") +
+    "</section>";
+}
+async function viewTodos(slug) {
+  markActive(null);
+  view().innerHTML = '<div class="panel"><p class="muted">Loading to-dos…</p></div>';
+  const { trip } = await loadTrip(slug);
+  if (!trip) { view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
+  const title = trip.title || slug;
+  const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
+  const hero = '<div class="trip-hero"><a class="back" href="#/">' + icon("pin") + "All trips</a>" +
+    "<h1>" + esc(title) + "</h1>" + (range ? '<div class="muted mono">' + esc(range) + "</div>" : "") +
+    (trip.note ? '<div class="muted">' + esc(trip.note) + "</div>" : "") + "</div>";
+  const rows = await loadTodos(slug);
+  view().innerHTML = renderSubnav(slug, "todos") + hero + '<div class="panel todos-panel">' + todosSectionHTML(rows) + "</div>";
+}
+// Re-render every to-do list on screen (the tab and/or the wide-screen pane) in place — no route change.
+async function refreshTodos(slug, focusAdd) {
+  const lists = document.querySelectorAll("section.todos");
+  if (!lists.length) return;
+  const rows = await loadTodos(slug);
+  lists.forEach(sec => {
+    const doneOpen = !!(sec.querySelector(".todo-done") && sec.querySelector(".todo-done").open);
+    const heading = !!sec.querySelector(".todos-h");
+    sec.outerHTML = todosSectionHTML(rows, { doneOpen, heading });
+  });
+  if (focusAdd) { const i = document.querySelector("section.todos .todo-in"); if (i) i.focus(); }
+}
+let _todosBound = false;
+function bindTodos() {
+  if (_todosBound) return; _todosBound = true;
+  document.addEventListener("submit", async (e) => {
+    const f = e.target.closest("form.todo-add"); if (!f) return;
+    e.preventDefault();
+    const slug = tripSlugFromHash(), inp = f.querySelector(".todo-in"), title = (inp.value || "").trim();
+    if (!slug || !title) return;
+    inp.disabled = true;
+    try {
+      await api("todos/" + encodeURIComponent(slug) + "/todos", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, done: "0" }) });
+      track("todo_added");
+      await refreshTodos(slug, true);
+    } catch { inp.disabled = false; }
+  });
+  document.addEventListener("click", async (e) => {
+    const tg = e.target.closest("[data-todo-toggle]"), del = e.target.closest("[data-todo-del]");
+    if (!tg && !del) return;
+    const slug = tripSlugFromHash(); if (!slug) return;
+    e.preventDefault();
+    const btn = tg || del, id = tg ? tg.dataset.todoToggle : del.dataset.todoDel;
+    const url = "todos/" + encodeURIComponent(slug) + "/todos/" + encodeURIComponent(id);
+    btn.disabled = true;
+    try {
+      if (tg) {
+        const done = tg.dataset.done === "1" ? "0" : "1";
+        await api(url, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ done }) });
+        track(done === "1" ? "todo_done" : "todo_reopened");
+      } else {
+        await api(url, { method: "DELETE" });
+        track("todo_deleted");
+      }
+      await refreshTodos(slug);
+    } catch { btn.disabled = false; }
+  });
+}
+
 // ---- regions (0017 M6): add / edit / reorder / delete in the app --------------------------------
 // A region's place in time comes from its steps; the region's own order (moveRegion) is the only
 // reorder. All writes go through /api/regions (shared/core.js), the same rules Claude's MCP tools use.
@@ -2185,6 +2277,7 @@ function route() {
     if (parts[2] === "map") return viewMap(decodeURIComponent(parts[1]));
     if (parts[2] === "budget") return viewBudget(decodeURIComponent(parts[1]));
     if (parts[2] === "packing") return viewPacking(decodeURIComponent(parts[1]));
+    if (parts[2] === "todos") return viewTodos(decodeURIComponent(parts[1]));
     if (parts[2] === "trash") return viewTrash(decodeURIComponent(parts[1]));
     return viewTimeline(parts[1]);
   }
@@ -2299,5 +2392,6 @@ function trackTopbar() {
   bindWizards();
   bindTree();
   bindRegions();
+  bindTodos();
   route();
 })();

@@ -160,6 +160,23 @@ CREATE TABLE IF NOT EXISTS packing_audit (
   op TEXT NOT NULL, detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
 );
 
+-- todos: a free-form trip to-do list (effort 0020; migrations/004_todos.sql). Not tied to steps.
+CREATE TABLE IF NOT EXISTS todos (
+  space TEXT NOT NULL, list TEXT NOT NULL, todo_id TEXT NOT NULL,
+  title          TEXT NOT NULL DEFAULT '',
+  done           TEXT NOT NULL DEFAULT '0',         -- '0' | '1'
+  note           TEXT,
+  deleted        TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT,
+  PRIMARY KEY (space, list, todo_id)
+);
+CREATE INDEX IF NOT EXISTS idx_todos ON todos (space, list, sort_order);
+CREATE TABLE IF NOT EXISTS todos_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, space TEXT NOT NULL, list TEXT NOT NULL, todo_id TEXT,
+  op TEXT NOT NULL, detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
+);
+
 -- attachments (M9): photo METADATA. space=<slug>, list='attachments'. Image BYTES live in Workers KV
 -- (binding IMAGES_KV) at key att/<slug>/<attachment_id>; only /api/image/** ever touches the bytes.
 -- parent_type = step|activity; kv_key is rebuilt server-side from slug+id (never trusted from a client).

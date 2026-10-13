@@ -1,6 +1,16 @@
 {
   "releases": [
     {
+      "version": "v0.10.0",
+      "title": "Trip to-dos",
+      "date": "2026-10-13",
+      "notes": [
+        "Every trip now has a To-do list — a new To-do tab next to Packing. Add anything (it doesn’t have to belong to a step), tick it off, tap to rename it, or delete it; finished ones fold away under “N done”.",
+        "Ask Claude to manage it too: “add ‘buy travel insurance’ to the Thailand to-dos”, “what’s still open?”, “tick off the passport check”.",
+        "Deleted to-dos land in Trash, so you can bring them back."
+      ]
+    },
+    {
       "version": "v0.9.2",
       "title": "Tabs that stay put",
       "date": "2026-10-13",

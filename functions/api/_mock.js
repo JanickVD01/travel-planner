@@ -2,7 +2,7 @@
 // the real adapters; self-seeds a realistic Thailand trip so previews aren't empty. Edits evaporate.
 // IMPORTANT: when you add an /api/* route, add a branch here too, or it 404s in previews.
 import { computeBudget, composeOverview } from "../../shared/core.js";
-const S = { entries: [], trips: [], regions: [], steps: [], activities: [], packing: [], attachments: [] };
+const S = { entries: [], trips: [], regions: [], steps: [], activities: [], packing: [], attachments: [], todos: [] };
 function j(o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json; charset=utf-8" } }); }
 // A real (tiny) PNG so preview <img> tags served by /api/image resolve to actual bytes (no KV in previews).
 const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCAYAAAD5PA/NAAAAC0lEQVR4nGNgQAMAABEAAe4mBk8AAAAASUVORK5CYII="), c => c.charCodeAt(0));
@@ -59,6 +59,10 @@ const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCA
 
   const pack = (i, o) => S.packing.push(base(Object.assign({ id: "pk-demo-" + i, sort_order: i * 10, packed: "0", category: null, qty: null, note: null }, o)));
   pack(1, { title: "Travel adapters", owner: "shared", packed: "0", category: "Tech" });
+  // trip to-dos (0020): a free-form list, not tied to steps
+  [["Check passport validity (6 months)", "1"], ["Buy travel insurance", "0"], ["Book the Chiang Mai cooking class", "0"],
+   ["Order Thai baht for arrival", "0"], ["Download offline maps", "0"]]
+    .forEach(([title, done], i) => S.todos.push(base({ id: "td-demo-" + (i + 1), title: title, done: done, note: null, sort_order: (i + 1) * 10 })));
   pack(2, { title: "Sunscreen", owner: "demo@example.com", packed: "0", category: "Toiletries", qty: "2" });
 
   const att = (i, o) => S.attachments.push(base(Object.assign({ id: "at-demo-" + i, sort_order: i * 10, caption: null, content_type: "image/jpeg", size: null, pinned: "0" }, o)));
@@ -114,6 +118,16 @@ export async function handleMock(request, env) {
   if (parts[0] === "regions") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.regions.filter(r => !r.deleted) }); if (request.method === "POST" && last === "regions") return demoCreate(S.regions, "rg", request); return j({ ok: true, demo: true }); }
   if (parts[0] === "steps")   { if (request.method === "GET") return j({ rows: isTrash ? [] : S.steps }); if (request.method === "POST" && last === "flow") return demoCreate(S.steps, "st", request); return j({ ok: true, demo: true }); }
   if (parts[0] === "activities") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.activities }); if (request.method === "POST" && last === "activities") return demoCreate(S.activities, "ac", request); return j({ ok: true, demo: true }); }
+  if (parts[0] === "todos") {   // full in-memory CRUD (incl. Trash) so the to-do list really works on previews
+    const id = parts[3], seg2 = parts[4], row = id && id !== "trash" ? S.todos.find(r => r.id === id) : null;
+    if (request.method === "GET") return j({ rows: isTrash ? S.todos.filter(r => r.deleted) : S.todos.filter(r => !r.deleted) });
+    if (request.method === "POST" && last === "todos") return demoCreate(S.todos, "td", request);
+    if (request.method === "POST" && row && seg2 === "restore") { row.deleted = null; return j({ row }); }
+    if (request.method === "PATCH" && row) { let b = {}; try { b = await request.json(); } catch (e) {} ["title", "done", "note"].forEach(k => { if (k in b) row[k] = b[k] == null ? null : String(b[k]); }); return j({ row }); }
+    if (request.method === "DELETE" && row && seg2 === "purge") { S.todos.splice(S.todos.indexOf(row), 1); return j({ ok: true }); }
+    if (request.method === "DELETE" && row) { row.deleted = new Date().toISOString(); return j({ ok: true }); }
+    return j({ ok: true, demo: true });
+  }
   if (parts[0] === "packing") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.packing }); return j({ ok: true, demo: true }); }
   if (parts[0] === "attachments") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.attachments }); return j({ ok: true, demo: true }); }
   if (parts[0] === "image") {   // GET -> real placeholder PNG bytes (no KV in previews); POST -> ok/demo (never touches KV)
