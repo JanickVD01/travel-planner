@@ -1,6 +1,31 @@
 {
   "releases": [
     {
+      "version": "v0.8.1",
+      "title": "Smoother timeline, fewer dead ends",
+      "date": "2026-10-13",
+      "notes": [
+        "Tapping a step’s title or its › inside a region opens it again — and the regions and places you opened stay open when you come back.",
+        "Tapping a region in the nights strip now lands on that region’s header, not halfway into it.",
+        "The Timeline · Map · Budget · Packing tabs stay pinned right under the top bar while you scroll, on phones too — and there’s no longer a white bar behind them.",
+        "A region with just one place opens straight to its stay in one tap.",
+        "Packing, Budget and Home are back on plain paper — the map only shows behind the itinerary and in the Map tab."
+      ]
+    },
+    {
+      "version": "v0.8.0",
+      "title": "Your trip, region by region",
+      "date": "2026-10-13",
+      "notes": [
+        "The timeline is now grouped the way you think about a trip: regions (like “North” or “Krabi”), the places you stay in each, and the steps inside them. Tap a region or place to open or close it.",
+        "Use “Show” at the top to see the whole trip at a glance by regions, by places, or every step.",
+        "A summary line and a strip of nights per region sit above the timeline — tap a region in the strip to jump to it.",
+        "Nights with nothing planned show up as their own “N nights unplanned” marker, so gaps are easy to spot (an overnight train or flight counts as covered).",
+        "Claude can now set up and edit regions for you: ask it to group your stays, rename a region, or move one earlier or later.",
+        "A Feedback tab on the right edge of the screen lets you send a quick note about whatever you’re looking at."
+      ]
+    },
+    {
       "version": "v0.7.0",
       "title": "See your trip on the map",
       "date": "2026-07-12",
