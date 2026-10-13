@@ -169,6 +169,11 @@ stays.
   errors. One bug found and fixed in the process: the `.loc` list-item rule also matched the
   `.marker.loc` span (it overrode `position:absolute`); scoped to `li.loc`.
 - **Static:** `node --check` (core, mock, app); `node scripts/validate-data.mjs` ✓.
+- **Density pass** (owner, before merge: "use screen space efficiently"): no hint paragraph in the hierarchy view;
+  full-width Show chips with no label row; slimmer region headers (title `--text-lg`, tighter padding);
+  **one-line** travel legs at the Regions/Locations depths (ellipsised title, no wrapped chevron row); no
+  inserter before the first item of a region/place (same slot as its header). Regions view of the demo trip
+  ≈ 1 phone screen (was ≈ 1.5). Interaction checks re-run: unchanged, no tap target < 44 px, no JS errors.
 
 ## Outcome
 

@@ -747,13 +747,15 @@ function gapRowHTML(g) {
     '<div class="gap-body"><strong>' + esc(nightsLabel(g.nights)) + " unplanned</strong>" +
     '<span class="gap-dates mono">' + esc(dateSpan(g.from, g.to)) + "</span></div></li>";
 }
-function treeNodesHTML(nodes, c) {
-  return nodes.map(n => {
+// `nested` lists (inside a region/location) get no inserter before their FIRST node: that slot is the
+// same place as the header above it, so it only cost a row (owner: use screen space efficiently).
+function treeNodesHTML(nodes, c, nested) {
+  return nodes.map((n, i) => {
     if (n.type === "gap") return gapRowHTML(n);
     if (n.type === "location") return locationRowHTML(n, c);
     if (n.type === "region") return regionGroupHTML(n, c);
     const s = c.stepById[n.id];
-    return s ? stepInserterHTML(n.index, c.regionId) + stepCardHTML(s, c.rate, c.byStep[s.id], c.slug) : "";
+    return s ? ((nested && i === 0) ? "" : stepInserterHTML(n.index, c.regionId)) + stepCardHTML(s, c.rate, c.byStep[s.id], c.slug) : "";
   }).join("");
 }
 function lastStepIndex(nodes) {
@@ -771,7 +773,7 @@ function locationRowHTML(n, c) {
       '<button type="button" class="tree-toggle loc-toggle" data-toggle="' + esc(key) + '" data-level="location" aria-expanded="' + open + '" aria-controls="' + id + '">' +
         CHEVRON + '<span class="tt-text"><span class="loc-title">' + esc(n.place || "Stay") + '</span><span class="tt-meta mono">' + meta + "</span></span>" +
       "</button></div>" +
-    '<ol class="tl-sub" id="' + id + '"' + (open ? "" : " hidden") + ">" + treeNodesHTML(n.children, c) + "</ol></li>";
+    '<ol class="tl-sub" id="' + id + '"' + (open ? "" : " hidden") + ">" + treeNodesHTML(n.children, c, true) + "</ol></li>";
 }
 function regionGroupHTML(n, c) {
   const g = (c.tree.regions || {})[n.region_id] || {};
@@ -797,7 +799,7 @@ function regionGroupHTML(n, c) {
         CHEVRON + '<span class="tt-text"><span class="rg-title">' + esc(g.title || "Region") + '</span><span class="tt-meta mono">' + meta + "</span>" +
         (hints.length ? '<span class="rg-hint">' + esc(hints.join(" · ")) + "</span>" : "") + "</span>" +
       "</button></h2></div>" +
-    '<ol class="tl-sub" id="' + id + '"' + (open ? "" : " hidden") + ">" + treeNodesHTML(n.children, sub) +
+    '<ol class="tl-sub" id="' + id + '"' + (open ? "" : " hidden") + ">" + treeNodesHTML(n.children, sub, true) +
       (endIdx != null && endIdx >= 0 ? stepInserterHTML(endIdx, rid, addLabel, !n.children.length) : "") + "</ol></li>";
 }
 // Trip level: totals + a strip of the trip's regions sized by nights (planned-only + unplanned hatched).
@@ -818,9 +820,9 @@ function tripSummaryHTML(tree) {
   }).join("") + "</div>" : "";
   return '<section class="trip-sum" aria-label="Trip overview"><div class="sum-facts mono">' + facts + "</div>" + strip + "</section>";
 }
-function zoomBarHTML(depth) {
-  return '<div class="zoom-row"><span class="zoom-label muted" id="zoom-lbl">Show</span>' +
-    '<div class="basis-toggle zoom-bar" role="group" aria-labelledby="zoom-lbl">' +
+function zoomBarHTML(depth) {                            // full-width, no visible label (it costs a row)
+  return '<div class="zoom-row">' +
+    '<div class="basis-toggle zoom-bar" role="group" aria-label="Show the timeline by">' +
     DEPTHS.map(d => '<button type="button" class="basis-chip zoom-chip" data-depth="' + d + '" aria-pressed="' + (d === depth) + '">' + esc(DEPTH_LABEL[d]) + "</button>").join("") +
     "</div></div>";
 }
@@ -887,9 +889,8 @@ async function viewTimeline(slug) {
   const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
   const hasRegions = !!(regions && regions.length && tree);
   const ts = loadTreeState(slug);
-  const hint = '<p class="tl-hint muted">' + (hasRegions
-    ? "Tap a region or place to fold it open; tap a step for its details, or a status or date to edit inline."
-    : "Tap a step to open its details; tap a status or date to edit inline. Use “add step” to build your timeline — or ask Claude.") + "</p>";
+  // The hierarchy view drops the hint: chevrons + the Show chips explain themselves, and it cost 2 rows.
+  const hint = hasRegions ? "" : '<p class="tl-hint muted">Tap a step to open its details; tap a status or date to edit inline. Use “add step” to build your timeline — or ask Claude.</p>';
   const stepById = {}; steps.forEach(s => { stepById[s.id] = s; });
   const ctx = { rate, byStep, slug, stepById, tree, ts, regionId: null };
   // The tree (regions › locations › steps, plus unplanned gaps) when core built one; else the flat list.
