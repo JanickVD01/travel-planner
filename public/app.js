@@ -181,17 +181,18 @@ async function loadTrip(slug) {
   if (state.trip[slug]) return state.trip[slug];
   const trips = await loadTrips();
   const trip = trips.find(t => t.slug === slug) || null;
-  let steps = [];
-  try { const d = await api("steps/" + encodeURIComponent(slug) + "/flow"); steps = (d && d.rows) || []; } catch {}
-  let activities = [];
-  try { const d = await api("activities/" + encodeURIComponent(slug) + "/activities"); activities = (d && d.rows) || []; } catch {}
-  // Group live activities under their parent step; anything whose step_id matches no live step is "unassigned".
-  const liveStepIds = new Set(steps.filter(s => !s.deleted).map(s => s.id));
-  const byStep = {}, unassigned = [];
-  activities.filter(a => !a.deleted).forEach(a => {
-    if (liveStepIds.has(a.step_id)) (byStep[a.step_id] = byStep[a.step_id] || []).push(a);
-    else unassigned.push(a);
-  });
+  // One read (0017): /api/overview returns the live steps (timeline order), activities grouped by step +
+  // "unassigned", the trip's regions and the Trip › Region › Location › Step `tree` — all built in
+  // shared/core.js, so the browser never re-derives the hierarchy, gaps or money.
+  let ov = null;
+  try { ov = await api("overview/" + encodeURIComponent(slug)); } catch {}
+  const steps = (ov && ov.steps) || [];
+  const byStep = (ov && ov.activitiesByStep) || {};
+  const unassigned = (ov && ov.unassigned) || [];
+  const activities = Object.keys(byStep).reduce((all, k) => all.concat(byStep[k]), []).concat(unassigned);
+  const regions = (ov && ov.regions) || [];
+  const regionById = {}; regions.forEach(r => { regionById[r.id] = r; });
+  const tree = (ov && ov.tree) || null;
   // Attachments (M9): photo metadata; bytes are served separately by /api/image. Group live rows by
   // parent so a card/detail view can look up its photos in O(1). Degrades to [] if unbound/unavailable.
   let attachments = [];
@@ -200,7 +201,7 @@ async function loadTrip(slug) {
   attachments.filter(a => !a.deleted)
     .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0))
     .forEach(a => { const k = a.parent_type + ":" + a.parent_id; (byParent[k] = byParent[k] || []).push(a); });
-  state.trip[slug] = { trip, steps, activities, byStep, unassigned, attachments, byParent };
+  state.trip[slug] = { trip, steps, activities, byStep, unassigned, attachments, byParent, regions, regionById, tree };
   return state.trip[slug];
 }
 function invalidateTrip(slug) { delete state.trip[slug]; }
@@ -710,19 +711,195 @@ function renderSubnav(slug, active) {
       ">" + esc(t.label) + "</a>").join("") + "</nav>";
 }
 
+// ---- trip hierarchy timeline (0017): Trip › Region › Location › Step ------
+// The tree comes pre-built from core (/api/overview `tree`); this only renders it. Region and location
+// rows are collapsible headers on the same metro rail; the "Show" control sets every group to one depth
+// (Trip · Regions · Locations · Steps) and per-node toggles override it. Collapse state is a per-viewer
+// convenience in localStorage (never data). Toggling flips `hidden`/aria-expanded on the existing DOM —
+// no re-render (scroll is kept) and no map call (the backdrop stays still, per 0015).
+const DEPTHS = ["trip", "regions", "locations", "steps"];
+const DEPTH_LABEL = { trip: "Trip", regions: "Regions", locations: "Locations", steps: "Steps" };
+function treeStateKey(slug) { return "tp.tree." + slug; }
+function loadTreeState(slug) {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(treeStateKey(slug)) || "null"); } catch {}
+  if (!s || typeof s !== "object" || DEPTHS.indexOf(s.depth) < 0) s = { depth: "steps", open: {} };
+  if (!s.open || typeof s.open !== "object") s.open = {};
+  return s;
+}
+function saveTreeState(slug, s) { try { localStorage.setItem(treeStateKey(slug), JSON.stringify(s)); } catch {} }
+// A region is open from the Locations depth down; a location only at the Steps depth. An explicit
+// per-node toggle (ts.open[key]) wins until the depth is changed again.
+function nodeOpen(ts, key, level) {
+  if (Object.prototype.hasOwnProperty.call(ts.open, key)) return !!ts.open[key];
+  return level === "region" ? (ts.depth === "locations" || ts.depth === "steps") : ts.depth === "steps";
+}
+function treeDomId(key) { return "tn-" + String(key).replace(/[^A-Za-z0-9_-]/g, "-"); }
+function nightsLabel(n) { n = Number(n) || 0; return n + " night" + (n === 1 ? "" : "s"); }
+function dateSpan(a, d) { return [fmtDate(a), fmtDate(d)].filter(Boolean).join(" → "); }
+function eurShort(v) { return "€" + Math.round(Number(v) || 0).toLocaleString("en-US"); }
+const CHEVRON = '<svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+const metaJoin = (parts) => parts.filter(Boolean).map(p => '<span>' + p + "</span>").join('<span class="sep" aria-hidden="true">·</span>');
+
+// An unplanned gap: nothing planned between the end of one plan and the start of the next (owner, 0017).
+function gapRowHTML(g) {
+  return '<li class="tl-gap"><span class="marker gap" aria-hidden="true"></span>' +
+    '<div class="gap-body"><strong>' + esc(nightsLabel(g.nights)) + " unplanned</strong>" +
+    '<span class="gap-dates mono">' + esc(dateSpan(g.from, g.to)) + "</span></div></li>";
+}
+function treeNodesHTML(nodes, c) {
+  return nodes.map(n => {
+    if (n.type === "gap") return gapRowHTML(n);
+    if (n.type === "location") return locationRowHTML(n, c);
+    if (n.type === "region") return regionGroupHTML(n, c);
+    const s = c.stepById[n.id];
+    return s ? stepInserterHTML(n.index, c.regionId) + stepCardHTML(s, c.rate, c.byStep[s.id], c.slug) : "";
+  }).join("");
+}
+function lastStepIndex(nodes) {
+  let m = -1;
+  (nodes || []).forEach(n => { if (n.type === "step") m = Math.max(m, n.index); else if (n.children) m = Math.max(m, lastStepIndex(n.children)); });
+  return m;
+}
+function locationRowHTML(n, c) {
+  const key = n.key, open = nodeOpen(c.ts, key, "location"), id = treeDomId(key);
+  const single = n.stay_ids.length === 1 && n.children.length === 1;   // one stay: its card stands in when open
+  const meta = metaJoin([esc(dateSpan(n.arrive, n.depart)), n.nights ? esc(nightsLabel(n.nights)) : "",
+    n.stay_ids.length > 1 ? esc(n.stay_ids.length + " stays") : ""]);
+  return '<li class="loc' + (single ? " single" : "") + (open ? " is-open" : "") + '" data-node="' + esc(key) + '">' +
+    '<div class="loc-head"><span class="marker loc" aria-hidden="true"></span>' +
+      '<button type="button" class="tree-toggle loc-toggle" data-toggle="' + esc(key) + '" data-level="location" aria-expanded="' + open + '" aria-controls="' + id + '">' +
+        CHEVRON + '<span class="tt-text"><span class="loc-title">' + esc(n.place || "Stay") + '</span><span class="tt-meta mono">' + meta + "</span></span>" +
+      "</button></div>" +
+    '<ol class="tl-sub" id="' + id + '"' + (open ? "" : " hidden") + ">" + treeNodesHTML(n.children, c) + "</ol></li>";
+}
+function regionGroupHTML(n, c) {
+  const g = (c.tree.regions || {})[n.region_id] || {};
+  const key = "rg:" + n.region_id + ":" + n.segment, open = nodeOpen(c.ts, key, "region"), id = treeDomId(key);
+  const has = g.stays > 0;
+  const dates = has || g.arrive ? dateSpan(g.arrive, g.depart) : dateSpan(g.start_date, g.end_date);
+  const nights = has ? nightsLabel(g.nights) : (g.planned_nights ? "planned " + nightsLabel(g.planned_nights) : "no stays yet");
+  const meta = metaJoin([esc(dates), esc(nights),
+    g.locations > 1 ? esc(g.locations + " places") : "",
+    g.eur && g.eur.est > 0 ? esc("≈ " + eurShort(g.eur.est)) : ""]);
+  const hints = [];
+  if (g.nights_gap) hints.push("planned " + g.planned_nights + " · booked " + g.nights);
+  if (g.dates_outside) hints.push("stays fall outside the planned dates");
+  if (n.split) hints.push("part " + n.segment + " — this region’s stays aren’t together");
+  const rid = n.region_id;
+  const sub = Object.assign({}, c, { regionId: rid });
+  // "+ add" at the end of the region (or into an empty one) — new steps land inside this region.
+  const endIdx = n.children.length ? lastStepIndex(n.children) + 1 : n.insert_index;
+  const addLabel = n.children.length ? "add to " + (g.title || "region") : "add a stay";
+  return '<li class="rg' + (open ? " is-open" : "") + (has ? "" : " planned") + '" data-node="' + esc(key) + '">' +
+    '<div class="rg-head"><span class="marker region" aria-hidden="true"></span>' +
+      '<h2 class="rg-h"><button type="button" class="tree-toggle rg-toggle" data-toggle="' + esc(key) + '" data-level="region" aria-expanded="' + open + '" aria-controls="' + id + '">' +
+        CHEVRON + '<span class="tt-text"><span class="rg-title">' + esc(g.title || "Region") + '</span><span class="tt-meta mono">' + meta + "</span>" +
+        (hints.length ? '<span class="rg-hint">' + esc(hints.join(" · ")) + "</span>" : "") + "</span>" +
+      "</button></h2></div>" +
+    '<ol class="tl-sub" id="' + id + '"' + (open ? "" : " hidden") + ">" + treeNodesHTML(n.children, sub) +
+      (endIdx != null && endIdx >= 0 ? stepInserterHTML(endIdx, rid, addLabel, !n.children.length) : "") + "</ol></li>";
+}
+// Trip level: totals + a strip of the trip's regions sized by nights (planned-only + unplanned hatched).
+function tripSummaryHTML(tree) {
+  const t = tree.totals || {};
+  const facts = metaJoin([esc(nightsLabel(t.nights)), t.regions ? esc(t.regions + " region" + (t.regions === 1 ? "" : "s")) : "",
+    esc((t.stays || 0) + " stay" + (t.stays === 1 ? "" : "s")), esc(dateSpan(t.start, t.end)),
+    t.unplanned_nights ? "<strong>" + esc(nightsLabel(t.unplanned_nights) + " unplanned") + "</strong>" : ""]);
+  const segs = (tree.strip || []).filter(s => s.nights > 0);
+  const strip = segs.length ? '<div class="nstrip" role="list" aria-label="Trip by nights">' + segs.map(s => {
+    const label = (s.title || "") + ", " + nightsLabel(s.nights) + (s.planned ? " planned" : "");
+    const cls = "nseg" + (s.gap ? " gap" : s.planned ? " planned" : s.region_id ? "" : " loose");
+    const inner = '<span class="nseg-t">' + esc(s.gap ? nightsLabel(s.nights) : s.title) + "</span>";
+    const grow = ' style="flex-grow:' + Math.max(1, Math.round(s.nights)) + '"';
+    return s.region_id
+      ? '<button type="button" role="listitem" class="' + cls + '"' + grow + ' data-jump="rg:' + esc(s.region_id) + ":" + esc(s.segment || 1) + '" aria-label="' + esc(label) + '">' + inner + "</button>"
+      : '<span role="listitem" class="' + cls + '"' + grow + ' aria-label="' + esc(label) + '">' + inner + "</span>";
+  }).join("") + "</div>" : "";
+  return '<section class="trip-sum" aria-label="Trip overview"><div class="sum-facts mono">' + facts + "</div>" + strip + "</section>";
+}
+function zoomBarHTML(depth) {
+  return '<div class="zoom-row"><span class="zoom-label muted" id="zoom-lbl">Show</span>' +
+    '<div class="basis-toggle zoom-bar" role="group" aria-labelledby="zoom-lbl">' +
+    DEPTHS.map(d => '<button type="button" class="basis-chip zoom-chip" data-depth="' + d + '" aria-pressed="' + (d === depth) + '">' + esc(DEPTH_LABEL[d]) + "</button>").join("") +
+    "</div></div>";
+}
+// Re-apply collapse state to the rendered tree in place (no re-render).
+function applyTree(slug, ts, animateKey) {
+  const root = document.getElementById("tl-tree");
+  if (!root) return;
+  root.setAttribute("data-depth", ts.depth);
+  root.hidden = ts.depth === "trip";
+  document.querySelectorAll(".zoom-chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.depth === ts.depth)));
+  root.querySelectorAll("[data-toggle]").forEach(btn => {
+    const key = btn.dataset.toggle, open = nodeOpen(ts, key, btn.dataset.level);
+    const list = document.getElementById(btn.getAttribute("aria-controls"));
+    const li = btn.closest("li");
+    btn.setAttribute("aria-expanded", String(open));
+    if (list) list.hidden = !open;
+    if (li) li.classList.toggle("is-open", open);
+    if (open && key === animateKey && list) motion(a => a.animate(list.children, { opacity: [0, 1], translateY: [-4, 0], delay: a.stagger(22), duration: 220, ease: "out(3)" }));
+  });
+}
+let _treeBound = false;
+function bindTree() {                                     // one delegated listener for toggles, depth chips + strip
+  if (_treeBound) return; _treeBound = true;
+  document.addEventListener("click", (e) => {
+    const slug = tripSlugFromHash();
+    const tg = e.target.closest("[data-toggle]");
+    if (tg && slug) {
+      e.preventDefault();
+      const ts = loadTreeState(slug), key = tg.dataset.toggle;
+      ts.open[key] = !nodeOpen(ts, key, tg.dataset.level);
+      saveTreeState(slug, ts); applyTree(slug, ts, key);
+      return;
+    }
+    const dp = e.target.closest("[data-depth]");
+    if (dp && slug) {
+      e.preventDefault();
+      const ts = loadTreeState(slug);
+      ts.depth = dp.dataset.depth; ts.open = {};           // choosing a depth resets per-node overrides
+      saveTreeState(slug, ts); applyTree(slug, ts);
+      const root = document.getElementById("tl-tree");
+      if (root && !root.hidden) motion(a => a.animate(root.querySelectorAll(":scope > li"), { opacity: [0, 1], translateY: [6, 0], delay: a.stagger(30), duration: 260, ease: "out(3)" }));
+      return;
+    }
+    const jp = e.target.closest("[data-jump]");
+    if (jp && slug) {                                      // strip segment -> open that region and go to it
+      e.preventDefault();
+      const ts = loadTreeState(slug), key = jp.dataset.jump;
+      if (ts.depth === "trip") ts.depth = "regions";
+      ts.open[key] = true;
+      saveTreeState(slug, ts); applyTree(slug, ts, key);
+      const li = document.querySelector('li[data-node="' + (window.CSS && CSS.escape ? CSS.escape(key) : key) + '"]');
+      if (li) { li.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" }); const b = li.querySelector("[data-toggle]"); if (b) b.focus({ preventScroll: true }); }
+    }
+  });
+}
+
 async function viewTimeline(slug) {
   markActive(null);
   view().innerHTML = '<div class="panel"><p class="muted">Loading trip…</p></div>';
-  const { trip, steps, byStep, unassigned } = await loadTrip(slug);
+  const { trip, steps, byStep, unassigned, regions, tree } = await loadTrip(slug);
   if (!trip) { hideTripMap(); view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
   const rate = trip.thb_per_eur;
   const title = trip.title || slug;
   const range = [fmtDate(trip.start_date), fmtDate(trip.end_date)].filter(Boolean).join(" – ");
-  const hint = '<p class="tl-hint muted">Tap a step to open its details; tap a status or date to edit inline. Use “add step” to build your timeline — or ask Claude.</p>';
-  const body = steps.length
-    ? '<ol class="tl">' + steps.map((s, i) => stepInserterHTML(i) + stepCardHTML(s, rate, byStep[s.id], slug)).join("") + stepInserterHTML(steps.length) + "</ol>"
+  const hasRegions = !!(regions && regions.length && tree);
+  const ts = loadTreeState(slug);
+  const hint = '<p class="tl-hint muted">' + (hasRegions
+    ? "Tap a region or place to fold it open; tap a step for its details, or a status or date to edit inline."
+    : "Tap a step to open its details; tap a status or date to edit inline. Use “add step” to build your timeline — or ask Claude.") + "</p>";
+  const stepById = {}; steps.forEach(s => { stepById[s.id] = s; });
+  const ctx = { rate, byStep, slug, stepById, tree, ts, regionId: null };
+  // The tree (regions › locations › steps, plus unplanned gaps) when core built one; else the flat list.
+  const items = (tree && tree.items) || steps.map((s, i) => ({ type: "step", id: s.id, index: i }));
+  const body = steps.length || hasRegions
+    ? '<ol class="tl' + (hasRegions ? ' tl-tree" id="tl-tree" data-depth="' + esc(ts.depth) + '"' + (ts.depth === "trip" ? " hidden" : "") : '"') + ">" +
+        treeNodesHTML(items, ctx) + stepInserterHTML(steps.length) + "</ol>"
     : '<div class="tl-empty"><p class="muted">No steps yet — start building your trip.</p>' +
       '<button type="button" class="btn insert-btn-lg" data-insert-step="0">' + icon("plus") + "Add your first step</button></div>";
+  const overview = hasRegions ? tripSummaryHTML(tree) + zoomBarHTML(ts.depth) : "";
   // Activities whose parent step no longer exists get their own group so they're never dropped.
   const unassignedHTML = (unassigned && unassigned.length)
     ? '<section class="unassigned"><h2 class="unassigned-title">Unassigned</h2>' +
@@ -736,7 +913,7 @@ async function viewTimeline(slug) {
       "<h1>" + esc(title) + "</h1>" + (range ? '<div class="muted mono">' + esc(range) + "</div>" : "") +
       (trip && trip.note ? '<div class="muted">' + esc(trip.note) + "</div>" : "") + "</div>" +
     renderSubnav(slug, "timeline") +
-    '<div class="panel tl-panel">' + hint + body + unassignedHTML + "</div>";
+    '<div class="panel tl-panel">' + overview + hint + body + unassignedHTML + "</div>";
   // signature entrance: stagger the markers in (reduced-motion + no-anime safe).
   motion(a => a.animate(".tl .step", { opacity: [0, 1], translateY: [8, 0], delay: a.stagger(45), duration: 380, ease: "out(3)" }));
   syncTripMap(slug);   // still backdrop: frame the whole trip behind the timeline (only if it has located stays)
@@ -1468,7 +1645,7 @@ function openWizard(opts) {
   return { close };
 }
 
-function openStepWizard(slug, insertIndex, steps) {
+function openStepWizard(slug, insertIndex, steps, regionId) {
   const prev = insertIndex > 0 ? steps[insertIndex - 1] : null;
   const next = insertIndex < steps.length ? steps[insertIndex] : null;
   const prevEnd = prev ? (prev.depart || prev.arrive) : null;
@@ -1534,16 +1711,18 @@ function openStepWizard(slug, insertIndex, steps) {
       return '<div class="rev">' + (rows.join("") || '<p class="muted">Nothing to review.</p>') + "</div>";
     }
   };
+  const bundle = state.trip[slug], reg = regionId && bundle && bundle.regionById ? bundle.regionById[regionId] : null;
   openWizard({
-    title: insertIndex >= steps.length ? "Add a step" : "Insert a step",
+    title: reg ? ("Add to " + (reg.title || "region")) : (insertIndex >= steps.length ? "Add a step" : "Insert a step"),
     panes: [kindPane, corePane, optPane, reviewPane],
     createLabel: "Add step",
-    onCreate: (st) => createStepFromWizard(slug, insertIndex, steps, st)
+    onCreate: (st) => createStepFromWizard(slug, insertIndex, steps, st, regionId)
   });
 }
 
-async function createStepFromWizard(slug, insertIndex, steps, st) {
+async function createStepFromWizard(slug, insertIndex, steps, st, regionId) {
   const body = { kind: st.kind, cost_ccy: st.cost_ccy || "EUR", booking_status: st.booking_status || "Idea" };
+  if (regionId) body.region_id = regionId;                  // added from inside a region (0017): core places it there
   if (st.kind === "stay") {
     const place = (st.place || "").trim();
     body.title = place; body.location = place;
@@ -1597,8 +1776,11 @@ async function createStepFromWizard(slug, insertIndex, steps, st) {
   vt(route);
 }
 
-function stepInserterHTML(index) {
-  return '<li class="tl-insert"><button type="button" class="insert-btn" data-insert-step="' + index + '">' + icon("plus") + "add step</button></li>";
+// `regionId` (0017): an inserter inside a region creates the step IN that region; `keep` = always shown
+// (an empty region's "add a stay"), even at the shallow depths where the other inserters are hidden.
+function stepInserterHTML(index, regionId, label, keep) {
+  return '<li class="tl-insert' + (keep ? " keep" : "") + '"><button type="button" class="insert-btn" data-insert-step="' + index + '"' +
+    (regionId ? ' data-region="' + esc(regionId) + '"' : "") + ">" + icon("plus") + esc(label || "add step") + "</button></li>";
 }
 
 function openActivityWizard(slug, stepId) {
@@ -1675,7 +1857,7 @@ function bindWizards() {
       const slug = tripSlugFromHash(); if (!slug) return;
       const idx = parseInt(stepBtn.dataset.insertStep, 10) || 0;
       const t = await loadTrip(slug);
-      openStepWizard(slug, idx, (t && t.steps) || []);
+      openStepWizard(slug, idx, (t && t.steps) || [], stepBtn.dataset.region || null);
       return;
     }
     const actBtn = e.target.closest("[data-add-activity]");
@@ -1802,5 +1984,6 @@ window.addEventListener("resize", () => {
   bindStepDelete();
   bindActivityDelete();
   bindWizards();
+  bindTree();
   route();
 })();

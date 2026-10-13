@@ -2,7 +2,7 @@
 
 > **Status:** 🚧 In progress — M1 ✅ + M2 ✅ (2026-10-13, PR #51). Migration 003 applied to prod D1 via the
 > `migrate` workflow before merge (run 38371496790: 5 queries, success). M3 ✅ (PR #52). M4 ✅ (prod
-> backfill of Thailand + France, owner-confirmed). M5–M7 pending. This record carries the full milestone plan and is **updated in place** as
+> backfill of Thailand + France, owner-confirmed). M5 ✅ (PR 3, `code/trip-hierarchy-timeline`). M6–M7 pending. This record carries the full milestone plan and is **updated in place** as
 > milestones land (like [0010](../0010-pinned-step-photo/)). See [`README.md`](../README.md) for the
 > index and [`research.md`](research.md) for the codebase findings that shaped the design.
 
@@ -71,7 +71,7 @@ indexes first, the non-idempotent `ALTER TABLE steps ADD COLUMN region_id TEXT` 
 | 1 `code/trip-hierarchy-core` | **M2 — Core + schema**: `FLAT_SPECS.regions` + `steps.region_id`; `flatCreate` honours an explicit `sort_order`; `nextTimelineSlot`; region wrappers (`listRegions`, `createRegion`, `patchRegion`, `deleteRegion`, `restoreRegion`, `purgeRegionDeep`, `moveRegion`, `assignSteps`); pure `buildTripTree` + `composeOverview` (→ `tripOverview`); `computeBudget` `byRegion`; `schema.sql`; `migrations/003_region_id.sql`; `functions/api/regions/[[path]].js`; `_mock.js` uses `composeOverview` + demo regions (Bangkok ×2 stays, North, Krabi = Ao Nang → ferry → Railay, empty "Bangkok (return)") — ✅ 2026-10-13 (see *M2 verification* below) | **003, before merge** | y (auto) | n |
 | 2 `code/trip-hierarchy-mcp` | **M3 — MCP**: `list_regions`, `add_region`, `edit_region`, `move_region`, `delete_region`, `restore_region`, `list_deleted_regions`, `purge_region`, `assign_steps_to_region`; `region_id` on `add_step`/`edit_step`/`add_stay`/`add_travel`; updated `get_trip_overview`/`get_budget` descriptions; smoke round-trip — ✅ 2026-10-13 (see *M3 verification*) | none | **y** | n |
 | (ops) | **M4 — Guided backfill on prod**: `list_trips` + `get_trip_overview` → proposal table per trip → **owner confirms** → `add_region` + `assign_steps_to_region` → re-check (no `split_regions`, no loose stays). Rollback = `assign_steps_to_region(null)` + `delete_region`. Outcome logged here — ✅ 2026-10-13 (see *M4 outcome*) | none | n | n |
-| 3 `code/trip-hierarchy-timeline` | **M5 — Timeline**: unplanned-gap nodes in core `buildTripTree` (+ strip + `totals.unplanned_nights`); `loadTrip` → `/api/overview`; tree render (`regionGroupHTML`, `locationRowHTML`, existing `stepCardHTML`); "Expand to" control; trip summary + nights strip; collapse state + one delegated `bindTree()` (no re-render, keeps scroll); CSS — ⏳ | none | n | n |
+| 3 `code/trip-hierarchy-timeline` | **M5 — Timeline**: unplanned-gap nodes in core `buildTripTree` (+ strip + `totals.unplanned_nights`); `loadTrip` → `/api/overview`; tree render (`regionGroupHTML`, `locationRowHTML`, existing `stepCardHTML`); "Expand to" control; trip summary + nights strip; collapse state + one delegated `bindTree()` (no re-render, keeps scroll); CSS; inserters inside a region create the step there (`data-region` → `region_id`) — ✅ 2026-10-13 (see *M5 verification*) | none | n | n |
 | 4 `code/trip-hierarchy-editing` | **M6 — Editing**: region sheet `#/trip/<slug>/region/<id>` (edit, member list, move earlier/later, delete); "Add region" wizard; region picker in step detail; step-wizard region default (tapped "+" → previous step's region); Trash "Regions" group; Budget "By region" — ⏳ | none | n | n |
 | 5 `content/trip-hierarchy-reconcile` | **M7 — Reconcile**: `CLAUDE.md` (data model, scoping, MCP list), `DESIGN.md` (hierarchy timeline, interchange marker, tonal chips), `README.md`, `public/data/app.json`, `releases.json` v0.8.0, index ✅, MEMORY, GitHub About — ⏳ | none | n | **y** |
 
@@ -153,6 +153,22 @@ Written via `add_region` (chronological) + `assign_steps_to_region`: every call 
 North [Chiang Mai 5n] · flight · Krabi [Ao Nang 7n] · Bangkok (return) [1n] · flights (16 nights, 4 regions);
 France = flight · Paris [6n, €1,165 est] · TGV · Provence [Avignon 7n, €1,087 est] · flight. No splits, no loose
 stays.
+
+## M5 verification (done 2026-10-13)
+
+- **Gap logic** (pure `buildTripTree`): demo → one gap "4 nights · 18 → 22 Nov" before the planned
+  "Bangkok (return)"; a Thailand-prod-shaped fixture → exactly one gap 12 → 16 Dec (the 29 → 30 Nov
+  night train is covered, not a gap); a gap between two stays of the same region sits inside it; a stay with
+  no check-out claims no gap after it.
+- **Demo-mode UI** (`wrangler pages dev public --binding DEMO_API=1`, headless Chrome over CDP at 390 px,
+  light + dark, reduced motion): all four depths render as designed. Toggling keeps scroll at 0 → 0; state
+  survives a reload (depth + a per-region override); every `aria-controls` target exists; `aria-pressed`
+  tracks the depth; **no visible tap target < 44 px**; no horizontal scroll; the strip's Krabi segment
+  switches Trip → Regions, opens Krabi and focuses its toggle; no JS errors. Every other view that reads
+  `loadTrip` (step + activity detail with nested activities, Budget, Map, Packing, Trash) renders with no
+  errors. One bug found and fixed in the process: the `.loc` list-item rule also matched the
+  `.marker.loc` span (it overrode `position:absolute`); scoped to `li.loc`.
+- **Static:** `node --check` (core, mock, app); `node scripts/validate-data.mjs` ✓.
 
 ## Outcome
 
