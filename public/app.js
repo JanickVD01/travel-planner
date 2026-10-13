@@ -33,7 +33,14 @@ function prefersReducedMotion() { try { return matchMedia("(prefers-reduced-moti
 // Wrap a DOM-updating render in a View Transition when supported + motion allowed; else render directly.
 function vt(render) {
   if (typeof document.startViewTransition !== "function" || prefersReducedMotion()) return render();
-  try { return document.startViewTransition(render); } catch { return render(); }
+  try {
+    const t = document.startViewTransition(render);
+    // A transition is skipped/aborted when another one starts or the viewport resizes mid-swap (e.g. the
+    // scrollbar going away on Map). The DOM update still runs; only `ready` rejects — don't let that
+    // surface as an uncaught error (it was landing in error tracking). Render errors still reject `finished`.
+    if (t && t.ready) t.ready.catch(() => {});
+    return t;
+  } catch { return render(); }
 }
 // Run an anime.js-driven animation only when the lib is present and motion is allowed; no-op otherwise.
 function motion(run) {
@@ -747,9 +754,12 @@ function loadTreeState(slug) {
 }
 function saveTreeState(slug, s) { try { localStorage.setItem(treeStateKey(slug), JSON.stringify(s)); } catch {} }
 // A region is open from the Locations depth down; a location only at the Steps depth. An explicit
-// per-node toggle (ts.open[key]) wins until the depth is changed again.
-function nodeOpen(ts, key, level) {
-  if (Object.prototype.hasOwnProperty.call(ts.open, key)) return !!ts.open[key];
+// per-node toggle (ts.open[key]) wins until the depth is changed again. A region's ONLY place follows a
+// hand toggle of its region (`parentKey`), so opening "Bangkok (return)" shows its stay in one tap, not two.
+function nodeOpen(ts, key, level, parentKey) {
+  const own = (k) => Object.prototype.hasOwnProperty.call(ts.open, k);
+  if (own(key)) return !!ts.open[key];
+  if (parentKey && own(parentKey)) return !!ts.open[parentKey];
   return level === "region" ? (ts.depth === "locations" || ts.depth === "steps") : ts.depth === "steps";
 }
 function treeDomId(key) { return "tn-" + String(key).replace(/[^A-Za-z0-9_-]/g, "-"); }
@@ -782,13 +792,13 @@ function lastStepIndex(nodes) {
   return m;
 }
 function locationRowHTML(n, c) {
-  const key = n.key, open = nodeOpen(c.ts, key, "location"), id = treeDomId(key);
+  const key = n.key, parent = c.soleParent || "", open = nodeOpen(c.ts, key, "location", parent), id = treeDomId(key);
   const single = n.stay_ids.length === 1 && n.children.length === 1;   // one stay: its card stands in when open
   const meta = metaJoin([esc(dateSpan(n.arrive, n.depart)), n.nights ? esc(nightsLabel(n.nights)) : "",
     n.stay_ids.length > 1 ? esc(n.stay_ids.length + " stays") : ""]);
   return '<li class="loc' + (single ? " single" : "") + (open ? " is-open" : "") + '" data-node="' + esc(key) + '">' +
     '<div class="loc-head"><span class="marker loc" aria-hidden="true"></span>' +
-      '<button type="button" class="tree-toggle loc-toggle" data-toggle="' + esc(key) + '" data-level="location" aria-expanded="' + open + '" aria-controls="' + id + '">' +
+      '<button type="button" class="tree-toggle loc-toggle" data-toggle="' + esc(key) + '" data-level="location"' + (parent ? ' data-parent="' + esc(parent) + '"' : "") + ' aria-expanded="' + open + '" aria-controls="' + id + '">' +
         CHEVRON + '<span class="tt-text"><span class="loc-title">' + esc(n.place || "Stay") + '</span><span class="tt-meta mono">' + meta + "</span></span>" +
       "</button></div>" +
     '<ol class="tl-sub" id="' + id + '"' + (open ? "" : " hidden") + ">" + treeNodesHTML(n.children, c, true) + "</ol></li>";
@@ -807,7 +817,8 @@ function regionGroupHTML(n, c) {
   if (g.dates_outside) hints.push("stays fall outside the planned dates");
   if (n.split) hints.push("part " + n.segment + " — this region’s stays aren’t together");
   const rid = n.region_id;
-  const sub = Object.assign({}, c, { regionId: rid });
+  const soleLoc = n.children.filter(x => x.type === "location").length === 1;
+  const sub = Object.assign({}, c, { regionId: rid, soleParent: soleLoc ? key : "" });
   // "+ add" at the end of the region (or into an empty one) — new steps land inside this region.
   const endIdx = n.children.length ? lastStepIndex(n.children) + 1 : n.insert_index;
   const addLabel = n.children.length ? "add to " + (g.title || "region") : "add a stay";
@@ -852,7 +863,7 @@ function applyTree(slug, ts, animateKey) {
   root.hidden = ts.depth === "trip";
   document.querySelectorAll(".zoom-chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.depth === ts.depth)));
   root.querySelectorAll("[data-toggle]").forEach(btn => {
-    const key = btn.dataset.toggle, open = nodeOpen(ts, key, btn.dataset.level);
+    const key = btn.dataset.toggle, open = nodeOpen(ts, key, btn.dataset.level, btn.dataset.parent);
     const list = document.getElementById(btn.getAttribute("aria-controls"));
     const li = btn.closest("li");
     btn.setAttribute("aria-expanded", String(open));
@@ -870,7 +881,7 @@ function bindTree() {                                     // one delegated liste
     if (tg && slug) {
       e.preventDefault();
       const ts = loadTreeState(slug), key = tg.dataset.toggle;
-      ts.open[key] = !nodeOpen(ts, key, tg.dataset.level);
+      ts.open[key] = !nodeOpen(ts, key, tg.dataset.level, tg.dataset.parent);
       saveTreeState(slug, ts); applyTree(slug, ts, key);
       return;
     }
@@ -1986,7 +1997,24 @@ window.addEventListener("resize", () => {
   _mapResizeT = setTimeout(() => { _mapCtl.onResize(); _mapCtl.fitAll(false); }, 150);
 });
 
+// Sticky chrome is offset by the REAL top-bar height (it differs by width + safe-area): the sub-nav sticks
+// just under it, and scroll targets (strip jumps, focused inputs) clear both bars via scroll-padding-top.
+function trackTopbar() {
+  const bar = $(".topbar"); if (!bar) return;
+  const set = () => document.documentElement.style.setProperty("--topbar-h", Math.round(bar.getBoundingClientRect().height) + "px");
+  set();
+  if (window.ResizeObserver) new ResizeObserver(set).observe(bar);
+  // The sub-nav gets its frosted backing only while stuck under the bar (see .subnav.is-stuck).
+  let raf = 0;
+  const stuck = () => { raf = 0; const nav = document.querySelector(".subnav"); if (!nav) return;
+    nav.classList.toggle("is-stuck", scrollY > 0 && nav.getBoundingClientRect().top <= bar.getBoundingClientRect().bottom + 0.5); };
+  addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(stuck); }, { passive: true });
+  const v = document.getElementById("view");             // views re-render async: re-check when the DOM swaps
+  if (v && window.MutationObserver) new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(stuck); }).observe(v, { childList: true });
+}
+
 (async function boot() {
+  trackTopbar();
   try { state.app = await fetchJSON("data/app.json"); } catch { state.app = { title: "Travel Planner" }; }
   $("#brand-title").textContent = (state.app && state.app.title) || "Travel Planner";
   document.title = $("#brand-title").textContent;

@@ -86,6 +86,8 @@ git verbs; the server-side `protect-main` ruleset is the real backstop.)
 - Open a PR. CI runs `validate` (required) and posts a **demo-mode preview** link. Merge is the only
   path to production. **Merge commits only** (squash/rebase are disabled) so release-note links stay valid.
 - **PR description = four lines:** `what/why` · `What's New? y/n` · `migration none/NNN` · `worker redeploy? y/n`.
+  `validate` enforces the second: **`What's New? y` fails unless the PR changes `public/data/releases.json`**
+  (newest entry first; editing the description re-runs the check).
 - **Conflicts in append-style files** (`releases.json`): keep BOTH entries, then
   `node scripts/validate-data.mjs`, commit the merge, push.
 - **Start every effort with its record.** Before writing any code, create the effort's folder

@@ -49,6 +49,10 @@ button, a { touch-action: manipulation; }
 }
 
 /* ---- top bar ---- */
+/* --topbar-h is measured by app.js (trackTopbar); these are fallbacks. Sticky chrome below the bar uses it,
+   and scroll-padding-top keeps scroll targets (strip jumps, focused inputs) clear of bar + sub-nav. */
+:root { --topbar-h: 63px; --subnav-h: 56px; }
+html { scroll-padding-top: calc(var(--topbar-h) + var(--subnav-h) + var(--space-2)); }
 .topbar {
   position: sticky; top: 0; z-index: 40;
   display: flex; align-items: center; gap: var(--space-3);
@@ -332,7 +336,7 @@ a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-u
 /* ---- activity detail (M6): a bottom-sheet-style view with an editable notes block ---- */
 .sheet { max-width: 720px; margin: 0 auto; }
 .sheet-head {
-  position: sticky; top: 56px; z-index: 20; margin: 0 0 var(--space-3);
+  position: sticky; top: var(--topbar-h); z-index: 20; margin: 0 0 var(--space-3);
   padding: 6px 0;
   background: color-mix(in srgb, var(--paper-0) 90%, transparent);
   backdrop-filter: saturate(1.2) blur(8px); -webkit-backdrop-filter: saturate(1.2) blur(8px);
@@ -393,10 +397,14 @@ a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-u
 
 /* ---- per-trip sub-nav (M7): sticky, horizontally-scrollable chip tabs ---- */
 .subnav {
-  position: sticky; top: 56px; z-index: 20;
+  position: sticky; top: var(--topbar-h); z-index: 20;
   display: flex; gap: var(--space-2);
   margin: 0 0 var(--space-4); padding: 6px 2px;
   overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+/* Frosted only once STUCK with content scrolling under it (app.js toggles .is-stuck); at rest the pills sit
+   straight on the page, so there is no standalone white bar behind them (owner feedback, 2026-10-13). */
+.subnav.is-stuck {
   background: color-mix(in srgb, var(--paper-0) 90%, transparent);
   backdrop-filter: saturate(1.2) blur(8px); -webkit-backdrop-filter: saturate(1.2) blur(8px);
 }
@@ -411,7 +419,6 @@ a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-u
 .subnav a[aria-current="page"] {
   color: var(--accent-contrast); background: var(--accent); border-color: var(--accent);
 }
-@media (max-width: 720px) { .subnav { top: 0; } }
 
 /* ---- budget view (M7) ---- */
 .budget .cat-h { font-size: var(--text-lg); margin: var(--space-5) 0 var(--space-3); }
@@ -942,6 +949,9 @@ button.nseg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 /* Shell layer: fixed, full-bleed, BEHIND the grid (body::before is z-index:-1) and all content. Inert
    (empty + non-interactive) until map.js populates it on a trip surface. */
 #trip-map { position: fixed; inset: 0; z-index: -2; pointer-events: none; overflow: hidden; }
+/* Off the itinerary surfaces (Home, What's New, Budget, Packing, Trash) the built map must not linger
+   behind the page — hideTripMap() drops both classes, this is what actually hides it. */
+body:not(.map-bg):not(.map-view) #trip-map { visibility: hidden; }
 #trip-map svg { display: block; }
 
 /* SVG element colours — theme-aware via --map-* / --accent. */
