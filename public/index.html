@@ -45,6 +45,10 @@
     </aside>
     <main id="view" class="view"><!-- rendered by the hash router --></main>
   </div>
+  <!-- Wide-screen workspace (effort 0020, >= 1200 px on a trip): the Regions panel under the map (left) and
+       the right pane (At a glance, or the selected step / region). Empty + hidden everywhere else. -->
+  <aside id="ws-left" class="ws-left" aria-label="Regions"></aside>
+  <aside id="ws-pane" class="ws-pane" aria-label="Details"><div class="ws-pane-body"></div></aside>
 
   <script src="vendor/anime.min.js"></script>
   <script src="vendor/d3.min.js"></script>
