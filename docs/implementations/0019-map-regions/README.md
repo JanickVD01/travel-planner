@@ -66,4 +66,5 @@ emphasise one region; phone framing of small areas fixed on the way. What's New 
 
 ## Later changes
 
-*(append-only, newest last — none yet)*
+- **2026-10-13 — Mexico shading: not wanted.** The owner confirmed province shading for countries missing
+  from `admin1-lite.json` (e.g. Mexico for the 2027 trip) isn't needed; labels-only stays the behaviour there.
