@@ -2397,31 +2397,16 @@ function protoRegionNavHTML(slug) {
 async function protoGlanceHTML(slug) {
   const t = await loadTrip(slug); if (!t || !t.trip) return "";
   const s = encodeURIComponent(slug), tot = (t.tree && t.tree.totals) || {};
-  const live = (t.steps || []).filter(x => !x.deleted);
-  const toBook = live.filter(x => x.included !== "1" && (!x.booking_status || x.booking_status === "Idea" || x.booking_status === "Planned"));
   const gaps = []; (function walk(ns) { (ns || []).forEach(n => { if (n.type === "gap") gaps.push(n); if (n.children) walk(n.children); }); })(t.tree && t.tree.items);
-  let b = null; try { b = await api("budget/" + s); } catch {}
   const pk = await loadPacking(slug); const packRows = (pk && pk.packing) || [], packed = packRows.filter(r => r.packed === "1").length;
   const sec = (title, n, body) => '<section class="proto-sec"><h3>' + esc(title) + (n != null ? ' <span class="mono muted">' + n + "</span>" : "") + "</h3>" + body + "</section>";
   const facts = '<p class="proto-facts mono">' + metaJoin([esc(nightsLabel(tot.nights)), tot.regions ? esc(tot.regions + " regions") : "", esc(dateSpan(tot.start, tot.end))]) + "</p>";
-  const bookList = toBook.length ? '<ul class="proto-list">' + toBook.slice(0, 6).map(x => {
-      const d = x.kind === "travel" ? x.depart : x.arrive, st = x.booking_status || "Idea";
-      return '<li><a href="#/trip/' + s + "/step/" + encodeURIComponent(x.id) + '"><span class="pl-title">' + esc(x.title || x.location || "Step") + '</span><span class="pl-meta mono">' + esc(fmtDate(d) || "no date") + '</span><span class="chip status-' + esc(st) + '">' + esc(st) + "</span></a></li>";
-    }).join("") + "</ul>" + (toBook.length > 6 ? '<p class="muted">+ ' + (toBook.length - 6) + " more</p>" : "")
-    : '<p class="muted">Everything is booked.</p>';
   const gapList = gaps.length ? '<ul class="proto-list">' + gaps.map(g => '<li class="pl-gap"><strong>' + esc(nightsLabel(g.nights)) + '</strong> <span class="mono muted">' + esc(dateSpan(g.from, g.to)) + "</span></li>").join("") + "</ul>"
     : '<p class="muted">No unplanned nights.</p>';
-  let money = '<p class="muted">Set an exchange rate to see the budget.</p>';
-  if (b && b.totalEst != null) {
-    const tgt = Number(b.target) || Number(t.trip.budget_target_eur) || 0, est = Number(b.totalEst) || 0, act = Number(b.totalActual) || 0;
-    const pct = tgt > 0 ? Math.min(100, Math.round(est / tgt * 100)) : 0;
-    money = '<p class="proto-big mono">' + esc("€" + Math.round(est).toLocaleString("en-US")) + (tgt ? ' <span class="muted">/ €' + Math.round(tgt).toLocaleString("en-US") + "</span>" : "") + "</p>" +
-      (tgt ? '<div class="proto-meter" role="meter" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" aria-valuetext="' + pct + '% of target"><div style="width:' + pct + '%"></div></div>' : "") +
-      '<p class="muted">estimated · €' + Math.round(act).toLocaleString("en-US") + ' spent · <a href="#/trip/' + s + '/budget">Budget ›</a></p>';
-  }
   const packing = packRows.length ? '<p><strong class="mono">' + packed + " / " + packRows.length + '</strong> packed · <a href="#/trip/' + s + '/packing">Packing ›</a></p>' : '<p class="muted">No packing list yet.</p>';
+  // Owner, 2026-10-13: "To book" and "Budget" dropped — To-do · Unplanned · Packing.
   return '<h2 class="proto-h">At a glance</h2>' + facts + await protoTodosHTML(slug) +
-    sec("To book", toBook.length, bookList) + sec("Unplanned", gaps.length || null, gapList) + sec("Budget", null, money) + sec("Packing", null, packing);
+    sec("Unplanned", gaps.length || null, gapList) + sec("Packing", null, packing);
 }
 // A free-form trip to-do list (owner, 2026-10-13): add, tick off, rename (tap the text), delete; done items
 // fold away under "N done". Not tied to steps. Prototype: demo-backed; the real build adds a `todos` list in core.
