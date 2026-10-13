@@ -1,7 +1,7 @@
 # 0020 — Wide-screen workspace (laptop / desktop layout)
 
 > **Status:** ✅ Shipped 2026-10-13 — M1 prototype (#65, closed unmerged) → B picked; M2 trip to-dos (#66), M3 layout B
-> (#67), M4 reconcile (`content/0020-reconcile`). Live check of the MCP to-do tools pending an MCP reconnect (see *Outcome*). See the [index](../README.md).
+> (#67), M4 reconcile (`content/0020-reconcile`). MCP to-do tools verified live on prod (see *Outcome*). See the [index](../README.md).
 
 ## Context
 
@@ -105,10 +105,9 @@ production build:
 - What's New v0.10.0 + v0.11.0. Reconcile: `CLAUDE.md` (status, data map, data model, MCP tools), `README.md`,
   `DESIGN.md` (in #67), `app.json` tagline, index ✅, GitHub About, the MEMORY journal.
 
-**Pending:** a live run of the MCP to-do tools against prod. This Claude session still had the pre-deploy tool
-list (the worker redeployed at 15:11 UTC); it needs an MCP reconnect (`/mcp`), then: `add_todo` on
-thailand-2026 → `list_todos` → `toggle_todo` → `delete_todo` → `purge_todo` (self-cleaning). Logged under
-*Later changes* when done.
+**MCP verified live (2026-10-13, after an `/mcp` reconnect):** on thailand-2026 — `list_todos` (empty) →
+`add_todo` (`td-…`, `done:"0"`) → `toggle_todo` (`done:"1"`, audit `updated_by` = the owner) → `delete_todo` →
+`list_deleted_todos` (in Trash) → `purge_todo` → both lists empty again. Nothing left behind.
 
 ## Later changes
 
