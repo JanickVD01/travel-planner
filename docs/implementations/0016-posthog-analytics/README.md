@@ -5,9 +5,11 @@
 > milestones 2–6): PostHog EU account created; `*.posthog.com` allow-listed in the CSP; the library +
 > `analytics.js` load; manual `$pageview` on the hash router; the two users identified from `/api/me`;
 > error tracking on. **Session replay added** (2026-07-16, M7): `worker-src 'self' blob:` added to the
-> CSP, recording on with form inputs masked (page text visible). **Still open (deliberate opt-ins):**
-> feature-flag/usage-event/survey wiring (M8) and the final reconcile (M9). See the index —
-> [`README.md`](../README.md) — and the data map in [`CLAUDE.md`](../../../CLAUDE.md).
+> CSP, recording on with form inputs masked (page text visible). **Survey feedback button added**
+> (2026-07-16, M8): a persistent brand-matched `#feedback-btn` in the top bar that a PostHog "Feedback
+> button" survey (created in the UI) opens. **Still open:** feature flags + manual usage events (M8) and
+> the final reconcile (M9). See the index — [`README.md`](../README.md) — and the data map in
+> [`CLAUDE.md`](../../../CLAUDE.md).
 
 ## Context
 
@@ -71,8 +73,13 @@ consent banner), `respect_dnt`, `identified_only`, and masked replay text.
    **Masking posture:** form inputs masked (passwords always), **page text left visible** so the owners
    can see their own sessions when debugging — owner's choice for testing. Tighten later with
    `maskTextSelector:'*'` or `ph-no-capture` on sensitive nodes if desired.
-8. **(Opt-in) Feature flags + a few manual usage events + one survey** — ⏳ pending (`Analytics.capture(...)`
-   helper is already in place for the events).
+8. **(Opt-in) Surveys / feature flags / usage events** — 🔧 in progress.
+   - **Survey (feedback button)** — ✅ code 2026-07-16. Added a persistent, brand-matched `#feedback-btn`
+     to the top bar ([`public/index.html`](../../../public/index.html) + [`styles.css`](../../../public/styles.css)),
+     revealed only when analytics is ready ([`public/app.js`](../../../public/app.js)). **Owner (UI):** create
+     a PostHog survey → Presentation **Feedback button** → *your own custom button* → selector **`#feedback-btn`**.
+     No CSP/deploy change (surveys already enabled in the SDK init).
+   - **Feature flags + manual usage events** — ⏳ pending (`Analytics.capture(...)` helper already in place).
 9. **Verify + reconcile** — 🔧 partial (this PR: [`CLAUDE.md`](../../../CLAUDE.md) data map). Final reconcile
    (DESIGN.md, index status, `releases.json`, GitHub About) after the opt-ins settle.
 

@@ -33,6 +33,11 @@
     </a>
     <div class="spacer"></div>
     <span id="who" class="who" title="Signed-in user"></span>
+    <!-- Feedback: opens a PostHog "Feedback button" (Widget) survey bound to #feedback-btn (effort 0016 M8).
+         Hidden until analytics is ready (app.js), so it never shows on demo/preview or if the SDK is blocked. -->
+    <button id="feedback-btn" class="icon-btn" aria-label="Send feedback" title="Send feedback" hidden>
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 4H4a1.5 1.5 0 0 0-1.5 1.5v9A1.5 1.5 0 0 0 4 16h3v3.5L11.5 16H20a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 20 4z"/></svg>
+    </button>
     <button id="theme-toggle" class="icon-btn" aria-label="Toggle light/dark theme">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/></svg>
     </button>
