@@ -5,24 +5,30 @@ no-build static SPA + `/api/*` Pages Functions + a shared domain core + a D1 dat
 MCP server, all fronted by Cloudflare Access and shipped through a hardened GitHub flow built for
 **safe parallel sessions**. Full rationale lives in `ai-first_project_initialisation.md`.
 
-> **Status:** live (v0.7), in active use. The data model is real (see **Data model** below): a **trip**
+> **Status:** live (v0.9), in active use. The data model is real (see **Data model** below): a **trip**
 > owns a metro **timeline** of `steps` (travel legs + stays), each stay nests `activities`, plus a
-> `packing` list and photo `attachments`. A stay's `lat`/`lng` now also drive a **visual trip map**
-> (self-hosted vector atlas): a still backdrop behind the timeline + an interactive **Map view** whose
-> pins open a stay's detail (effort 0015). The generic `entries` list still exists but is now only the
-> MCP smoke-test fixture. Full history in `docs/implementations/`.
+> `packing` list and photo `attachments`. Steps group into **regions** (effort 0017): the timeline is a
+> collapsible **Trip › Region › Location › Step** tree (locations are derived from stays; unplanned nights
+> show as gaps), built ONLY by `buildTripTree` in core and served by `/api/overview`; regions are edited in
+> the app (region sheet, wizard, pickers) and by Claude (MCP region tools). A stay's `lat`/`lng` drive a
+> **visual trip map** (self-hosted vector atlas, 0015): a still backdrop behind the timeline + an
+> interactive **Map view** whose pins open a stay; the trip's regions are shaded + labelled on it and
+> framed by region chips (0019). Navigation is a hamburger **menu** (Home · What's New) with the trip tabs
+> first (0018). PostHog (0016) carries error tracking, replay, a **Feedback** tab and usage events. The
+> generic `entries` list is now only the MCP smoke-test fixture. Full history in `docs/implementations/`.
 
 ## Data map (where things live)
 
 | Concern | File |
 |---|---|
 | Domain logic (validation, audit, CRUD engine) — **single source of truth** | `shared/core.js` |
+| Trip tree (Trip › Region › Location › Step, unplanned gaps, per-region totals) — built once, in core | `shared/core.js` `buildTripTree` / `composeOverview` → `functions/api/overview/` |
 | Browser API (`/api/*`) — thin adapters over the core | `functions/api/**` |
 | Auth gate (require Access identity, fail-closed) | `functions/_middleware.js` |
 | Demo-mode switch (mock only when `!DB && DEMO_API=1`) | `functions/api/_middleware.js`, `functions/api/_mock.js` |
 | SPA shell / router / views | `public/index.html`, `public/app.js`, `public/styles.css` |
 | Trip map — self-hosted vector atlas (timeline backdrop + interactive Map view) | `public/map.js` (+ vendored `public/vendor/d3.min.js`, `topojson-client.min.js`, `vendor/geo/*` Natural Earth JSON) |
-| Analytics / error tracking / session replay (PostHog Cloud EU; opt-in telemetry, real prod sessions only) — effort 0016 | `public/analytics.js` (guarded `window.Analytics`; loads `array.full.js` from PostHog's EU assets host; CSP allow-lists `*.posthog.com` on `script-src`/`connect-src` + `worker-src 'self' blob:` for replay, in `public/_headers`) |
+| Analytics / error tracking / session replay (PostHog Cloud EU; opt-in telemetry, real prod sessions only) + Feedback tab + usage events (`track()` in `app.js`) — effort 0016 | `public/analytics.js` (guarded `window.Analytics`; loads `array.full.js` from PostHog's EU assets host; CSP allow-lists `*.posthog.com` on `script-src`/`connect-src` + `worker-src 'self' blob:` for replay, in `public/_headers`) |
 | Design language / taste contract (brand, fonts, palette, tokens thesis) — **read before any UI change** | `DESIGN.md` |
 | Implementation history — one folder per effort (`NNNN-slug/README.md`; plan · decisions · outcome · later-changes log) | `docs/implementations/` |
 | App metadata + release notes | `public/data/**` |
@@ -38,7 +44,7 @@ worker import it, so the UI and Claude can never disagree. Never duplicate logic
 ## Scoping model
 
 Every row is scoped by two free-text keys: `space` and `list`. **`space` = a trip** (its slug, e.g.
-`france-2026`) and **`list` = the collection** within it: `flow` (timeline steps), `activities`,
+`france-2026`) and **`list` = the collection** within it: `flow` (timeline steps), `regions`, `activities`,
 `packing`, or `attachments`. Trip config rows themselves live at `space='app'`, `list='trips'`.
 
 ## Data model (real entities — `FLAT_SPECS` in `shared/core.js` + `schema.sql`)
@@ -48,7 +54,13 @@ Every row is scoped by two free-text keys: `space` and `list`. **`space` = a tri
 - **steps** (`<slug>`/`flow`) — `kind` travel|stay; `title`/`location`; **`map_url`** (primary location
   link) + `lat`/`lng` (legacy fallback); `arrive`/`depart` (+`_time`); `accom_name`; `transport`/`carrier`;
   `cost_est`/`cost_actual`/`cost_ccy`; `booking_status`/`booking_url`; **`included`** (`'1'` = cost covered
-  by another ticket → hidden on the card + excluded from the budget); `note`.
+  by another ticket → hidden on the card + excluded from the budget); **`region_id`** (nullable; the
+  step's region — free text like `activities.step_id`, not an FK); `note`.
+- **regions** (`<slug>`/`regions`, effort 0017) — `title`, `planned_nights`, `start_date`/`end_date`
+  (planned window), `note`; `sort_order` only places an **empty** region. A region's dates/nights are
+  **derived** from its stays in core; **step `sort_order` is the only chronology** and `moveRegion` is the
+  only reorder (moves its steps as a block). Soft-deleting a region doesn't cascade (its steps fall back to
+  top level); purging clears `region_id` and never deletes steps. Locations aren't stored (derived from stays).
 - **activities** (`<slug>`/`activities`) — hung off a step via `step_id`; `day`, `needs_advance`,
   location/`map_url`, cost + booking + **`included`** + `note`.
 - **packing** (`<slug>`/`packing`) — `owner` (`'shared'` | email), `packed`, `category`, `qty`.
@@ -58,7 +70,7 @@ Every row is scoped by two free-text keys: `space` and `list`. **`space` = a tri
 
 Soft-delete is baked into every table (`deleted` column) → **Trash** (restore / delete-forever). **Money
 math lives ONLY in `computeBudget`** (all EUR; excludes `included` rows; returns estimated *and* actual
-category breakdowns + per-person figures, `PEOPLE=2`). **Locations:** a real Google Maps `map_url` wins;
+category breakdowns + per-person figures + `byRegion`, `PEOPLE=2`). **Locations:** a real Google Maps `map_url` wins;
 `lat`/`lng` only derives a search link as a fallback (set via MCP `set_map_url`).
 
 ## Add a list (the ~6-line change)
@@ -132,7 +144,10 @@ Once the worker is deployed and connected:
 `claude mcp add --transport http travel-planner https://<worker>.<sub>.workers.dev/mcp`
 Then ask Claude to manage trips, steps, activities, packing and photos — `create_trip`,
 `add_stay`/`add_travel`/`add_step`, `add_activity`, `edit_step`/`edit_activity`, `set_booking`,
-`set_included`, `set_map_url`, `get_trip_overview`, `get_budget`, and the packing/attachment tools.
+`set_included`, `set_map_url`, `get_trip_overview`, `get_budget`, the region tools (`list_regions`,
+`add_region`, `edit_region`, `move_region`, `assign_steps_to_region`, `delete_region` / `restore_region` /
+`purge_region`, and `region_id` on `add_stay` / `add_travel` / `add_step` / `edit_step`), and the
+packing/attachment tools.
 All are thin wrappers over `shared/core.js` (the same rules the browser API uses).
 
 **On phones / the claude.ai app:** add a *custom connector* to the same `/mcp` URL instead of the CLI.

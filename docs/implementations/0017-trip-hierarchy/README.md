@@ -2,7 +2,7 @@
 
 > **Status:** 🚧 In progress — M1 ✅ + M2 ✅ (2026-10-13, PR #51). Migration 003 applied to prod D1 via the
 > `migrate` workflow before merge (run 38371496790: 5 queries, success). M3 ✅ (PR #52). M4 ✅ (prod
-> backfill of Thailand + France, owner-confirmed). M5 ✅ (PR 3, `code/trip-hierarchy-timeline`) + an M5 follow-up fix (`code/fix-tree-link-clicks`, see *M5 follow-up*) + owner feedback fixes (`code/feedback-quick-fixes`, see *Owner feedback fixes*). M6 ✅ (`code/trip-hierarchy-editing`, see *M6 verification*), M7 pending. This record carries the full milestone plan and is **updated in place** as
+> backfill of Thailand + France, owner-confirmed). M5 ✅ (PR 3, `code/trip-hierarchy-timeline`) + an M5 follow-up fix (`code/fix-tree-link-clicks`, see *M5 follow-up*) + owner feedback fixes (`code/feedback-quick-fixes`, see *Owner feedback fixes*). M6 ✅ (`code/trip-hierarchy-editing`, see *M6 verification*), M7 ✅ (`content/trip-hierarchy-reconcile`). **✅ Shipped 2026-10-13.** This record carries the full milestone plan and is **updated in place** as
 > milestones land (like [0010](../0010-pinned-step-photo/)). See [`README.md`](../README.md) for the
 > index and [`research.md`](research.md) for the codebase findings that shaped the design.
 
@@ -73,7 +73,7 @@ indexes first, the non-idempotent `ALTER TABLE steps ADD COLUMN region_id TEXT` 
 | (ops) | **M4 — Guided backfill on prod**: `list_trips` + `get_trip_overview` → proposal table per trip → **owner confirms** → `add_region` + `assign_steps_to_region` → re-check (no `split_regions`, no loose stays). Rollback = `assign_steps_to_region(null)` + `delete_region`. Outcome logged here — ✅ 2026-10-13 (see *M4 outcome*) | none | n | n |
 | 3 `code/trip-hierarchy-timeline` | **M5 — Timeline**: unplanned-gap nodes in core `buildTripTree` (+ strip + `totals.unplanned_nights`); `loadTrip` → `/api/overview`; tree render (`regionGroupHTML`, `locationRowHTML`, existing `stepCardHTML`); "Expand to" control; trip summary + nights strip; collapse state + one delegated `bindTree()` (no re-render, keeps scroll); CSS; inserters inside a region create the step there (`data-region` → `region_id`) — ✅ 2026-10-13 (see *M5 verification*) | none | n | n |
 | 4 `code/trip-hierarchy-editing` | **M6 — Editing**: region sheet `#/trip/<slug>/region/<id>` (edit, member list, move earlier/later, delete), opened from a "›" on each region header; "Add region" wizard; region picker in step detail; step-wizard region field (default: the inserter's region, else the previous step's); Trash "Regions" group; Budget "By region". **Plus owner feedback (2026-10-13):** drop the **Trip** chip (Show: Regions · Locations · Steps) and add **Expand all / Collapse all** to the chip row; **usage events** via `Analytics.capture` (`timeline_depth_set`, `tree_node_toggled`, `tree_expand_all`, `nights_strip_jump`, `step_opened`, `step_created`, `region_created` / `region_edited` / `region_moved` / `region_deleted`) — folded here from 0016 M8 — ✅ 2026-10-13 (see *M6 verification*) | none | n | y |
-| 5 `content/trip-hierarchy-reconcile` | **M7 — Reconcile**: `CLAUDE.md` (data model, scoping, MCP list), `DESIGN.md` (hierarchy timeline, interchange marker, tonal chips), `README.md`, `public/data/app.json`, `releases.json` v0.8.0, index ✅, MEMORY, GitHub About — ⏳ | none | n | **y** |
+| 5 `content/trip-hierarchy-reconcile` | **M7 — Reconcile**: `CLAUDE.md` (data model, scoping, MCP list), `DESIGN.md` (hierarchy timeline, interchange marker, tonal chips), `README.md`, `public/data/app.json`, `releases.json` v0.8.0, index ✅, MEMORY, GitHub About — ✅ 2026-10-13 (release notes already landed with each PR: v0.8.0 in #56, v0.9.0 in #59) | none | n | n |
 
 Each PR description uses the four-line format (`what/why` · `What's New? y/n` · `migration none/NNN` ·
 `worker redeploy? y/n`).
@@ -271,7 +271,15 @@ errors; the M5 follow-up link checks still pass.
 
 ## Outcome
 
-*(to be written when the effort ships)*
+Shipped 2026-10-13 across PRs #51 (core + migration 003), #52 (MCP), the guided prod backfill (Thailand:
+Bangkok / North / Krabi / Bangkok (return); France: Paris / Provence; Mexico skipped on purpose), #53 (the
+tree timeline), #54 + #55 (fixes found through PostHog the same day: dead links inside the tree; sticky
+chrome, strip jump, one-tap single-place regions, the map lingering behind Packing) and #59 (in-app region
+editing, Show without the empty Trip depth + Expand/Collapse all, usage events). Trips now read top-down
+— regions → places → steps — in the browser and through Claude, with every rule (tree, gaps, per-region
+money, ordering) in `shared/core.js`. The regions also reached the map in [0019](../0019-map-regions/).
+Reconcile (M7): `CLAUDE.md` (status, data map, scoping, data model, MCP tools), `README.md`, `DESIGN.md`
+decision log, `public/data/app.json` tagline, the index, the MEMORY journal and the GitHub About.
 
 ## Later changes
 

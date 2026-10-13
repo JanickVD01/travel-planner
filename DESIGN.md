@@ -329,6 +329,16 @@ Records the locked brand inputs and the final visual decision.
   `--pin-plate-alpha` ≈ 0.72 (title ~7.4:1 / dates ~6.0:1 over a white photo; frosted blur is dropped
   under `prefers-reduced-transparency`, the tint carries the contrast). Supersedes the 0010 "media
   island" darkening. See [`docs/implementations/0011-pinned-photo-text-plate/`](docs/implementations/0011-pinned-photo-text-plate/).
+- **2026-10-13 — Trip hierarchy timeline (Trip › Region › Location › Step).** Effort 0017. The flat
+  metro timeline becomes a collapsible tree on the same rail: **region** headers are a tonal `--paper-2`
+  band with an **interchange-capsule marker** in the `--rail` ink-blue (blue = "region" everywhere, incl. the
+  map in 0019); **location** rows use a ring marker; a location with one stay lets its card stand in. A
+  summary line + a **nights strip** (regions sized by nights) sit above the tree; **unplanned nights** are a
+  hatched, dashed gap marker (never colour alone). **Show: Regions · Locations · Steps** + **Expand all /
+  Collapse all** on one row, with a **tonal** active chip (the accent stays with stays + the active tab). Each
+  region has its own sheet (edit, its steps, reorder, delete). Density: one-line travel legs at the shallow
+  depths, no hint paragraph, no label row. See
+  [`docs/implementations/0017-trip-hierarchy/`](docs/implementations/0017-trip-hierarchy/).
 - **2026-10-13 — Hamburger menu, no sidebar, trip tabs first.** Owner feedback (rage clicks on a hamburger
   that did nothing on desktop). The permanent left sidebar (just Home + What's New) is gone on every width;
   the hamburger opens a small floating **menu panel** with those two links (disclosure button,
