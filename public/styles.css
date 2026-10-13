@@ -1051,6 +1051,21 @@ body.map-bg .step .leg { background: var(--paper-1); border: 1px solid var(--lin
 body.map-bg .subnav { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* Detail back-header ("‹ Trip") likewise floats on the beige sheet — no standalone white box. */
 body.map-bg .sheet-head { background: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* …but once STUCK under the bar, with cards scrolling beneath, they get the sheet's own frosted backing,
+   stretched to the sheet's edges + a hairline — otherwise the pills float over the content and read as
+   "not pinned" (owner feedback, 2026-10-13). At rest nothing changes (no band over the sheet). */
+body.map-bg .subnav, body.map-bg .sheet-head {
+  margin-left: calc(-1 * var(--space-4)); margin-right: calc(-1 * var(--space-4));
+  padding-left: calc(var(--space-4) + 2px); padding-right: calc(var(--space-4) + 2px);
+}
+body.map-bg .subnav.is-stuck, body.map-bg .sheet-head.is-stuck {
+  background: color-mix(in srgb, var(--paper-1) 94%, transparent);
+  -webkit-backdrop-filter: saturate(1.2) blur(8px); backdrop-filter: saturate(1.2) blur(8px);
+  box-shadow: 0 1px 0 var(--line-hair);
+}
+@media (prefers-reduced-transparency: reduce) {
+  body.map-bg .subnav.is-stuck, body.map-bg .sheet-head.is-stuck { background: var(--paper-1); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 
 /* ---- Map view: a full, interactive foreground map of all stops (body.map-view) ---- */
 body.map-view { overflow: hidden; }                       /* lock page scroll — the map pans instead */
