@@ -1,6 +1,6 @@
 # 0019 — Trip regions on the map
 
-> **Status:** 🚧 In review — M1–M3 ✅ in `code/map-regions` (merge after #59, which it builds on). Front-end only
+> **Status:** ✅ Shipped 2026-10-13 (PR #60, deployed 12:38 UTC). Front-end only
 > (`public/map.js`, `public/app.js`, `public/styles.css`) + docs — no schema/migration/worker/core change.
 > Builds on [0015](../0015-trip-globe/) (the atlas) and [0017](../0017-trip-hierarchy/) (regions). See the
 > [index](../README.md).
@@ -58,7 +58,11 @@ edge (+ room for a pin label) instead of a fixed offset.
 
 ## Outcome
 
-*(to be written when the effort ships)*
+Shipped 2026-10-13 in PR #60 (after #59, which it builds on). The trip's provinces are washed in the region
+blue with a label per region on both the still backdrop and the Map view, where tonal region chips frame and
+emphasise one region; phone framing of small areas fixed on the way. What's New v0.9.1. Reconcile rode with
+0017 M7 (`content/trip-hierarchy-reconcile`): `CLAUDE.md` status, `README.md`, `DESIGN.md` (decision log in
+#60), index ✅.
 
 ## Later changes
 
