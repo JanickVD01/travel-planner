@@ -248,14 +248,16 @@ function tripMapStops(slug) {
   const out = [];
   (b.steps || []).forEach(s => {
     if (s.deleted || s.kind === "travel" || !stepHasCoords(s)) return;
-    out.push({ lat: Number(s.lat), lng: Number(s.lng), title: s.title || s.location || "", stepId: s.id });
+    const rg = s.region_id && b.regionById ? b.regionById[s.region_id] : null;   // 0019: the map shows trip regions
+    out.push({ lat: Number(s.lat), lng: Number(s.lng), title: s.title || s.location || "", stepId: s.id,
+      regionId: rg && !rg.deleted ? rg.id : null, regionTitle: rg && !rg.deleted ? (rg.title || "") : "" });
   });
   return out;
 }
 function hideTripMap() { document.body.classList.remove("map-bg", "map-view"); _mapGen++; }
 // A signature of a trip's located stops — changes only when a pin's position/label/set changes, so we
 // rebuild the (expensive) map geometry just once per trip and skip it on plain timeline↔detail navigation.
-function stopsSig(stops) { return stops.map(s => s.stepId + "@" + s.lat + "," + s.lng + "#" + s.title).join("|"); }
+function stopsSig(stops) { return stops.map(s => s.stepId + "@" + s.lat + "," + s.lng + "#" + s.title + "^" + (s.regionId || "") + "~" + (s.regionTitle || "")).join("|"); }
 // Drive the persistent atlas behind an itinerary surface: show it only when the trip has located stays,
 // framed to the whole trip, STATIC (no fly, no per-stop focus). It only moves in the interactive Map view.
 async function syncTripMap(slug) {
@@ -266,7 +268,11 @@ async function syncTripMap(slug) {
   const ctl = await ensureMap();
   if (!ctl || gen !== _mapGen) return;               // failed to load, or superseded by a later navigation
   const sig = slug + "::" + stopsSig(stops);
-  if (sig === _mapSig) return;                       // same trip already framed on the backdrop — leave it
+  ctl.setTopPad(0);
+  if (sig === _mapSig) {                             // same trip already framed on the backdrop — leave it,
+    if (ctl.focusedRegion()) ctl.focusRegion(null, false);   // unless the Map view left a region focused (0019)
+    return;
+  }
   _mapSig = sig;
   ctl.setTrip(stops);                                // rebuild (also reflects coordinate/title edits)
   ctl.fitAll(false);                                 // frame the whole trip instantly — a still backdrop
@@ -1015,7 +1021,15 @@ async function viewMap(slug) {
       "</div></div>";
     return;
   }
-  view().innerHTML = renderSubnav(slug, "map") + hero;
+  // Region chips (0019): All · each trip region that has a located stay, in timeline order.
+  const t = state.trip[slug] || {};
+  const located = new Set(stops.map(x => x.regionId).filter(Boolean));
+  const chipRegions = regionOrder(t.tree, t.regions).filter(id => located.has(id)).map(id => t.regionById[id]).filter(Boolean);
+  const chips = chipRegions.length ? '<div class="map-regions" role="group" aria-label="Show a region on the map">' +
+    '<button type="button" class="map-rchip" data-map-region="" aria-pressed="true">All</button>' +
+    chipRegions.map(r => '<button type="button" class="map-rchip" data-map-region="' + esc(r.id) + '" aria-pressed="false">' + esc(r.title || "Region") + "</button>").join("") +
+    "</div>" : "";
+  view().innerHTML = renderSubnav(slug, "map") + hero + chips;
   document.body.classList.add("map-view");
   document.body.classList.remove("map-bg");
   const gen = ++_mapGen;
@@ -1023,7 +1037,16 @@ async function viewMap(slug) {
   if (!ctl || gen !== _mapGen) return;       // failed to load, or navigated away while loading
   const sig = slug + "::" + stopsSig(stops);
   if (sig !== _mapSig) { _mapSig = sig; ctl.setTrip(stops); }   // reuse the geometry if it's already this trip
-  ctl.fitAll(!prefersReducedMotion());       // frame all stops for the interactive view
+  const row = view().querySelector(".map-regions");
+  ctl.setTopPad(row ? Math.round(row.getBoundingClientRect().bottom) + 26 : 0);   // frame below the chips (+ a pin label)
+  ctl.focusRegion(null, !prefersReducedMotion());   // frame all stops for the interactive view (and clear a focus)
+  if (row) row.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-map-region]"); if (!b) return;
+    const id = b.dataset.mapRegion || null;
+    row.querySelectorAll("[data-map-region]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    ctl.focusRegion(id, !prefersReducedMotion());
+    track("map_region_focused", { all: !id });
+  });
 }
 
 let budgetBasis = "est";   // "Where it goes" breakdown basis: 'est' | 'actual' (module state, like the packing filter)
@@ -2237,7 +2260,9 @@ window.addEventListener("resize", () => {
   _mapSig = "";                                            // force a rebuild at the new size on the next sync
   if (!_mapCtl || !(document.body.classList.contains("map-bg") || document.body.classList.contains("map-view"))) return;
   clearTimeout(_mapResizeT);
-  _mapResizeT = setTimeout(() => { _mapCtl.onResize(); _mapCtl.fitAll(false); }, 150);
+  _mapResizeT = setTimeout(() => {                         // re-frame what was framed (a focused region, 0019)
+    _mapCtl.onResize(); const f = _mapCtl.focusedRegion(); if (f) _mapCtl.focusRegion(f, false); else _mapCtl.fitAll(false);
+  }, 150);
 });
 
 // Sticky chrome is offset by the REAL top-bar height (it differs by width + safe-area): the sub-nav sticks

@@ -1,6 +1,16 @@
 {
   "releases": [
     {
+      "version": "v0.9.1",
+      "title": "See your regions on the map",
+      "date": "2026-10-13",
+      "notes": [
+        "The map now shows where your regions are: the provinces you’re staying in are shaded, and each region is labelled.",
+        "On the Map tab, tap a region (All · Bangkok · North · …) to zoom to it and see it highlighted — tap All to see the whole trip again.",
+        "Shading works for Thailand, France, Belgium, the USA and Japan today; elsewhere you still get the region labels."
+      ]
+    },
+    {
       "version": "v0.9.0",
       "title": "Plan by region",
       "date": "2026-10-13",
