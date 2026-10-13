@@ -1,7 +1,7 @@
 # 0020 — Wide-screen workspace (laptop / desktop layout)
 
-> **Status:** 🚧 In progress — **M1** (this record + a throwaway clickable prototype of three layouts) 🔧;
-> waiting for the owner to try A / B / C on the prototype preview and pick one. See the [index](../README.md).
+> **Status:** 🚧 In progress — **M1** 🔧: the owner tried A / B / C and **picked B** (2026-10-13); the
+> prototype was regenerated as **B only, with the owner's refinements** for a second look. See the [index](../README.md).
 
 ## Context
 
@@ -49,7 +49,20 @@ the browser, which the real build would move into `shared/core.js` like every ot
 
 ## Decision
 
-*(pending — the owner tries the prototype first)*
+**2026-10-13 — B · Planner workspace** (owner, after trying A / B / C on the prototype preview), with these
+refinements (all **≥ 1200 px only**; phones unchanged):
+
+| Refinement | What changes |
+|---|---|
+| **No notebook grid** | The squared-paper background (`body::before`) goes in the wide layout — plain paper. |
+| **The middle fits its space** | The timeline column fills the space between the left and right panes — no capped, centred card. |
+| **Regions live bottom-left** | The trip summary line + the region list (with the unplanned gaps in order) sit in the lower-left panel under the map; the summary + nights strip are removed from above the timeline. |
+| **A condensed detail pane** | Step / region details in the right pane use tight rows (≈ 34 px instead of 44 px), smaller labels and section headings. |
+| **No dashes under editable values** | The dashed underline goes; a soft tint on hover / focus marks a value as editable (desktop = mouse). |
+
+Regenerated prototype: [PR #65](https://github.com/JanickVD01/travel-planner/pull/65) (B only; switcher
+Current · B). Open questions for the build: whether the grid + dashes should also go on phones (the owner's
+notes were about the laptop view), and whether A's "map follows the timeline" stays (it is in the B prototype).
 
 ## Outcome
 
