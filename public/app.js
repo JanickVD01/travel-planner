@@ -2504,8 +2504,13 @@ function trackTopbar() {
     document.querySelectorAll(".subnav, .sheet-head").forEach(nav =>
       nav.classList.toggle("is-stuck", scrollY > 0 && nav.getBoundingClientRect().top <= edge)); };
   addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(stuck); }, { passive: true });
+  // The tab row scrolls sideways on phones: keep the current tab in view (e.g. To-do, the 5th) after a render.
+  const revealTab = () => { const a = document.querySelector('.subnav a[aria-current="page"]'), n = a && a.parentElement;
+    if (!n || n.scrollWidth <= n.clientWidth) return;
+    const l = a.offsetLeft - n.offsetLeft, r = l + a.offsetWidth;
+    if (l < n.scrollLeft || r > n.scrollLeft + n.clientWidth) n.scrollLeft = Math.max(0, r - n.clientWidth + 8); };
   const v = document.getElementById("view");             // views re-render async: re-check when the DOM swaps
-  if (v && window.MutationObserver) new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(stuck); }).observe(v, { childList: true });
+  if (v && window.MutationObserver) new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(() => { stuck(); revealTab(); }); }).observe(v, { childList: true });
 }
 
 (async function boot() {
