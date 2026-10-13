@@ -2296,7 +2296,7 @@ function protoChoice() {
   let v = null;
   try { v = new URLSearchParams(location.search).get("layout"); } catch {}
   if (!v) { try { v = localStorage.getItem(PROTO_KEY); } catch {} }
-  return ["a", "b", "c"].indexOf(v) >= 0 ? v : "";
+  return v === "b" ? v : "";                         // owner picked B (2026-10-13): A / C retired
 }
 function protoActive() { return innerWidth >= PROTO_MIN ? protoChoice() : ""; }
 function protoPaneMode() { const p = protoActive(); return p === "b" || p === "c"; }
@@ -2332,7 +2332,7 @@ function renderProtoSwitcher() {
   el.hidden = false;
   const cur = protoChoice();
   el.innerHTML = '<span class="proto-label">Layout prototype</span>' +
-    [["", "Current"], ["a", "A · Map"], ["b", "B · Planner"], ["c", "C · Detail"]]
+    [["", "Current"], ["b", "B · Planner"]]
       .map(([k, l]) => '<button type="button" data-proto="' + k + '" aria-pressed="' + (cur === k) + '">' + l + "</button>").join("");
 }
 // Panes sit under the top bar wherever it is (the demo banner scrolls away above it).
@@ -2377,13 +2377,21 @@ function protoMarkSelected(kind, id) {
 }
 function protoRegionNavHTML(slug) {
   const t = state.trip[slug]; if (!t || !t.tree) return "";
-  const rs = t.tree.regions || {};
-  const rows = regionOrder(t.tree, t.regions).map(id => {
-    const g = rs[id] || {}, r = t.regionById[id] || {};
-    const meta = metaJoin([esc(g.stays ? dateSpan(g.arrive, g.depart) : dateSpan(g.start_date, g.end_date)), g.stays ? esc(nightsLabel(g.nights)) : (g.planned_nights ? esc("planned " + nightsLabel(g.planned_nights)) : "")]);
-    return '<button type="button" class="proto-rnav" data-proto-region="' + esc(id) + '"><span class="pr-title">' + esc(r.title || "Region") + '</span><span class="pr-meta mono">' + meta + "</span></button>";
+  const rs = t.tree.regions || {}, tot = t.tree.totals || {};
+  const facts = metaJoin([esc(nightsLabel(tot.nights)), tot.regions ? esc(tot.regions + " region" + (tot.regions === 1 ? "" : "s")) : "",
+    esc((tot.stays || 0) + " stay" + (tot.stays === 1 ? "" : "s")), esc(dateSpan(tot.start, tot.end)),
+    tot.unplanned_nights ? "<strong>" + esc(nightsLabel(tot.unplanned_nights) + " unplanned") + "</strong>" : ""]);
+  // Top-level order of the trip: regions (a split region shows each block) + the unplanned gaps between them.
+  const rows = ((t.tree.items) || []).map(n => {
+    if (n.type === "gap") return '<div class="proto-rgap"><strong>' + esc(nightsLabel(n.nights)) + ' unplanned</strong><span class="mono">' + esc(dateSpan(n.from, n.to)) + "</span></div>";
+    if (n.type !== "region") return "";
+    const id = n.region_id, g = rs[id] || {}, r = t.regionById[id] || {};
+    const meta = metaJoin([esc(g.stays ? dateSpan(g.arrive, g.depart) : dateSpan(g.start_date, g.end_date)),
+      g.stays ? esc(nightsLabel(g.nights)) : (g.planned_nights ? esc("planned " + nightsLabel(g.planned_nights)) : esc("no stays yet")),
+      g.eur && g.eur.est > 0 ? esc("≈ " + eurShort(g.eur.est)) : ""]);
+    return '<button type="button" class="proto-rnav' + (g.stays ? "" : " planned") + '" data-proto-region="' + esc(id) + '"><span class="pr-title">' + esc(r.title || "Region") + '</span><span class="pr-meta mono">' + meta + "</span></button>";
   }).join("");
-  return '<h2 class="proto-h">Regions</h2>' + (rows || '<p class="muted">No regions yet.</p>');
+  return '<div class="proto-rnav-head"><h2 class="proto-h">Regions</h2><p class="proto-facts mono">' + facts + "</p></div>" + (rows || '<p class="muted">No regions yet.</p>');
 }
 async function protoGlanceHTML(slug) {
   const t = await loadTrip(slug); if (!t || !t.trip) return "";
