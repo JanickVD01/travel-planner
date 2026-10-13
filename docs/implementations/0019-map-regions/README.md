@@ -68,3 +68,13 @@ emphasise one region; phone framing of small areas fixed on the way. What's New 
 
 - **2026-10-13 — Mexico shading: not wanted.** The owner confirmed province shading for countries missing
   from `admin1-lite.json` (e.g. Mexico for the 2027 trip) isn't needed; labels-only stays the behaviour there.
+- **2026-10-13 — map labels never overlap** (`code/map-label-declutter`). Owner feedback on the 0020 workspace
+  map pane: "all this text is way too crowded" — every province name was drawn regardless of space, piling onto
+  stay and region names. `applyZoom` in `public/map.js` now places labels greedily in priority order — stay
+  names, then trip regions, then countries, then provinces — skipping any whose box would hit an already-placed
+  label or a pin (boxes estimated once per label from `LABEL_METRICS`, so panning stays cheap). Stay / region
+  names try a few spots around their anchor before giving up (close pins like Ao Nang + Railay); a stay named
+  like a nearby region or stay shows once (the region wins). Provinces only appear where there's room — zoom
+  in for more. Verified headless (`label-check`, real rendered boxes, zero overlaps + every region labelled) in
+  the workspace pane, the Map tab (whole trip, Krabi, zoomed further), the 1100 px backdrop and the phone Map tab.
+
