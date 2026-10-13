@@ -268,9 +268,10 @@ async function syncTripMap(slug) {
   const ctl = await ensureMap();
   if (!ctl || gen !== _mapGen) return;               // failed to load, or superseded by a later navigation
   const sig = slug + "::" + stopsSig(stops);
-  ctl.setTopPad(0);
+  ctl.setTopPad(wsActive() ? 28 : 0);                 // 0020: a map in the side pane needs little top room
   if (sig === _mapSig) {                             // same trip already framed on the backdrop — leave it,
-    if (ctl.focusedRegion()) ctl.focusRegion(null, false);   // unless the Map view left a region focused (0019)
+    if (ctl.focusedRegion() && !wsActive()) ctl.focusRegion(null, false);   // unless the Map view left a region focused (0019)
+    else if (ctl.needsResize()) ctl.fitAll(false);   // back from the full-screen Map tab into the pane (0020)
     return;
   }
   _mapSig = sig;
@@ -1187,9 +1188,12 @@ async function viewBudget(slug) {
 
 // Activity detail: a bottom-sheet-style view with an editable NOTES section. All values esc'd;
 // editable() controls reuse the shared inline-edit plumbing (entity="activities").
-async function viewActivity(slug, id) {
+async function viewActivity(slug, id, el) {
+  // el: render into the wide-screen pane instead of #view (0020); no view-transition name there (it would
+  // duplicate the timeline card's and abort the transition).
+  const out = () => el || view();
   markActive(null);
-  view().innerHTML = '<div class="panel"><p class="muted">Loading…</p></div>';
+  out().innerHTML = '<div class="panel"><p class="muted">Loading…</p></div>';
   const { trip, steps, activities } = await loadTrip(slug);
   const tripHome = "#/trip/" + encodeURIComponent(slug);
   const tripTitle = (trip && (trip.title || trip.slug)) || slug;
@@ -1197,7 +1201,7 @@ async function viewActivity(slug, id) {
   if (!a) {
     const nfHead = '<div class="sheet-head"><a class="back" href="' + esc(tripHome) + '">' +
       '<span class="chev" aria-hidden="true">‹</span> ' + esc(tripTitle) + "</a></div>";
-    view().innerHTML = '<div class="sheet">' + nfHead +
+    out().innerHTML = '<div class="sheet">' + nfHead +
       '<div class="panel detail"><h1>Activity not found</h1>' +
       '<p class="muted"><a href="' + esc(tripHome) + '">← Back to ' + esc(tripTitle) + "</a></p></div></div>";
     return;
@@ -1257,9 +1261,9 @@ async function viewActivity(slug, id) {
     ' data-slug="' + esc(slug) + '" data-id="' + esc(a.id) + '" data-step="' + esc(a.step_id || "") + '">' +
     icon("trash") + "Delete activity</button></div>";
 
-  view().innerHTML = '<div class="sheet">' + head +
+  out().innerHTML = '<div class="sheet">' + head +
     '<div class="panel detail">' +
-      '<h1 class="detail-title" style="view-transition-name:' + esc(vtName(a.id)) + '">' + esc(a.title || a.location) + "</h1>" +
+      '<h1 class="detail-title"' + (el ? "" : ' style="view-transition-name:' + esc(vtName(a.id)) + '"') + '>' + esc(a.title || a.location) + "</h1>" +
       '<div class="detail-context muted">in ' + esc(parentTitle) + "</div>" +
       meta + notes + photos + danger +
     "</div></div>";
@@ -1270,9 +1274,12 @@ async function viewActivity(slug, id) {
 // Step detail: a focused page for one stay or travel leg. Mirrors viewActivity; all fields inline-
 // editable (entity="steps"). A stay lists its nested activities (with the add-activity affordance);
 // a travel leg shows its transport/carrier/times. Cost hidden when the step is "included elsewhere".
-async function viewStep(slug, id) {
+async function viewStep(slug, id, el) {
+  // el: render into the wide-screen pane instead of #view (0020); no view-transition name there (it would
+  // duplicate the timeline card's and abort the transition).
+  const out = () => el || view();
   markActive(null);
-  view().innerHTML = '<div class="panel"><p class="muted">Loading…</p></div>';
+  out().innerHTML = '<div class="panel"><p class="muted">Loading…</p></div>';
   const { trip, steps, activities, regions } = await loadTrip(slug);
   const back = "#/trip/" + encodeURIComponent(slug);
   const tripTitle = (trip && (trip.title || trip.slug)) || slug;
@@ -1280,7 +1287,7 @@ async function viewStep(slug, id) {
     '<span class="chev" aria-hidden="true">‹</span> ' + esc(tripTitle) + "</a></div>";
   const s = (steps || []).find(x => String(x.id) === String(id));
   if (!s) {
-    view().innerHTML = '<div class="sheet">' + head +
+    out().innerHTML = '<div class="sheet">' + head +
       '<div class="panel detail"><h1>Step not found</h1>' +
       '<p class="muted"><a href="' + esc(back) + '">← Back to ' + esc(tripTitle) + "</a></p></div></div>";
     return;
@@ -1365,9 +1372,9 @@ async function viewStep(slug, id) {
     ' data-slug="' + esc(slug) + '" data-id="' + esc(s.id) + '" data-acts="' + actCount + '">' +
     icon("trash") + "Delete step</button></div>";
 
-  view().innerHTML = '<div class="sheet">' + head +
+  out().innerHTML = '<div class="sheet">' + head +
     '<div class="panel detail">' +
-      '<h1 class="detail-title" style="view-transition-name:' + esc(vtName(s.id)) + '">' + esc(s.title || s.location) + "</h1>" +
+      '<h1 class="detail-title"' + (el ? "" : ' style="view-transition-name:' + esc(vtName(s.id)) + '"') + '>' + esc(s.title || s.location) + "</h1>" +
       '<div class="detail-context muted">' + esc(kindLabel) + "</div>" +
       meta + notes + actsSection + photos + danger +
     "</div></div>";
@@ -1904,6 +1911,126 @@ function stepInserterHTML(index, regionId, label, keep) {
     (regionId ? ' data-region="' + esc(regionId) + '"' : "") + ">" + icon("plus") + esc(label || "add step") + "</button></li>";
 }
 
+// ---- wide-screen workspace (0020, layout B) -----------------------------------------------------------
+// >= 1200 px on a trip: the map leaves the backdrop for a top-left pane with the Regions panel under it
+// (trip summary, regions, unplanned gaps); the timeline fills the middle; the right pane shows At a glance
+// (To-do · Unplanned · Packing) or the selected step / region / activity, rendered by the SAME detail views
+// (their `el` argument). The map follows the scroll and a hovered card lights up its pin. Phones untouched.
+const WS_MQ = window.matchMedia ? matchMedia("(min-width: 1200px)") : null;
+let _wsTl = null, _wsRegion;                          // the trip object the timeline was rendered from; framed region
+function wsActive() { return !!(WS_MQ && WS_MQ.matches); }
+function applyWs() { document.body.classList.toggle("ws", wsActive()); wsSyncTop(); }
+function wsEls() { return { left: $("#ws-left"), pane: $("#ws-pane .ws-pane-body") }; }
+function wsSyncTop() {                                 // the panes start under the top bar wherever it is
+  const bar = $(".topbar");
+  if (bar) document.documentElement.style.setProperty("--pane-top", Math.max(0, Math.round(bar.getBoundingClientRect().bottom)) + "px");
+}
+async function wsEnsureTimeline(slug) {                // (re)render the middle only when its data changed
+  if (document.querySelector("#view .tl") && state.trip[slug] && _wsTl === state.trip[slug]) return;
+  const y = scrollY;
+  await viewTimeline(slug); _wsTl = state.trip[slug];
+  if (y) scrollTo(0, y);
+}
+async function wsRoute(parts) {
+  const slug = decodeURIComponent(parts[1]), sub = parts[2] || "", id = parts[3] ? decodeURIComponent(parts[3]) : "";
+  const { left, pane } = wsEls();
+  if ((sub === "step" || sub === "region" || sub === "activity") && id) {
+    await wsEnsureTimeline(slug);
+    if (sub === "step") await viewStep(slug, id, pane);
+    else if (sub === "region") await viewRegion(slug, id, pane);
+    else await viewActivity(slug, id, pane);
+    $("#ws-pane").scrollTop = 0;
+    wsMarkSelected(sub, id);
+  } else {
+    if (sub === "map") await viewMap(slug);
+    else if (sub === "budget") await viewBudget(slug);
+    else if (sub === "packing") await viewPacking(slug);
+    else if (sub === "todos") await viewTodos(slug);
+    else if (sub === "trash") await viewTrash(slug);
+    else await wsEnsureTimeline(slug);
+    pane.innerHTML = await wsGlanceHTML(slug, { todos: sub !== "todos" });   // the To-do tab already shows the list
+    $("#ws-pane").scrollTop = 0;
+    wsMarkSelected("", "");
+  }
+  if (sub !== "map") syncTripMap(slug);               // the map pane is there on every trip page
+  left.innerHTML = wsRegionNavHTML(slug);
+  _wsRegion = undefined; wsFollow();
+}
+function wsMarkSelected(kind, id) {
+  document.querySelectorAll("#view li.step").forEach(li => {
+    const m = /\/step\/([^/]+)$/.exec(li.dataset.href || "");
+    li.classList.toggle("is-selected", kind === "step" && !!m && decodeURIComponent(m[1]) === String(id));
+  });
+  document.querySelectorAll("#view li.rg").forEach(li => li.classList.toggle("is-selected", kind === "region" && (li.dataset.node || "").indexOf("rg:" + id + ":") === 0));
+}
+function wsRegionNavHTML(slug) {
+  const t = state.trip[slug]; if (!t || !t.tree) return "";
+  const rs = t.tree.regions || {}, tot = t.tree.totals || {};
+  const facts = metaJoin([esc(nightsLabel(tot.nights)), tot.regions ? esc(tot.regions + " region" + (tot.regions === 1 ? "" : "s")) : "",
+    esc((tot.stays || 0) + " stay" + (tot.stays === 1 ? "" : "s")), esc(dateSpan(tot.start, tot.end)),
+    tot.unplanned_nights ? "<strong>" + esc(nightsLabel(tot.unplanned_nights) + " unplanned") + "</strong>" : ""]);
+  // The trip's top-level order: regions (a split region shows each block) + the unplanned gaps between them.
+  const rows = (t.tree.items || []).map(n => {
+    if (n.type === "gap") return '<div class="ws-rgap"><strong>' + esc(nightsLabel(n.nights)) + ' unplanned</strong><span class="mono">' + esc(dateSpan(n.from, n.to)) + "</span></div>";
+    if (n.type !== "region") return "";
+    const id = n.region_id, g = rs[id] || {}, r = t.regionById[id] || {};
+    const meta = metaJoin([esc(g.stays ? dateSpan(g.arrive, g.depart) : dateSpan(g.start_date, g.end_date)),
+      g.stays ? esc(nightsLabel(g.nights)) : (g.planned_nights ? esc("planned " + nightsLabel(g.planned_nights)) : esc("no stays yet")),
+      g.eur && g.eur.est > 0 ? esc("≈ " + eurShort(g.eur.est)) : ""]);
+    return '<button type="button" class="ws-rnav' + (g.stays ? "" : " planned") + '" data-ws-region="' + esc(id) + '"><span class="wr-title">' + esc(r.title || "Region") + '</span><span class="wr-meta mono">' + meta + "</span></button>";
+  }).join("");
+  return '<div class="ws-rnav-head"><h2 class="ws-h">Regions</h2><p class="ws-facts mono">' + facts + "</p></div>" +
+    (rows || '<p class="muted">No regions yet — add one at the bottom of the timeline.</p>');
+}
+async function wsGlanceHTML(slug, opts) {
+  const t = await loadTrip(slug); if (!t || !t.trip) return "";
+  const s = encodeURIComponent(slug), tot = (t.tree && t.tree.totals) || {};
+  const gaps = []; (function walk(ns) { (ns || []).forEach(n => { if (n.type === "gap") gaps.push(n); if (n.children) walk(n.children); }); })(t.tree && t.tree.items);
+  const pk = await loadPacking(slug); const packRows = (pk && pk.packing) || [], packed = packRows.filter(r => r.packed === "1").length;
+  const sec = (title, n, body) => '<section class="ws-sec"><h3>' + esc(title) + (n != null ? ' <span class="mono muted">' + n + "</span>" : "") + "</h3>" + body + "</section>";
+  const facts = '<p class="ws-facts mono">' + metaJoin([esc(nightsLabel(tot.nights)), tot.regions ? esc(tot.regions + " regions") : "", esc(dateSpan(tot.start, tot.end))]) + "</p>";
+  const todos = opts && opts.todos === false ? "" : '<div class="ws-sec ws-todos">' + todosSectionHTML(await loadTodos(slug), { heading: true }) + "</div>";
+  const gapList = gaps.length ? '<ul class="ws-gaps">' + gaps.map(g => "<li><strong>" + esc(nightsLabel(g.nights)) + '</strong> <span class="mono muted">' + esc(dateSpan(g.from, g.to)) + "</span></li>").join("") + "</ul>"
+    : '<p class="muted">No unplanned nights.</p>';
+  const packing = packRows.length ? '<p><strong class="mono">' + packed + " / " + packRows.length + '</strong> packed · <a href="#/trip/' + s + '/packing">Packing ›</a></p>' : '<p class="muted">No packing list yet.</p>';
+  return '<h2 class="ws-h">At a glance</h2>' + facts + todos + sec("Unplanned", gaps.length || null, gapList) + sec("Packing", null, packing);
+}
+// The map follows the timeline: frame the region whose block crosses the upper third of the screen.
+function wsFollow() {
+  if (!wsActive() || !_mapCtl || document.body.classList.contains("map-view") || !document.querySelector("#view #tl-tree")) return;
+  const line = innerHeight * 0.35;
+  let cur = null;
+  document.querySelectorAll("#view li.rg").forEach(li => { const r = li.getBoundingClientRect(); if (r.top <= line && r.bottom > line) cur = (li.dataset.node || "").split(":")[1] || null; });
+  if (cur === _wsRegion) return;
+  _wsRegion = cur;
+  _mapCtl.focusRegion(cur, !prefersReducedMotion());
+  document.querySelectorAll(".ws-rnav").forEach(b => b.classList.toggle("is-current", b.dataset.wsRegion === cur));
+}
+let _wsBound = false;
+function bindWorkspace() {
+  if (_wsBound) return; _wsBound = true;
+  applyWs();
+  if (WS_MQ) {
+    const flip = () => { applyWs(); _mapSig = ""; _wsTl = null; vt(route); };
+    if (WS_MQ.addEventListener) WS_MQ.addEventListener("change", flip); else if (WS_MQ.addListener) WS_MQ.addListener(flip);
+  }
+  let raf = 0;
+  addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; wsSyncTop(); wsFollow(); }); }, { passive: true });
+  document.addEventListener("mouseover", (e) => {        // a hovered timeline card lights up its pin
+    if (!wsActive() || !_mapCtl) return;
+    const li = e.target.closest("#view li.step[data-href]"), m = li && /\/step\/([^/]+)$/.exec(li.dataset.href);
+    _mapCtl.highlightStop(m ? decodeURIComponent(m[1]) : null);
+  });
+  document.addEventListener("click", (e) => {            // Regions panel: frame the region + scroll the timeline to it
+    const b = e.target.closest("[data-ws-region]"); if (!b) return;
+    const id = b.dataset.wsRegion, li = document.querySelector('#view li.rg[data-node^="rg:' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + ':"]');
+    if (li) li.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+    if (_mapCtl) { _wsRegion = id; _mapCtl.focusRegion(id, !prefersReducedMotion()); }
+    document.querySelectorAll(".ws-rnav").forEach(x => x.classList.toggle("is-current", x.dataset.wsRegion === id));
+    track("ws_region_nav");
+  });
+}
+
 // ---- to-dos (0020): a free-form trip to-do list ---------------------------------------------------
 // Not tied to steps: add, tick off, rename (tap the text), delete; done items fold under "N done". The same
 // list renders on the To-do tab and in the wide-screen pane; Claude edits it too (MCP *_todo tools). Rows come
@@ -2035,9 +2162,12 @@ function openRegionWizard(slug) {
     }
   });
 }
-async function viewRegion(slug, id) {
+async function viewRegion(slug, id, el) {
+  // el: render into the wide-screen pane instead of #view (0020); no view-transition name there (it would
+  // duplicate the timeline card's and abort the transition).
+  const out = () => el || view();
   markActive(null);
-  view().innerHTML = '<div class="panel"><p class="muted">Loading…</p></div>';
+  out().innerHTML = '<div class="panel"><p class="muted">Loading…</p></div>';
   const { trip, steps, regions, tree } = await loadTrip(slug);
   const back = "#/trip/" + encodeURIComponent(slug);
   const tripTitle = (trip && (trip.title || trip.slug)) || slug;
@@ -2045,7 +2175,7 @@ async function viewRegion(slug, id) {
     '<span class="chev" aria-hidden="true">‹</span> ' + esc(tripTitle) + "</a></div>";
   const r = (regions || []).find(x => String(x.id) === String(id) && !x.deleted);
   if (!r) {
-    view().innerHTML = '<div class="sheet">' + head + '<div class="panel detail"><h1>Region not found</h1>' +
+    out().innerHTML = '<div class="sheet">' + head + '<div class="panel detail"><h1>Region not found</h1>' +
       '<p class="muted"><a href="' + esc(back) + '">← Back to ' + esc(tripTitle) + "</a></p></div></div>";
     return;
   }
@@ -2104,7 +2234,7 @@ async function viewRegion(slug, id) {
   const danger = '<div class="detail-danger"><button type="button" class="danger-btn" data-region-del="' + esc(r.id) + '" data-steps="' + members.length + '">' +
     icon("trash") + "Delete region</button></div>";
 
-  view().innerHTML = '<div class="sheet">' + head +
+  out().innerHTML = '<div class="sheet">' + head +
     '<div class="panel detail">' +
       '<h1 class="detail-title">' + E("title", esc(r.title || "Region"), { input: "text", value: r.title }) + "</h1>" +
       '<div class="detail-context muted rg-facts">' + facts + "</div>" +
@@ -2260,6 +2390,7 @@ function route() {
   const hash = location.hash.replace(/^#/, "") || "/";
   if (window.Analytics) Analytics.pageview(hash);  // hash router: send a manual $pageview per navigation (0016)
   const parts = hash.split("/").filter(Boolean);   // "/" -> [], "/trip/x" -> ["trip","x"]
+  document.body.classList.toggle("on-trip", parts[0] === "trip" && !!parts[1]);   // the workspace panes show on trips only
   // The faded atlas lives only on itinerary surfaces (timeline + step/activity detail + Map view); those
   // views drive it themselves via syncTripMap. Everywhere else (Home, What's New, Budget, Packing, Trash)
   // it's hidden so the plain paper look is untouched.
@@ -2270,6 +2401,7 @@ function route() {
   if (!(parts[0] === "trip" && parts[2] === "map")) document.body.classList.remove("map-view");
   if (parts.length === 0) return viewHome();
   if (parts[0] === "whats-new") return viewWhatsNew();
+  if (wsActive() && parts[0] === "trip" && parts[1]) return wsRoute(parts);   // wide-screen workspace (0020)
   if (parts[0] === "trip" && parts[1]) {
     if (parts[2] === "activity" && parts[3]) return viewActivity(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
     if (parts[2] === "step" && parts[3]) return viewStep(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
@@ -2398,5 +2530,6 @@ function trackTopbar() {
   bindTree();
   bindRegions();
   bindTodos();
+  bindWorkspace();
   route();
 })();

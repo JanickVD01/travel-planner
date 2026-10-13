@@ -1,6 +1,17 @@
 {
   "releases": [
     {
+      "version": "v0.11.0",
+      "title": "A workspace for big screens",
+      "date": "2026-10-13",
+      "notes": [
+        "On a laptop or desktop (1200 px and wider), a trip now uses the whole screen: the map on the left with your regions underneath, the timeline in the middle, and “At a glance” on the right — your to-dos, unplanned nights and packing.",
+        "Click a step or region and its details open on the right, so you never lose your place in the timeline.",
+        "The map follows along as you scroll, and hovering a card highlights its pin. The Map tab still opens the big full-screen map.",
+        "Everywhere: a cleaner look — plain paper instead of the squared background, and no more dashed lines under things you can edit (hover to see them, tap to change)."
+      ]
+    },
+    {
       "version": "v0.10.0",
       "title": "Trip to-dos",
       "date": "2026-10-13",

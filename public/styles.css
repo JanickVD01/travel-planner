@@ -21,15 +21,7 @@ body {
   text-rendering: optimizeLegibility;
   min-height: 100svh;
 }
-/* whisper of a transit grid, pure CSS */
-body::before {
-  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1;
-  background-image:
-    linear-gradient(var(--line-hair) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line-hair) 1px, transparent 1px);
-  background-size: var(--rail-x) var(--rail-x), var(--rail-x) var(--rail-x);
-  opacity: .30;
-}
+/* (0020, owner: plain paper — the notebook / transit-grid background is gone app-wide) */
 a { color: var(--accent-ink); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1, h2, h3 { font-family: var(--f-disp); margin: 0; letter-spacing: -.02em; font-weight: 600; line-height: 1.1; }
@@ -237,8 +229,8 @@ a.step-title:hover, a.leg-title:hover { color: var(--accent-ink); text-decoratio
 .step-card.pinned .step-sub,
 .step-card.pinned .muted { color: var(--on-media-dim); }
 .step-card.pinned .mono { color: var(--on-media); }
-.step-card.pinned .editable { color: var(--on-media); border-bottom-color: rgb(255 255 255 / .5); }
-.step-card.pinned .editable:hover { background: rgb(255 255 255 / .14); border-bottom-color: var(--on-media-accent); }
+.step-card.pinned .editable { color: var(--on-media); }
+.step-card.pinned .editable:hover { background: rgb(255 255 255 / .14); }
 .step-card.pinned .add-actual { color: var(--on-media-accent); }
 .step-card.pinned .step-open { color: var(--on-media-dim); }
 .step-card.pinned .step-open:hover { color: var(--on-media-accent); }
@@ -271,8 +263,7 @@ a.step-title:hover, a.leg-title:hover { color: var(--accent-ink); text-decoratio
   -webkit-appearance: none; appearance: none;
   font: inherit; color: inherit; letter-spacing: inherit; text-align: left;
   background: transparent; border: 0;
-  border-bottom: 1px dashed color-mix(in srgb, var(--ink-3) 70%, transparent);
-  border-radius: 6px 6px 0 0; cursor: pointer;
+  border-radius: 6px; cursor: pointer;                /* (0020, owner: no dashed underline — a tint on hover / focus) */
   display: inline-flex; align-items: center; gap: 6px;
   min-height: 44px; padding: 2px 5px;                 /* >=44px touch target */
   /* It's a <span role=button>, not a <button>: allow long-press text selection + the native Copy
@@ -282,7 +273,8 @@ a.step-title:hover, a.leg-title:hover { color: var(--accent-ink); text-decoratio
   -webkit-touch-callout: default;
   touch-action: manipulation;
 }
-.editable:hover { background: var(--paper-2); border-bottom-color: var(--accent); text-decoration: none; }
+.editable:hover { background: var(--paper-2); text-decoration: none; }
+.editable:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; background: var(--paper-2); }
 .add-actual { color: var(--accent-ink); font-size: var(--text-sm); font-weight: 600; }
 /* inline date/time on the timeline — compact tappable pills that wrap on small screens */
 .leg-when, .stay-when { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 1px 5px; }
@@ -379,7 +371,7 @@ a.act-title:hover { color: var(--accent-ink); text-decoration: underline; text-u
 .notes-body .editable {
   display: block; width: 100%; align-items: flex-start;
   min-height: 44px; padding: 10px 12px;
-  border: 1px dashed color-mix(in srgb, var(--ink-3) 70%, transparent);
+  border: 1px solid var(--line-hair);                 /* a quiet field outline (0020: no dashes) */
   border-radius: var(--radius-sm); line-height: 1.5;
 }
 .notes-body .note-text { white-space: pre-wrap; color: var(--ink-1); }
@@ -983,7 +975,7 @@ button.nseg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
   }
 }
 
-/* Shell layer: fixed, full-bleed, BEHIND the grid (body::before is z-index:-1) and all content. Inert
+/* Shell layer: fixed, full-bleed, BEHIND all content (z-index:-2). Inert
    (empty + non-interactive) until map.js populates it on a trip surface. */
 #trip-map { position: fixed; inset: 0; z-index: -2; pointer-events: none; overflow: hidden; }
 /* Off the itinerary surfaces (Home, What's New, Budget, Packing, Trash) the built map must not linger
@@ -1112,4 +1104,77 @@ body.map-view .subnav { background: transparent; -webkit-backdrop-filter: none; 
 .todo-del:hover { color: var(--danger); background: var(--danger-bg); }
 .todo-done { margin-top: var(--space-3); }
 .todo-done summary { cursor: pointer; font-size: var(--text-sm); color: var(--ink-2); min-height: 36px; display: flex; align-items: center; }
+
+/* ============================================================================================
+   Wide-screen workspace (effort 0020, layout B) — >= 1200 px on a trip (body.ws.on-trip).
+   Left: the map pane + the Regions panel. Middle: the page (timeline …) filling the space. Right: At a glance
+   or the selected step / region / activity (condensed). The Map tab stays full-screen (panes hidden).
+   ============================================================================================ */
+.ws-left, .ws-pane { display: none; }
+#trip-map .map-dot.is-hot { stroke: var(--accent-ink); stroke-width: 5; }
+@media (min-width: 1200px) {
+  body.ws { --pl: 27vw; --pr: 27vw; }
+  body.ws.on-trip .layout { max-width: none; margin: 0; padding-left: calc(var(--pl) + var(--space-5)); padding-right: calc(var(--pr) + var(--space-5)); }
+  body.ws.on-trip #view { max-width: none; width: 100%; margin: 0; }
+  body.ws.map-bg #view { background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0 0 var(--space-7); }
+  body.ws.map-bg .subnav, body.ws.map-bg .sheet-head { margin-left: 0; margin-right: 0; padding-left: 2px; padding-right: 2px; }
+  body.ws .subnav.is-stuck { background: color-mix(in srgb, var(--paper-0) 94%, transparent); }
+  body.ws.on-trip #view .trip-sum { display: none; }               /* it lives in the Regions panel */
+  /* the map leaves the backdrop for the top-left pane (vivid, interactive, stop labels on) */
+  body.ws.on-trip:not(.map-view) #trip-map {
+    position: fixed; inset: auto; top: var(--pane-top, var(--topbar-h)); left: 0; bottom: 40vh; width: var(--pl);
+    z-index: 30; pointer-events: auto; visibility: visible; cursor: grab;
+    border-right: 1px solid var(--line-hair); border-bottom: 1px solid var(--line-hair);
+  }
+  body.ws.on-trip:not(.map-view) #trip-map:active { cursor: grabbing; }
+  body.ws.map-bg #trip-map .map-ocean, body.ws.map-bg #trip-map .map-ground, body.ws.map-bg #trip-map .atlas-labels { opacity: 1; filter: none; }
+  body.ws.map-bg #trip-map::after { display: none; }
+  body.ws.on-trip #trip-map .atlas-label.stop { display: block; }
+  body.ws.on-trip #trip-map .map-dot { cursor: pointer; }
+  /* left, under the map: the Regions panel */
+  body.ws.on-trip:not(.map-view) .ws-left { display: block; position: fixed; left: 0; bottom: 0; width: var(--pl); height: 40vh; z-index: 30;
+    overflow: auto; padding: var(--space-4); background: var(--paper-1); border-right: 1px solid var(--line-hair); }
+  .ws-rnav-head { position: sticky; top: calc(-1 * var(--space-4)); z-index: 1; margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) var(--space-2);
+    padding: var(--space-4) var(--space-4) var(--space-2); background: var(--paper-1); }
+  .ws-rnav { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 48px; margin: 0 0 6px; padding: 8px 12px;
+    font: inherit; text-align: left; color: var(--ink-0); background: var(--paper-2); border: 1px solid var(--line-hair); border-left: 3px solid var(--rail);
+    border-radius: var(--radius-sm); cursor: pointer; }
+  .ws-rnav:hover { border-color: var(--rail); }
+  .ws-rnav:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ws-rnav.is-current { background: var(--paper-0); box-shadow: inset 0 0 0 1px var(--rail); }
+  .ws-rnav.planned { border-style: dashed; border-left-style: solid; background: transparent; }
+  .wr-title { font-family: var(--f-disp); font-weight: 600; }
+  .wr-meta { display: flex; flex-wrap: wrap; gap: 0 6px; font-size: var(--text-xs); color: var(--ink-2); }
+  .ws-rgap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; margin: 0 0 6px; padding: 8px 12px; font-size: var(--text-sm);
+    color: var(--ink-1); border: 1px dashed var(--ink-3); border-radius: var(--radius-sm);
+    background: repeating-linear-gradient(-45deg, var(--paper-1) 0 6px, var(--paper-2) 6px 9px); }
+  .ws-rgap .mono { font-size: var(--text-xs); color: var(--ink-2); }
+  /* right: At a glance / the selected detail */
+  body.ws.on-trip:not(.map-view) .ws-pane { display: block; position: fixed; top: var(--pane-top, var(--topbar-h)); right: 0; bottom: 0; width: var(--pr);
+    z-index: 30; overflow: auto; padding: var(--space-4) var(--space-5) var(--space-7); background: var(--paper-1); border-left: 1px solid var(--line-hair); }
+  .ws-h { font-size: var(--text-lg); margin: 0 0 var(--space-2); }
+  .ws-facts { display: flex; flex-wrap: wrap; gap: 0 6px; font-size: var(--text-sm); color: var(--ink-1); margin: 0 0 var(--space-3); }
+  .ws-rnav-head .ws-facts { font-size: var(--text-xs); margin: 4px 0 0; }
+  .ws-sec { padding: var(--space-3) 0; border-top: 1px solid var(--line-hair); }
+  .ws-sec > h3 { font-size: var(--text-sm); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); margin: 0 0 var(--space-2); }
+  .ws-gaps { list-style: none; margin: 0; padding: 0; }
+  .ws-gaps li { padding: 4px 0; }
+  /* the detail views in the pane: no sticky head, no card chrome, condensed rows */
+  .ws-pane .sheet { max-width: none; }
+  .ws-pane .sheet-head { position: static; margin: 0 0 var(--space-2); padding: 0; background: none; box-shadow: none; }
+  .ws-pane .panel.detail { box-shadow: none; padding: var(--space-4) var(--space-4) var(--space-5); }
+  .ws-pane .detail-title { font-size: 1.6rem; }
+  .ws-pane .detail-context { margin-bottom: var(--space-2); }
+  .ws-pane .detail-meta { gap: 0; margin-bottom: var(--space-4); }
+  .ws-pane .detail-meta .mrow { min-height: 34px; padding: 0; }
+  .ws-pane .detail-meta .mlabel { flex-basis: 92px; font-size: var(--text-xs); }
+  .ws-pane .detail-meta .editable { min-height: 32px; padding: 1px 5px; }
+  .ws-pane .detail-actions { margin-top: var(--space-2); }
+  .ws-pane :is(.notes, .step-acts, .rg-steps, .photos) { margin-top: var(--space-4); }
+  .ws-pane :is(.notes h2, .step-acts h2, .rg-steps h2) { font-size: var(--text-sm); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); margin-bottom: var(--space-2); }
+  .ws-pane .rg-member { min-height: 42px; padding: 3px 4px; }
+  /* the selected step / region in the timeline */
+  body.ws #view li.step.is-selected .step-card, body.ws #view li.step.is-selected .leg { box-shadow: 0 0 0 2px var(--accent); border-radius: var(--radius); }
+  body.ws #view li.rg.is-selected > .rg-head .rg-toggle { box-shadow: inset 0 0 0 2px var(--rail); }
+}
 
