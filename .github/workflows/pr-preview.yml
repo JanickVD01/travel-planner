@@ -5,6 +5,8 @@ name: pr-preview
 on:
   pull_request:
     branches: [main]
+    # `edited` re-runs validate when the PR description changes (the What's New guard reads it).
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
@@ -23,9 +25,25 @@ jobs:
         with:
           node-version: 22
       - run: node scripts/validate-data.mjs
+      # What's New guard: a PR whose description says "What's New? y" must add its release note to
+      # public/data/releases.json — so the in-app What's New can't silently fall behind (it did, v0.7 → v0.8).
+      - name: What's New guard
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            const m = body.match(/what['’]s new\?[\s*:_]*(y(?:es)?|no?)\b/i);
+            if (!m) { core.warning("PR description has no \"What's New? y/n\" line (four-line format)."); return; }
+            if (!/^y/i.test(m[1])) { core.info("What's New? n — no release note required."); return; }
+            const { owner, repo } = context.repo;
+            const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: context.payload.pull_request.number });
+            if (!files.some(f => f.filename === "public/data/releases.json"))
+              core.setFailed("What's New? y — but public/data/releases.json isn't changed. Add the release note (newest first).");
+            else core.info("What's New? y — releases.json is changed.");
 
   preview:
     needs: validate
+    if: github.event.action != 'edited'   # a description edit only re-checks validate; no redeploy
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
