@@ -216,6 +216,10 @@ window.TripMap = {
       // chips); 0 = the default (top bar + sub-nav).
       setTopPad: function (px) { extraTop = Math.max(0, Number(px) || 0); },
       onResize: function () { build(); },
+      // 0020 PROTOTYPE: emphasise one stop's pin (a hovered timeline card); null clears.
+      highlightStop: function (stepId) {
+        dots.forEach(function (c, i) { c.classList.toggle("is-hot", stepId != null && String(stays[i].stepId) === String(stepId)); });
+      },
       destroy: function () { d3.select(svg).on(".zoom", null); if (svg.parentNode) svg.parentNode.removeChild(svg); }
     };
   }

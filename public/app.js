@@ -4,7 +4,8 @@
 
 // ---- tiny helpers ----------------------------------------------------------
 const $ = (sel, el) => (el || document).querySelector(sel);
-const view = () => $("#view");
+let _viewTarget = null;                               // 0020 PROTOTYPE: details can render into a side pane
+const view = () => _viewTarget || $("#view");
 function esc(s) {
   return String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -268,7 +269,7 @@ async function syncTripMap(slug) {
   const ctl = await ensureMap();
   if (!ctl || gen !== _mapGen) return;               // failed to load, or superseded by a later navigation
   const sig = slug + "::" + stopsSig(stops);
-  ctl.setTopPad(0);
+  ctl.setTopPad(protoTopPad());                       // 0020 PROTOTYPE: a map in a pane needs little top room
   if (sig === _mapSig) {                             // same trip already framed on the backdrop — leave it,
     if (ctl.focusedRegion()) ctl.focusRegion(null, false);   // unless the Map view left a region focused (0019)
     return;
@@ -2168,6 +2169,7 @@ function route() {
   const hash = location.hash.replace(/^#/, "") || "/";
   if (window.Analytics) Analytics.pageview(hash);  // hash router: send a manual $pageview per navigation (0016)
   const parts = hash.split("/").filter(Boolean);   // "/" -> [], "/trip/x" -> ["trip","x"]
+  document.body.classList.toggle("on-trip", parts[0] === "trip" && !!parts[1]);   // 0020 PROTOTYPE
   // The faded atlas lives only on itinerary surfaces (timeline + step/activity detail + Map view); those
   // views drive it themselves via syncTripMap. Everywhere else (Home, What's New, Budget, Packing, Trash)
   // it's hidden so the plain paper look is untouched.
@@ -2178,6 +2180,7 @@ function route() {
   if (!(parts[0] === "trip" && parts[2] === "map")) document.body.classList.remove("map-view");
   if (parts.length === 0) return viewHome();
   if (parts[0] === "whats-new") return viewWhatsNew();
+  if (protoActive() && parts[0] === "trip" && parts[1]) return protoRoute(parts);   // 0020 PROTOTYPE
   if (parts[0] === "trip" && parts[1]) {
     if (parts[2] === "activity" && parts[3]) return viewActivity(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
     if (parts[2] === "step" && parts[3]) return viewStep(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
@@ -2281,8 +2284,171 @@ function trackTopbar() {
   if (v && window.MutationObserver) new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(stuck); }).observe(v, { childList: true });
 }
 
+// ============================================================================================
+// 0020 PROTOTYPE — wide-screen layouts A / B / C (THROWAWAY: lives only on the PR preview, never merged).
+// A = map pane + timeline · B = map + region navigator | timeline | At a glance / detail · C = timeline | detail
+// (+ small map). Only at >= 1200 px; chosen with the bottom switcher (localStorage) or ?layout=a|b|c.
+// Prototype-grade on purpose: e.g. At a glance is computed here, the real build would move it into core.
+// ============================================================================================
+const PROTO_KEY = "tp.proto.layout", PROTO_MIN = 1200;
+let _protoTl = null, _protoRegion = undefined;
+function protoChoice() {
+  let v = null;
+  try { v = new URLSearchParams(location.search).get("layout"); } catch {}
+  if (!v) { try { v = localStorage.getItem(PROTO_KEY); } catch {} }
+  return ["a", "b", "c"].indexOf(v) >= 0 ? v : "";
+}
+function protoActive() { return innerWidth >= PROTO_MIN ? protoChoice() : ""; }
+function protoPaneMode() { const p = protoActive(); return p === "b" || p === "c"; }
+function protoTopPad() { return protoActive() ? 28 : 0; }
+function protoEls() {
+  let left = document.getElementById("proto-left"), pane = document.getElementById("proto-pane");
+  if (!left) { left = document.createElement("aside"); left.id = "proto-left"; left.className = "proto-left"; left.setAttribute("aria-label", "Regions"); document.body.appendChild(left); }
+  if (!pane) { pane = document.createElement("aside"); pane.id = "proto-pane"; pane.className = "proto-pane"; pane.innerHTML = '<div class="proto-pane-body"></div>'; document.body.appendChild(pane); }
+  return { left, pane, paneBody: pane.querySelector(".proto-pane-body") };
+}
+function applyProto() {
+  const p = protoActive();
+  ["a", "b", "c"].forEach(k => document.body.classList.toggle("proto-" + k, p === k));
+  document.body.classList.toggle("proto", !!p);
+  _mapSig = ""; _protoTl = null; _protoRegion = undefined;   // rebuild the map at its pane size on the next sync
+  renderProtoSwitcher(); protoSyncTop();
+}
+function renderProtoSwitcher() {
+  let el = document.getElementById("proto-switch");
+  if (innerWidth < PROTO_MIN) { if (el) el.hidden = true; return; }
+  if (!el) {
+    el = document.createElement("div"); el.id = "proto-switch"; el.className = "proto-switch";
+    el.setAttribute("role", "group"); el.setAttribute("aria-label", "Layout prototype");
+    document.body.appendChild(el);
+    el.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-proto]"); if (!b) return;
+      try { localStorage.setItem(PROTO_KEY, b.dataset.proto); } catch {}
+      if (location.search) history.replaceState(null, "", location.pathname + location.hash);
+      applyProto(); vt(route);
+      track("proto_layout_set", { layout: b.dataset.proto || "current" });
+    });
+  }
+  el.hidden = false;
+  const cur = protoChoice();
+  el.innerHTML = '<span class="proto-label">Layout prototype</span>' +
+    [["", "Current"], ["a", "A · Map"], ["b", "B · Planner"], ["c", "C · Detail"]]
+      .map(([k, l]) => '<button type="button" data-proto="' + k + '" aria-pressed="' + (cur === k) + '">' + l + "</button>").join("");
+}
+// Panes sit under the top bar wherever it is (the demo banner scrolls away above it).
+function protoSyncTop() {
+  const bar = $(".topbar");
+  if (bar) document.documentElement.style.setProperty("--pane-top", Math.max(0, Math.round(bar.getBoundingClientRect().bottom)) + "px");
+}
+async function protoRoute(parts) {
+  const slug = decodeURIComponent(parts[1]), sub = parts[2] || "", id = parts[3] ? decodeURIComponent(parts[3]) : "";
+  const { left, paneBody } = protoEls();
+  const isDetail = protoPaneMode() && (sub === "step" || sub === "region" || sub === "activity") && id;
+  if (isDetail) {
+    if (!document.querySelector("#view .tl") || !state.trip[slug] || _protoTl !== state.trip[slug]) { await viewTimeline(slug); _protoTl = state.trip[slug]; }
+    _viewTarget = paneBody;
+    try {
+      if (sub === "step") await viewStep(slug, id);
+      else if (sub === "region") await viewRegion(slug, id);
+      else await viewActivity(slug, id);
+    } finally { _viewTarget = null; }
+    paneBody.scrollTop = 0;
+    protoMarkSelected(sub, id);
+  } else {
+    if (sub === "map") await viewMap(slug);
+    else if (sub === "budget") await viewBudget(slug);
+    else if (sub === "packing") await viewPacking(slug);
+    else if (sub === "trash") await viewTrash(slug);
+    else if (sub === "step" && id) await viewStep(slug, id);
+    else if (sub === "region" && id) await viewRegion(slug, id);
+    else if (sub === "activity" && id) await viewActivity(slug, id);
+    else { await viewTimeline(slug); _protoTl = state.trip[slug]; }
+    if (protoChoice() === "b") paneBody.innerHTML = await protoGlanceHTML(slug);
+    else if (protoChoice() === "c") paneBody.innerHTML = '<div class="proto-empty"><p><strong>Select a step or region</strong></p><p class="muted">Its details open here, next to the timeline.</p></div>';
+    protoMarkSelected("", "");
+  }
+  if (sub !== "map") syncTripMap(slug);                  // the map pane is there on every trip page
+  if (protoChoice() === "b") left.innerHTML = protoRegionNavHTML(slug);
+  _protoRegion = undefined; protoFollow();
+}
+function protoMarkSelected(kind, id) {
+  document.querySelectorAll("#view li.step").forEach(li => li.classList.toggle("is-selected", kind === "step" && /\/step\/([^/]+)$/.test(li.dataset.href || "") && decodeURIComponent(RegExp.$1) === String(id)));
+  document.querySelectorAll("#view li.rg").forEach(li => li.classList.toggle("is-selected", kind === "region" && (li.dataset.node || "").indexOf("rg:" + id + ":") === 0));
+}
+function protoRegionNavHTML(slug) {
+  const t = state.trip[slug]; if (!t || !t.tree) return "";
+  const rs = t.tree.regions || {};
+  const rows = regionOrder(t.tree, t.regions).map(id => {
+    const g = rs[id] || {}, r = t.regionById[id] || {};
+    const meta = metaJoin([esc(g.stays ? dateSpan(g.arrive, g.depart) : dateSpan(g.start_date, g.end_date)), g.stays ? esc(nightsLabel(g.nights)) : (g.planned_nights ? esc("planned " + nightsLabel(g.planned_nights)) : "")]);
+    return '<button type="button" class="proto-rnav" data-proto-region="' + esc(id) + '"><span class="pr-title">' + esc(r.title || "Region") + '</span><span class="pr-meta mono">' + meta + "</span></button>";
+  }).join("");
+  return '<h2 class="proto-h">Regions</h2>' + (rows || '<p class="muted">No regions yet.</p>');
+}
+async function protoGlanceHTML(slug) {
+  const t = await loadTrip(slug); if (!t || !t.trip) return "";
+  const s = encodeURIComponent(slug), tot = (t.tree && t.tree.totals) || {};
+  const live = (t.steps || []).filter(x => !x.deleted);
+  const toBook = live.filter(x => x.included !== "1" && (!x.booking_status || x.booking_status === "Idea" || x.booking_status === "Planned"));
+  const gaps = []; (function walk(ns) { (ns || []).forEach(n => { if (n.type === "gap") gaps.push(n); if (n.children) walk(n.children); }); })(t.tree && t.tree.items);
+  let b = null; try { b = await api("budget/" + s); } catch {}
+  const pk = await loadPacking(slug); const packRows = (pk && pk.packing) || [], packed = packRows.filter(r => r.packed === "1").length;
+  const sec = (title, n, body) => '<section class="proto-sec"><h3>' + esc(title) + (n != null ? ' <span class="mono muted">' + n + "</span>" : "") + "</h3>" + body + "</section>";
+  const facts = '<p class="proto-facts mono">' + metaJoin([esc(nightsLabel(tot.nights)), tot.regions ? esc(tot.regions + " regions") : "", esc(dateSpan(tot.start, tot.end))]) + "</p>";
+  const bookList = toBook.length ? '<ul class="proto-list">' + toBook.slice(0, 6).map(x => {
+      const d = x.kind === "travel" ? x.depart : x.arrive, st = x.booking_status || "Idea";
+      return '<li><a href="#/trip/' + s + "/step/" + encodeURIComponent(x.id) + '"><span class="pl-title">' + esc(x.title || x.location || "Step") + '</span><span class="pl-meta mono">' + esc(fmtDate(d) || "no date") + '</span><span class="chip status-' + esc(st) + '">' + esc(st) + "</span></a></li>";
+    }).join("") + "</ul>" + (toBook.length > 6 ? '<p class="muted">+ ' + (toBook.length - 6) + " more</p>" : "")
+    : '<p class="muted">Everything is booked.</p>';
+  const gapList = gaps.length ? '<ul class="proto-list">' + gaps.map(g => '<li class="pl-gap"><strong>' + esc(nightsLabel(g.nights)) + '</strong> <span class="mono muted">' + esc(dateSpan(g.from, g.to)) + "</span></li>").join("") + "</ul>"
+    : '<p class="muted">No unplanned nights.</p>';
+  let money = '<p class="muted">Set an exchange rate to see the budget.</p>';
+  if (b && b.totalEst != null) {
+    const tgt = Number(b.target) || Number(t.trip.budget_target_eur) || 0, est = Number(b.totalEst) || 0, act = Number(b.totalActual) || 0;
+    const pct = tgt > 0 ? Math.min(100, Math.round(est / tgt * 100)) : 0;
+    money = '<p class="proto-big mono">' + esc("€" + Math.round(est).toLocaleString("en-US")) + (tgt ? ' <span class="muted">/ €' + Math.round(tgt).toLocaleString("en-US") + "</span>" : "") + "</p>" +
+      (tgt ? '<div class="proto-meter" role="meter" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" aria-valuetext="' + pct + '% of target"><div style="width:' + pct + '%"></div></div>' : "") +
+      '<p class="muted">estimated · €' + Math.round(act).toLocaleString("en-US") + ' spent · <a href="#/trip/' + s + '/budget">Budget ›</a></p>';
+  }
+  const packing = packRows.length ? '<p><strong class="mono">' + packed + " / " + packRows.length + '</strong> packed · <a href="#/trip/' + s + '/packing">Packing ›</a></p>' : '<p class="muted">No packing list yet.</p>';
+  return '<h2 class="proto-h">At a glance</h2>' + facts +
+    sec("To book", toBook.length, bookList) + sec("Unplanned", gaps.length || null, gapList) + sec("Budget", null, money) + sec("Packing", null, packing);
+}
+// The map follows the timeline (A/B): frame the region whose block crosses the upper third of the screen.
+function protoFollow() {
+  const p = protoActive(); if (!(p === "a" || p === "b") || !_mapCtl || !document.querySelector("#view #tl-tree")) return;
+  const line = innerHeight * 0.35;
+  let cur = null;
+  document.querySelectorAll("#view li.rg").forEach(li => { const r = li.getBoundingClientRect(); if (r.top <= line && r.bottom > line) cur = (li.dataset.node || "").split(":")[1] || null; });
+  if (cur === _protoRegion) return;
+  _protoRegion = cur;
+  _mapCtl.focusRegion(cur, !prefersReducedMotion());
+  document.querySelectorAll(".proto-rnav").forEach(b => b.classList.toggle("is-current", b.dataset.protoRegion === cur));
+}
+function bindProto() {
+  let raf = 0;
+  addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; protoSyncTop(); protoFollow(); }); }, { passive: true });
+  addEventListener("resize", () => { const was = document.body.classList.contains("proto"); applyProto(); if (was !== !!protoActive()) vt(route); });
+  // Hovering a timeline card lights up its pin.
+  document.addEventListener("mouseover", (e) => {
+    if (!protoActive() || !_mapCtl || !_mapCtl.highlightStop) return;
+    const li = e.target.closest("#view li.step[data-href]");
+    const m = li && /\/step\/([^/]+)$/.exec(li.dataset.href);
+    _mapCtl.highlightStop(m ? decodeURIComponent(m[1]) : null);
+  });
+  // B: the region navigator frames the region and scrolls the timeline to it.
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-proto-region]"); if (!b) return;
+    const id = b.dataset.protoRegion, li = document.querySelector('#view li.rg[data-node^="rg:' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + ':"]');
+    if (li) li.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+    if (_mapCtl) { _protoRegion = id; _mapCtl.focusRegion(id, !prefersReducedMotion()); }
+    document.querySelectorAll(".proto-rnav").forEach(x => x.classList.toggle("is-current", x === b));
+  });
+}
+
 (async function boot() {
   trackTopbar();
+  applyProto(); bindProto();                        // 0020 PROTOTYPE
   try { state.app = await fetchJSON("data/app.json"); } catch { state.app = { title: "Travel Planner" }; }
   $("#brand-title").textContent = (state.app && state.app.title) || "Travel Planner";
   document.title = $("#brand-title").textContent;
