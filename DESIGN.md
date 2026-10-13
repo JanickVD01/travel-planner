@@ -337,3 +337,9 @@ Records the locked brand inputs and the final visual decision.
   **Timeline · Map · Budget · Packing tabs come first**, right under the top bar, then the trip hero — the
   same spot on all four tabs (the Map tab already had them there). Supersedes the §11 "left `.nav`" shell.
   See [`docs/implementations/0018-nav-menu/`](docs/implementations/0018-nav-menu/).
+- **2026-10-13 — Trip regions on the map.** Owner feedback. The provinces a trip's stays are in are washed
+  in the **`--rail` ink-blue** (the colour that already means "region" on the timeline — no new hue, the
+  accent stays with pins + the active tab), each trip region gets a label, and the Map view gets tonal
+  region chips (the active one ringed in the rail blue) that frame and emphasise one region. The still
+  backdrop shows the same subtle wash and never moves (0015 stands). See
+  [`docs/implementations/0019-map-regions/`](docs/implementations/0019-map-regions/).
