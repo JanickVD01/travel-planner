@@ -5,9 +5,9 @@
 > milestones 2–6): PostHog EU account created; `*.posthog.com` allow-listed in the CSP; the library +
 > `analytics.js` load; manual `$pageview` on the hash router; the two users identified from `/api/me`;
 > error tracking on. **Session replay added** (2026-07-16, M7): `worker-src 'self' blob:` added to the
-> CSP, recording on with form inputs masked (page text visible). **Survey feedback button added**
-> (2026-07-16, M8): a persistent brand-matched `#feedback-btn` in the top bar that a PostHog "Feedback
-> button" survey (created in the UI) opens. **Still open:** feature flags + manual usage events (M8) and
+> CSP, recording on with form inputs masked (page text visible). **Feedback survey live** (M8): PostHog's
+> own floating **"Feedback" tab** (widget survey, shown every visit); the unused top-bar `#feedback-btn`
+> was removed on 2026-10-13. **Still open:** feature flags + manual usage events (M8) and
 > the final reconcile (M9). See the index — [`README.md`](../README.md) — and the data map in
 > [`CLAUDE.md`](../../../CLAUDE.md).
 
@@ -79,6 +79,11 @@ consent banner), `respect_dnt`, `identified_only`, and masked replay text.
      revealed only when analytics is ready ([`public/app.js`](../../../public/app.js)). **Owner (UI):** create
      a PostHog survey → Presentation **Feedback button** → *your own custom button* → selector **`#feedback-btn`**.
      No CSP/deploy change (surveys already enabled in the SDK init).
+     **Revised 2026-10-13 (`code/fix-tree-link-clicks`):** the survey was created as PostHog's built-in
+     floating **Feedback tab** (Widget → *tab*, right edge; schedule *always*, so it keeps showing after a
+     response), never bound to `#feedback-btn`, and the owner uses the tab. PostHog data showed zero clicks
+     on `#feedback-btn` since launch, so the button + its CSS + its reveal in `boot()` were **removed**. The tab
+     is the only feedback entry point; answers land as `survey sent` with the session replay linked.
    - **Feature flags + manual usage events** — ⏳ pending (`Analytics.capture(...)` helper already in place).
 9. **Verify + reconcile** — 🔧 partial (this PR: [`CLAUDE.md`](../../../CLAUDE.md) data map). Final reconcile
    (DESIGN.md, index status, `releases.json`, GitHub About) after the opt-ins settle.
