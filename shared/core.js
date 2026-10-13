@@ -682,6 +682,7 @@ const isTravel = (s) => s && s.kind === "travel";
 function foldLocations(rid, nodes, stepById) {
   const out = []; let loc = null, locKey = null;
   nodes.forEach(n => {
+    if (n.type === "gap") { out.push(n); loc = null; return; }   // an unplanned gap breaks the fold
     const s = stepById.get(n.id);
     if (isTravel(s)) { out.push(n); loc = null; return; }
     const key = normPlace(s.location || s.title);
@@ -700,30 +701,53 @@ function foldLocations(rid, nodes, stepById) {
 // every step node carries its global `index` in the live, sorted step list (what the UI's inserters use),
 // and an empty region carries `insert_index` (where a first step would go). `budget` (computeBudget's
 // result, optional) supplies each region's EUR subtotal — money math never happens here.
-//   items:   [ {type:"region", region_id, segment, split, children:[location|step], insert_index?} | {type:"step", id, index} ]
+//   items:   [ {type:"region", region_id, segment, split, children:[location|step|gap], insert_index?}
+//            | {type:"step", id, index} | {type:"gap", from, to, nights} ]
 //   regions: { <id>: { title, arrive, depart, nights, stays, steps, locations, planned_nights, start_date,
 //                      end_date, nights_gap, dates_outside, empty, split, eur:{est,actual}|null } }
-//   strip:   [ {region_id|null, title, segment?, nights, planned} ]   (trip-level proportional strip)
-//   totals:  { nights, regions, locations, stays, travel, start, end }
+//   strip:   [ {region_id|null, title, segment?, nights, planned, gap?} ]   (trip-level proportional strip)
+//   totals:  { nights, unplanned_nights, regions, locations, stays, travel, start, end }
+// UNPLANNED GAPS (owner decision, 0017): when nothing is planned between the end of one plan and the start
+// of the next, a {type:"gap"} node sits between them — inside a region when both sides are in it, else at
+// top level. Coverage: a stay covers arrive -> depart, a travel leg depart -> arrive (so an overnight train
+// or flight is NOT a gap), a dated empty region its planned start -> end. A stay with no check-out date
+// makes coverage unknown (no gap is claimed across it).
 export function buildTripTree(trip, regions, steps, activities, budget) {
   const live = (regions || []).filter(r => !r.deleted);
   const seq = timelineItems(live, steps);
   const stepById = new Map(seq.filter(x => x.type === "step").map(x => [x.id, x.row]));
-  const items = [], segs = {}; let cur = null, idx = 0;
+  const items = [], segs = {}; let cur = null, idx = 0, covered = null, unplanned = 0;
+  const gapBefore = (start) => {
+    if (!covered || !start || start <= covered) return null;
+    const n = stayNights({ arrive: covered, depart: start });
+    if (n <= 0) return null;
+    unplanned += n;
+    return { type: "gap", from: covered, to: start, nights: n };
+  };
   seq.forEach(it => {
     if (it.type === "region") {                    // an empty (planned) region
+      const s0 = cleanDate(it.row.start_date), e0 = cleanDate(it.row.end_date);
+      const g = gapBefore(s0); if (g) items.push(g);
       segs[it.id] = (segs[it.id] || 0) + 1;
       items.push({ type: "region", region_id: it.id, segment: 1, split: false, children: [], insert_index: idx });
+      if (e0 || s0) covered = maxD(covered, e0 || s0);
       cur = null; return;
     }
+    const s = it.row, trav = isTravel(s);
+    const start = trav ? (cleanDate(s.depart) || cleanDate(s.arrive)) : cleanDate(s.arrive);
+    const end = trav ? (cleanDate(s.arrive) || cleanDate(s.depart)) : cleanDate(s.depart);
+    const g = gapBefore(start);
     const node = { type: "step", id: it.id, index: idx++ };
-    if (!it.region_id) { items.push(node); cur = null; return; }
-    if (!cur || cur.region_id !== it.region_id) {
+    if (!it.region_id) { if (g) items.push(g); items.push(node); cur = null; }
+    else if (cur && cur.region_id === it.region_id) { if (g) cur.children.push(g); cur.children.push(node); }
+    else {
+      if (g) items.push(g);
       segs[it.region_id] = (segs[it.region_id] || 0) + 1;
-      cur = { type: "region", region_id: it.region_id, segment: segs[it.region_id], split: false, children: [] };
+      cur = { type: "region", region_id: it.region_id, segment: segs[it.region_id], split: false, children: [node] };
       items.push(cur);
     }
-    cur.children.push(node);
+    if (!trav && start && !end) covered = null;      // open-ended stay: coverage unknown from here
+    else if (start || end) covered = maxD(covered, end || start);
   });
   items.forEach(b => {
     if (b.type !== "region") return;
@@ -761,12 +785,15 @@ export function buildTripTree(trip, regions, steps, activities, budget) {
   });
 
   const strip = []; let loose = null;
+  const gapSeg = (gp) => ({ region_id: null, title: "Unplanned", nights: gp.nights, planned: false, gap: true });
   items.forEach(b => {
+    if (b.type === "gap") { loose = null; strip.push(gapSeg(b)); return; }
     if (b.type === "region") {
       loose = null;
       const g = summary[b.region_id];
       const n = b.children.reduce((t, c) => t + (c.type === "location" ? c.nights : 0), 0);
       strip.push({ region_id: b.region_id, title: g.title, segment: b.segment, nights: g.stays > 0 ? n : (g.planned_nights || 0), planned: g.stays === 0 });
+      b.children.forEach(c => { if (c.type === "gap") strip.push(gapSeg(c)); });   // a gap inside the region follows it
       return;
     }
     const s = stepById.get(b.id);
@@ -776,7 +803,7 @@ export function buildTripTree(trip, regions, steps, activities, budget) {
   });
 
   const all = Array.from(stepById.values());
-  const totals = { nights: 0, regions: live.length, locations: 0, stays: 0, travel: 0, start: null, end: null };
+  const totals = { nights: 0, unplanned_nights: unplanned, regions: live.length, locations: 0, stays: 0, travel: 0, start: null, end: null };
   all.forEach(s => {
     if (isTravel(s)) totals.travel++; else { totals.stays++; totals.nights += stayNights(s); }
     totals.start = minD(totals.start, minD(s.arrive, s.depart));

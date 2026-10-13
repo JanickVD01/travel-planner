@@ -87,9 +87,18 @@ async function demoCreate(store, prefix, request) {
   let body = {}; try { body = await request.json(); } catch (e) {}
   const now = "2026-07-08T00:00:00.000Z";
   const max = store.reduce((m, r) => Math.max(m, Number(r.sort_order) || 0), 0);
+  let sort = max + 10;
+  // A step created INSIDE a region lands right after that region's last step (or takes an empty region's
+  // slot) — a rough stand-in for core createStep's placement, so a demo add doesn't show as a split region.
+  if (store === S.steps && body.region_id) {
+    const members = S.steps.filter(s => s.region_id === body.region_id && !s.deleted);
+    const reg = S.regions.find(r => r.id === body.region_id);
+    if (members.length) sort = Math.max.apply(null, members.map(s => Number(s.sort_order) || 0)) + 1;
+    else if (reg) sort = Number(reg.sort_order) || sort;
+  }
   const row = Object.assign(
     { created_by: "demo@example.com", created_at: now, updated_by: "demo@example.com", updated_at: now, deleted: null },
-    body, { id: prefix + "-demo-" + (++_demoSeq), sort_order: max + 10 }
+    body, { id: prefix + "-demo-" + (++_demoSeq), sort_order: sort }
   );
   store.push(row);
   return j({ row }, 201);
