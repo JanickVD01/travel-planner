@@ -856,7 +856,7 @@ function bindTree() {                                     // one delegated liste
       saveTreeState(slug, ts); applyTree(slug, ts, key);
       return;
     }
-    const dp = e.target.closest("[data-depth]");
+    const dp = e.target.closest(".zoom-chip[data-depth]");   // not "[data-depth]": #tl-tree carries one too
     if (dp && slug) {
       e.preventDefault();
       const ts = loadTreeState(slug);
@@ -1974,10 +1974,7 @@ window.addEventListener("resize", () => {
   $("#brand-title").textContent = (state.app && state.app.title) || "Travel Planner";
   document.title = $("#brand-title").textContent;
   await loadMe();
-  if (window.Analytics) {
-    Analytics.init(state.me);                      // PostHog init + identify (real prod sessions only) (0016)
-    if (Analytics.ready) { const fb = $("#feedback-btn"); if (fb) fb.hidden = false; }  // reveal feedback button (0016 M8)
-  }
+  if (window.Analytics) Analytics.init(state.me);  // PostHog init + identify (real prod sessions only) (0016)
   buildNav();
   bindEditable();
   bindPhotos();

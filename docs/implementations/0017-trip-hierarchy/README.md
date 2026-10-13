@@ -2,7 +2,7 @@
 
 > **Status:** 🚧 In progress — M1 ✅ + M2 ✅ (2026-10-13, PR #51). Migration 003 applied to prod D1 via the
 > `migrate` workflow before merge (run 38371496790: 5 queries, success). M3 ✅ (PR #52). M4 ✅ (prod
-> backfill of Thailand + France, owner-confirmed). M5 ✅ (PR 3, `code/trip-hierarchy-timeline`). M6–M7 pending. This record carries the full milestone plan and is **updated in place** as
+> backfill of Thailand + France, owner-confirmed). M5 ✅ (PR 3, `code/trip-hierarchy-timeline`) + an M5 follow-up fix (`code/fix-tree-link-clicks`, see *M5 follow-up*). M6–M7 pending. This record carries the full milestone plan and is **updated in place** as
 > milestones land (like [0010](../0010-pinned-step-photo/)). See [`README.md`](../README.md) for the
 > index and [`research.md`](research.md) for the codebase findings that shaped the design.
 
@@ -174,6 +174,25 @@ stays.
   **one-line** travel legs at the Regions/Locations depths (ellipsised title, no wrapped chevron row); no
   inserter before the first item of a region/place (same slot as its header). Regions view of the demo trip
   ≈ 1 phone screen (was ≈ 1.5). Interaction checks re-run: unchanged, no tap target < 44 px, no JS errors.
+
+## M5 follow-up — links inside the tree were dead (2026-10-13)
+
+Found the same morning from PostHog: in the first post-deploy replays the owner clicked a step's title and
+its "›" five times with no navigation, and sent two feedback notes ("Clicking through no longer works on
+the actual step within when you're on the regions view"; "Clicking on Ao Nang also doesn't seem to do
+much"). **Cause:** `bindTree()` matched the Show chips with `closest("[data-depth]")`, but the tree root
+`<ol id="tl-tree">` carries `data-depth` too, so *every* click inside the tree was handled as a chip click:
+`preventDefault()` (no link in the tree could open — step title, "›", Maps/booking links) and
+`ts.open = {}` (hand-opened regions/locations collapsed). Tapping empty card space still worked (it sets
+`location.hash` in code). It hit every depth, not only Regions. **Fix:** match `.zoom-chip[data-depth]`.
+Missed in M5 verification because those checks exercised toggles, chips and the strip but never clicked a
+link inside the tree.
+
+**Verification:** a headless-Chrome script on the demo trip (390 px) replaying the owner's sequence —
+Regions → open a region + location → click a step title → back → Steps → click a "›" → Locations chip →
+click the tree background. On `main`: the title/chevron don't navigate and the opened rows collapse. On the
+fix: all pass, the opened region + location stay open after returning, the chips still set depth. (The
+same PR removes the unused top-bar feedback button — see [0016](../0016-posthog-analytics/) M8.)
 
 ## Outcome
 
