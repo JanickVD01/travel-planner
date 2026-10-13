@@ -329,4 +329,11 @@ Records the locked brand inputs and the final visual decision.
   `--pin-plate-alpha` ≈ 0.72 (title ~7.4:1 / dates ~6.0:1 over a white photo; frosted blur is dropped
   under `prefers-reduced-transparency`, the tint carries the contrast). Supersedes the 0010 "media
   island" darkening. See [`docs/implementations/0011-pinned-photo-text-plate/`](docs/implementations/0011-pinned-photo-text-plate/).
-
+- **2026-10-13 — Hamburger menu, no sidebar, trip tabs first.** Owner feedback (rage clicks on a hamburger
+  that did nothing on desktop). The permanent left sidebar (just Home + What's New) is gone on every width;
+  the hamburger opens a small floating **menu panel** with those two links (disclosure button,
+  `aria-expanded`, closes on link / Escape / outside tap / navigation; floating chrome → the one tuned
+  shadow). Content is one centred column (`--maxw` 760 px ≈ the old content width). On every trip page the
+  **Timeline · Map · Budget · Packing tabs come first**, right under the top bar, then the trip hero — the
+  same spot on all four tabs (the Map tab already had them there). Supersedes the §11 "left `.nav`" shell.
+  See [`docs/implementations/0018-nav-menu/`](docs/implementations/0018-nav-menu/).

@@ -394,6 +394,24 @@ function buildNav() {
     '<a href="#/" data-route="/">Home</a>' +
     '<a href="#/whats-new" data-route="/whats-new">What’s New</a>';
 }
+// The hamburger's disclosure menu (0018): Home + What's New in a floating panel on every width. Closes on a
+// link tap, Escape (focus back to the button), a tap outside, or any navigation.
+function setMenu(open, focusFirst) {
+  const btn = $("#menu-toggle"), side = $("#side");
+  if (!btn || !side) return;
+  if (open) { const bar = $(".topbar"); if (bar) side.style.top = Math.round(bar.getBoundingClientRect().bottom + 4) + "px"; }   // hug the bar wherever it sits
+  side.hidden = !open; btn.setAttribute("aria-expanded", String(open));
+  if (open && focusFirst) { const a = side.querySelector("a"); if (a) a.focus(); }
+}
+function bindMenu() {
+  const btn = $("#menu-toggle"), side = $("#side");
+  if (!btn || !side) return;
+  btn.addEventListener("click", () => setMenu(side.hidden, true));
+  side.addEventListener("click", (e) => { if (e.target.closest("a")) setMenu(false); });
+  document.addEventListener("click", (e) => { if (!side.hidden && !side.contains(e.target) && !btn.contains(e.target)) setMenu(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !side.hidden) { setMenu(false); btn.focus(); } });
+  addEventListener("hashchange", () => setMenu(false));
+}
 function markActive(route) {
   document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("active", a.getAttribute("data-route") === route));
 }
@@ -906,14 +924,13 @@ async function viewTimeline(slug) {
     ? '<section class="unassigned"><h2 class="unassigned-title">Unassigned</h2>' +
       '<ul class="acts acts-loose">' + unassigned.map(a => activityCardHTML(a, rate, slug)).join("") + "</ul></section>"
     : "";
-  view().innerHTML =
+  view().innerHTML = renderSubnav(slug, "timeline") +       // tabs first: same spot on every trip tab (0018)
     '<div class="trip-hero"><div class="hero-top">' +
         '<a class="back" href="#/">' + icon("pin") + "All trips</a>" +
         '<a class="trash-link" href="#/trip/' + encodeURIComponent(slug) + '/trash">' + icon("trash") + "Trash</a>" +
       "</div>" +
       "<h1>" + esc(title) + "</h1>" + (range ? '<div class="muted mono">' + esc(range) + "</div>" : "") +
       (trip && trip.note ? '<div class="muted">' + esc(trip.note) + "</div>" : "") + "</div>" +
-    renderSubnav(slug, "timeline") +
     '<div class="panel tl-panel">' + overview + hint + body + unassignedHTML + "</div>";
   // signature entrance: stagger the markers in (reduced-motion + no-anime safe).
   motion(a => a.animate(".tl .step", { opacity: [0, 1], translateY: [8, 0], delay: a.stagger(45), duration: 380, ease: "out(3)" }));
@@ -937,14 +954,14 @@ async function viewMap(slug) {
   const stops = tripMapStops(slug);
   if (!stops.length) {                       // no coordinates yet -> plain paper empty-state (no foreground map)
     hideTripMap();
-    view().innerHTML = hero + renderSubnav(slug, "map") +
+    view().innerHTML = renderSubnav(slug, "map") + hero +
       '<div class="panel"><div class="map-empty">' + icon("pin") +
       "<p>Your trip isn’t on the map yet.</p>" +
       '<p class="muted">Add a stay with coordinates — paste a Google Maps link, or ask Claude to set coordinates — and your stops will show here.</p>' +
       "</div></div>";
     return;
   }
-  view().innerHTML = hero + renderSubnav(slug, "map");
+  view().innerHTML = renderSubnav(slug, "map") + hero;
   document.body.classList.add("map-view");
   document.body.classList.remove("map-bg");
   const gen = ++_mapGen;
@@ -969,7 +986,7 @@ async function viewBudget(slug) {
   const hero = '<div class="trip-hero"><a class="back" href="#/">' + icon("pin") + "All trips</a>" +
     "<h1>" + esc(title) + "</h1>" + (range ? '<div class="muted mono">' + esc(range) + "</div>" : "") +
     (trip.note ? '<div class="muted">' + esc(trip.note) + "</div>" : "") + "</div>";
-  const shell = hero + renderSubnav(slug, "budget");
+  const shell = renderSubnav(slug, "budget") + hero;   // tabs first (0018)
 
   // Trip-level inline edits — trips live at space='app', so pass space:"app" (see openEditor).
   const rateV = trip.thb_per_eur;
@@ -1334,7 +1351,7 @@ async function viewPacking(slug) {
   const hero = '<div class="trip-hero"><a class="back" href="#/">' + icon("pin") + "All trips</a>" +
     "<h1>" + esc(title) + "</h1>" + (range ? '<div class="muted mono">' + esc(range) + "</div>" : "") +
     (trip.note ? '<div class="muted">' + esc(trip.note) + "</div>" : "") + "</div>";
-  const shell = hero + renderSubnav(slug, "packing");
+  const shell = renderSubnav(slug, "packing") + hero;   // tabs first (0018)
 
   const all = t.packing || [];
   const rows = packFilterRows(all, actor, _packFilter);
@@ -1957,7 +1974,7 @@ function bindActivityDelete() {                           // "Delete activity" �
 // ---- boot ------------------------------------------------------------------
 function setTheme(t) { document.documentElement.setAttribute("data-theme", t); try { localStorage.setItem("app-theme", t); } catch {} }
 $("#theme-toggle").addEventListener("click", () => setTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light"));
-$("#menu-toggle").addEventListener("click", () => $("#side").classList.toggle("collapsed"));
+bindMenu();
 window.addEventListener("hashchange", () => vt(route));
 
 // The map SVG is sized to the viewport at build time; on resize, rebuild it at the new size (debounced).
