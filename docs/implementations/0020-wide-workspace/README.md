@@ -1,7 +1,7 @@
 # 0020 — Wide-screen workspace (laptop / desktop layout)
 
-> **Status:** 🚧 In progress — **M1** ✅ (the owner tried A / B / C and **picked B** with refinements, 2026-10-13);
-> **M2** (trip to-dos, PR #66) and **M3** (layout B) in review; M4 (reconcile) next. Build plan approved 2026-10-13. See the [index](../README.md).
+> **Status:** ✅ Shipped 2026-10-13 — M1 prototype (#65, closed unmerged) → B picked; M2 trip to-dos (#66), M3 layout B
+> (#67), M4 reconcile (`content/0020-reconcile`). Live check of the MCP to-do tools pending an MCP reconnect (see *Outcome*). See the [index](../README.md).
 
 ## Context
 
@@ -41,9 +41,9 @@ the browser, which the real build would move into `shared/core.js` like every ot
 | `content/0020-record` | **M1a — Record** (this file) + index row 🚧 — ✅ #64 | — | — | n |
 | `code/0020-prototype` *(throwaway, preview only — closed unmerged)* | **M1b — Clickable prototype** of A / B / C | — | — | — |
 | — | **Decision** — owner tries the prototype and picks (or mixes) a layout; logged here — ✅ B (see *Decision*) | — | — | — |
-| `code/todos` | **M2 — Trip to-dos, end to end**: `FLAT_SPECS.todos` + wrappers (core), `migrations/004_todos.sql` (applied to prod via `migrate` **before merge**) + `schema.sql`, `/api/todos`, demo mock, MCP `list_todos` / `add_todo` / `edit_todo` / `toggle_todo` / `delete_todo` / `restore_todo` / `list_deleted_todos` / `purge_todo` (+ smoke), a **To-do tab** on every screen (owner), Trash "To-dos" group — 🔧 | **004** | **y** | y |
-| `code/wide-workspace` | **M3 — Layout B in production** (≥ 1200 px): map pane + Regions panel (summary, regions, gaps) left · the timeline filling the middle · right pane At a glance (To-do · Unplanned · Packing) with step / region detail opening in it (condensed); map follows the scroll + pin hover; full-screen Map tab; **no notebook grid + no dashed underlines app-wide** (owner) — 🔧 (see *M3 notes*) | none | n | y |
-| `content/0020-reconcile` | **M4 — Reconcile**; close prototype #65 unmerged | none | n | n |
+| `code/todos` | **M2 — Trip to-dos, end to end**: `FLAT_SPECS.todos` + wrappers (core), `migrations/004_todos.sql` (applied to prod via `migrate` **before merge**) + `schema.sql`, `/api/todos`, demo mock, MCP `list_todos` / `add_todo` / `edit_todo` / `toggle_todo` / `delete_todo` / `restore_todo` / `list_deleted_todos` / `purge_todo` (+ smoke), a **To-do tab** on every screen (owner), Trash "To-dos" group — ✅ #66 | **004** | **y** | y |
+| `code/wide-workspace` | **M3 — Layout B in production** (≥ 1200 px): map pane + Regions panel (summary, regions, gaps) left · the timeline filling the middle · right pane At a glance (To-do · Unplanned · Packing) with step / region detail opening in it (condensed); map follows the scroll + pin hover; full-screen Map tab; **no notebook grid + no dashed underlines app-wide** (owner) — ✅ #67 (see *M3 notes*) | none | n | y |
+| `content/0020-reconcile` | **M4 — Reconcile**; close prototype #65 unmerged — ✅ | none | n | n |
 
 ## Decision
 
@@ -93,7 +93,22 @@ errors). Every earlier suite (quick fixes, menu, M6, map regions, pinned tabs, t
 
 ## Outcome
 
-*(to be written when the effort ships)*
+Shipped 2026-10-13. The owner's feedback ("we only use the middle of a laptop screen") went from three options →
+a clickable throwaway prototype (#65) tried on a laptop → **layout B** with the owner's refinements → a clean
+production build:
+- **#66 — trip to-dos**, a free-form per-trip list, end to end: core `FLAT_SPECS.todos`, migration 004
+  (applied to prod before merge), `/api/todos`, MCP `*_todo` tools, a **To-do tab** on every screen, Trash.
+  Core verified against real SQLite (`node:sqlite`, 12 checks); the tab in headless Chrome at 1600 + 390 px.
+- **#67 — the workspace (≥ 1200 px)**: map pane + Regions panel, the timeline filling the middle, At a glance /
+  details in the right pane, the map following the scroll; app-wide plain paper + no dashed underlines.
+  27 headless checks, run locally and against the deployed preview; every earlier suite still green.
+- What's New v0.10.0 + v0.11.0. Reconcile: `CLAUDE.md` (status, data map, data model, MCP tools), `README.md`,
+  `DESIGN.md` (in #67), `app.json` tagline, index ✅, GitHub About, the MEMORY journal.
+
+**Pending:** a live run of the MCP to-do tools against prod. This Claude session still had the pre-deploy tool
+list (the worker redeployed at 15:11 UTC); it needs an MCP reconnect (`/mcp`), then: `add_todo` on
+thailand-2026 → `list_todos` → `toggle_todo` → `delete_todo` → `purge_todo` (self-cleaning). Logged under
+*Later changes* when done.
 
 ## Later changes
 

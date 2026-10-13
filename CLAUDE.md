@@ -5,7 +5,7 @@ no-build static SPA + `/api/*` Pages Functions + a shared domain core + a D1 dat
 MCP server, all fronted by Cloudflare Access and shipped through a hardened GitHub flow built for
 **safe parallel sessions**. Full rationale lives in `ai-first_project_initialisation.md`.
 
-> **Status:** live (v0.9), in active use. The data model is real (see **Data model** below): a **trip**
+> **Status:** live (v0.11), in active use. The data model is real (see **Data model** below): a **trip**
 > owns a metro **timeline** of `steps` (travel legs + stays), each stay nests `activities`, plus a
 > `packing` list and photo `attachments`. Steps group into **regions** (effort 0017): the timeline is a
 > collapsible **Trip › Region › Location › Step** tree (locations are derived from stays; unplanned nights
@@ -14,7 +14,9 @@ MCP server, all fronted by Cloudflare Access and shipped through a hardened GitH
 > **visual trip map** (self-hosted vector atlas, 0015): a still backdrop behind the timeline + an
 > interactive **Map view** whose pins open a stay; the trip's regions are shaded + labelled on it and
 > framed by region chips (0019). Navigation is a hamburger **menu** (Home · What's New) with the trip tabs
-> first (0018). PostHog (0016) carries error tracking, replay, a **Feedback** tab and usage events. The
+> first (0018). Each trip has a free-form **to-do** list (To-do tab + MCP `*_todo` tools), and at **≥ 1200 px** a trip
+> opens as a **workspace** (0020): map pane + Regions panel left, the timeline in the middle, a right pane with At a
+> glance (To-do · Unplanned · Packing) or the selected step / region / activity. PostHog (0016) carries error tracking, replay, a **Feedback** tab and usage events. The
 > generic `entries` list is now only the MCP smoke-test fixture. Full history in `docs/implementations/`.
 
 ## Data map (where things live)
@@ -28,6 +30,7 @@ MCP server, all fronted by Cloudflare Access and shipped through a hardened GitH
 | Demo-mode switch (mock only when `!DB && DEMO_API=1`) | `functions/api/_middleware.js`, `functions/api/_mock.js` |
 | SPA shell / router / views | `public/index.html`, `public/app.js`, `public/styles.css` |
 | Trip map — self-hosted vector atlas (timeline backdrop + interactive Map view) | `public/map.js` (+ vendored `public/vendor/d3.min.js`, `topojson-client.min.js`, `vendor/geo/*` Natural Earth JSON) |
+| Wide-screen workspace (≥ 1200 px; layout B) — `wsRoute` renders details into the pane via the detail views' `el` arg; `body.ws` | `public/app.js` (`wsRoute`, `wsGlanceHTML`, `wsRegionNavHTML`, `bindWorkspace`), `public/index.html` (`#ws-left`, `#ws-pane`), `public/styles.css` (`body.ws …`), `public/map.js` (`ensureSize`, `highlightStop`) |
 | Analytics / error tracking / session replay (PostHog Cloud EU; opt-in telemetry, real prod sessions only) + Feedback tab + usage events (`track()` in `app.js`) — effort 0016 | `public/analytics.js` (guarded `window.Analytics`; loads `array.full.js` from PostHog's EU assets host; CSP allow-lists `*.posthog.com` on `script-src`/`connect-src` + `worker-src 'self' blob:` for replay, in `public/_headers`) |
 | Design language / taste contract (brand, fonts, palette, tokens thesis) — **read before any UI change** | `DESIGN.md` |
 | Implementation history — one folder per effort (`NNNN-slug/README.md`; plan · decisions · outcome · later-changes log) | `docs/implementations/` |

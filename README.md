@@ -6,7 +6,8 @@ through a hardened GitHub flow designed for **safe parallel Claude Code sessions
 
 A shared, mobile-first trip planner: organise a trip as a metro-style **timeline** of travel legs and
 stays, grouped into **regions** (zoom between regions, places and steps; unplanned nights show as gaps),
-see it on a self-hosted **map** with your regions highlighted, nest **activities** under each stay, track a **budget** (estimated vs actual, in EUR from a THB
+see it on a self-hosted **map** with your regions highlighted, keep a free-form **to-do** list per trip, use
+a three-pane **workspace** on laptop screens, nest **activities** under each stay, track a **budget** (estimated vs actual, in EUR from a THB
 rate, with cost-per-person insights), keep a **packing list**, attach **photos**, and open any step or
 activity as its own detail page — all editable in the browser *and* by talking to Claude through the
 MCP server. Runs entirely on Cloudflare's free tier with no payment method attached.
@@ -42,12 +43,13 @@ node scripts/validate-data.mjs
 
 ## Status
 
-Live (v0.9) and in active use. The whole stack is deployed — Pages + D1 + Workers KV + Cloudflare
+Live (v0.11) and in active use. The whole stack is deployed — Pages + D1 + Workers KV + Cloudflare
 Access + the MCP worker + CI — and the product has shipped across efforts recorded in
 `docs/implementations/` (trips → metro timeline, activities, budget, packing, photo attachments,
 step/activity detail pages, in-app creation wizards, an "included in another ticket" cost flag, a
 trip map, PostHog analytics + in-app feedback, a hamburger menu, a Trip › Region › Location › Step
-timeline with in-app region editing, and the trip's regions on the map).
+timeline with in-app region editing, the trip's regions on the map, a per-trip to-do list, and a
+wide-screen workspace for laptops).
 The one-time outward-facing setup (Wrangler login, D1/KV create, Pages + bindings, Access, GitHub
 secrets + branch protection, MCP connect) is captured in `ai-first_project_initialisation.md` §6.
 
