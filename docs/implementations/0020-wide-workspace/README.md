@@ -59,9 +59,11 @@ refinements (all **≥ 1200 px only**; phones unchanged):
 | **Regions live bottom-left** | The trip summary line + the region list (with the unplanned gaps in order) sit in the lower-left panel under the map; the summary + nights strip are removed from above the timeline. |
 | **A condensed detail pane** | Step / region details in the right pane use tight rows (≈ 34 px instead of 44 px), smaller labels and section headings. |
 | **No dashes under editable values** | The dashed underline goes; a soft tint on hover / focus marks a value as editable (desktop = mouse). |
+| **A free-form to-do list** *(addition)* | The top of the right pane gets a real **To-do** list — add, tick off, rename, delete, done items folded away; **not tied to steps** ("an open space where to-dos can be added, checked off, consulted and managed at a high level"). Sits above To book · Unplanned · Budget · Packing. The real build adds a `todos` list in core + D1 + `/api/todos` + MCP tools (Claude can add / tick to-dos). |
+| **The Map tab stays full-screen** | Selecting Map still shows the full-screen interactive map (panes hidden) — the prototype first drew it at the side-pane size; fixed by redrawing when the map's container changes size. |
 
 Regenerated prototype: [PR #65](https://github.com/JanickVD01/travel-planner/pull/65) (B only; switcher
-Current · B). Open questions for the build: whether the grid + dashes should also go on phones (the owner's
+Current · B). Open questions for the build: where the to-do list lives on phones (e.g. its own tab), whether the grid + dashes should also go on phones (the owner's
 notes were about the laptop view), and whether A's "map follows the timeline" stays (it is in the B prototype).
 
 ## Outcome
