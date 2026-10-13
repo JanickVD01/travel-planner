@@ -1,6 +1,14 @@
 {
   "releases": [
     {
+      "version": "v0.9.2",
+      "title": "Tabs that stay put",
+      "date": "2026-10-13",
+      "notes": [
+        "When you scroll the timeline (or a step’s details), the tabs and the back link now sit on their own pinned bar at the top, instead of floating over your cards."
+      ]
+    },
+    {
       "version": "v0.9.1",
       "title": "See your regions on the map",
       "date": "2026-10-13",

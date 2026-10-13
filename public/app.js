@@ -2274,8 +2274,10 @@ function trackTopbar() {
   if (window.ResizeObserver) new ResizeObserver(set).observe(bar);
   // The sub-nav gets its frosted backing only while stuck under the bar (see .subnav.is-stuck).
   let raf = 0;
-  const stuck = () => { raf = 0; const nav = document.querySelector(".subnav"); if (!nav) return;
-    nav.classList.toggle("is-stuck", scrollY > 0 && nav.getBoundingClientRect().top <= bar.getBoundingClientRect().bottom + 0.5); };
+  // Also the detail pages' "‹ Trip" head, which sticks the same way.
+  const stuck = () => { raf = 0; const edge = bar.getBoundingClientRect().bottom + 0.5;
+    document.querySelectorAll(".subnav, .sheet-head").forEach(nav =>
+      nav.classList.toggle("is-stuck", scrollY > 0 && nav.getBoundingClientRect().top <= edge)); };
   addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(stuck); }, { passive: true });
   const v = document.getElementById("view");             // views re-render async: re-check when the DOM swaps
   if (v && window.MutationObserver) new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(stuck); }).observe(v, { childList: true });
