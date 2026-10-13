@@ -283,4 +283,12 @@ decision log, `public/data/app.json` tagline, the index, the MEMORY journal and 
 
 ## Later changes
 
-*(append-only, newest last — none yet)*
+- **2026-10-13 — pinned tabs get a backing on the map sheet** (`code/pinned-tabs-backing`). Owner feedback
+  (13:30 UTC): "Timeline, Map, Budget and Packing are still not pinned… when I scroll down they clutter my
+  screen." They were stuck, but on map-backed pages (Timeline, step / activity / region sheets) the 0015 rule
+  `body.map-bg .subnav { background: transparent }` out-ranked the `.subnav.is-stuck` backing from the
+  *Owner feedback fixes* above, so cards scrolled visibly under floating pills. Now, once stuck, the tabs and
+  the detail pages' "‹ Trip" head get the sheet's frosted backing stretched to the sheet's edges + a
+  hairline (solid under `prefers-reduced-transparency`); at rest nothing changes. Verified headless at 1600 +
+  390 px (`tabs-check`: no backing at rest, stuck under the bar with a backing that spans the sheet and hides
+  the content beside the pills, gone again at the top, the step head likewise) + every earlier suite.
