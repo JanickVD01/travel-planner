@@ -1,7 +1,8 @@
 # 0017 — Trip hierarchy timeline (Trip › Region › Location › Step)
 
 > **Status:** 🚧 In progress — M1 ✅ + M2 ✅ (2026-10-13, PR #51). Migration 003 applied to prod D1 via the
-> `migrate` workflow before merge (run 38371496790: 5 queries, success). M3–M7 pending. This record carries the full milestone plan and is **updated in place** as
+> `migrate` workflow before merge (run 38371496790: 5 queries, success). M3 ✅ (PR 2, `code/trip-hierarchy-mcp`).
+> M4–M7 pending. This record carries the full milestone plan and is **updated in place** as
 > milestones land (like [0010](../0010-pinned-step-photo/)). See [`README.md`](../README.md) for the
 > index and [`research.md`](research.md) for the codebase findings that shaped the design.
 
@@ -67,7 +68,7 @@ indexes first, the non-idempotent `ALTER TABLE steps ADD COLUMN region_id TEXT` 
 |---|---|---|---|---|
 | 1 `code/trip-hierarchy-core` | **M1 — Record** *(this file)* + [`research.md`](research.md) + index row 🚧 — ✅ 2026-10-13 | — | — | n |
 | 1 `code/trip-hierarchy-core` | **M2 — Core + schema**: `FLAT_SPECS.regions` + `steps.region_id`; `flatCreate` honours an explicit `sort_order`; `nextTimelineSlot`; region wrappers (`listRegions`, `createRegion`, `patchRegion`, `deleteRegion`, `restoreRegion`, `purgeRegionDeep`, `moveRegion`, `assignSteps`); pure `buildTripTree` + `composeOverview` (→ `tripOverview`); `computeBudget` `byRegion`; `schema.sql`; `migrations/003_region_id.sql`; `functions/api/regions/[[path]].js`; `_mock.js` uses `composeOverview` + demo regions (Bangkok ×2 stays, North, Krabi = Ao Nang → ferry → Railay, empty "Bangkok (return)") — ✅ 2026-10-13 (see *M2 verification* below) | **003, before merge** | y (auto) | n |
-| 2 `code/trip-hierarchy-mcp` | **M3 — MCP**: `list_regions`, `add_region`, `edit_region`, `move_region`, `delete_region`, `restore_region`, `list_deleted_regions`, `purge_region`, `assign_steps_to_region`; `region_id` on `add_step`/`edit_step`/`add_stay`/`add_travel`; updated `get_trip_overview`/`get_budget` descriptions; smoke round-trip — ⏳ | none | **y** | n |
+| 2 `code/trip-hierarchy-mcp` | **M3 — MCP**: `list_regions`, `add_region`, `edit_region`, `move_region`, `delete_region`, `restore_region`, `list_deleted_regions`, `purge_region`, `assign_steps_to_region`; `region_id` on `add_step`/`edit_step`/`add_stay`/`add_travel`; updated `get_trip_overview`/`get_budget` descriptions; smoke round-trip — ✅ 2026-10-13 (see *M3 verification*) | none | **y** | n |
 | (ops) | **M4 — Guided backfill on prod**: `list_trips` + `get_trip_overview` → proposal table per trip → **owner confirms** → `add_region` + `assign_steps_to_region` → re-check (no `split_regions`, no loose stays). Rollback = `assign_steps_to_region(null)` + `delete_region`. Outcome logged here — ⏳ | none | n | n |
 | 3 `code/trip-hierarchy-timeline` | **M5 — Timeline**: `loadTrip` → `/api/overview`; tree render (`regionGroupHTML`, `locationRowHTML`, existing `stepCardHTML`); "Expand to" control; trip summary + nights strip; collapse state + one delegated `bindTree()` (no re-render, keeps scroll); CSS — ⏳ | none | n | n |
 | 4 `code/trip-hierarchy-editing` | **M6 — Editing**: region sheet `#/trip/<slug>/region/<id>` (edit, member list, move earlier/later, delete); "Add region" wizard; region picker in step detail; step-wizard region default (tapped "+" → previous step's region); Trash "Regions" group; Budget "By region" — ⏳ | none | n | n |
@@ -116,6 +117,20 @@ Each PR description uses the four-line format (`what/why` · `What's New? y/n` �
   top level, restore regroups; a no-gap insert renumbers and lands between its neighbours with unique
   `sort_order`s; `byRegion` = tree `eur` = hand-computed figure; `createRegion` with `before_region_id`
   places it; `patchRegion` ignores `sort_order`; purge clears `region_id` on its steps and deletes none.
+
+## M3 verification (done 2026-10-13)
+
+- **Static:** `node --check` on `worker-mcp/src/mcp.js` + `scripts/smoke.mjs`.
+- **`npm run smoke`** against a local `wrangler dev src/dev.js` on a fresh scratch D1: the 9 region tools
+  are registered; new self-cleaning round-trip `add_region` → `add_stay(region_id)` → `get_trip_overview`
+  tree shows the region (2 nights, 1 stay) → `purge_region` (`steps_cleared: 1`) → `purge_step` ✓.
+- **Backfill simulation over MCP** (scratch client, 15 checks ✓) on a flat pre-0017 France-shaped trip
+  (BRU→Paris · Paris · →Avignon · Avignon · →Gordes · Gordes): `add_region` ×2 + `assign_steps_to_region`
+  → tree `flight | Paris[Paris] | train | Provence[Avignon, drive, Gordes]`, Provence 5 nights = plan,
+  `byRegion` correct; `missing` ids reported; `edit_step region_id` on the first leg → split detected,
+  un-assign (`region_id: null`) → no split; unknown region → error; `move_region` before / to end;
+  delete → `list_deleted_regions` → restore; `edit_region` title + clearing `planned_nights` (null);
+  `add_region` with `before_region_id` places an empty region; `add_stay` into it takes its slot.
 
 ## Outcome
 

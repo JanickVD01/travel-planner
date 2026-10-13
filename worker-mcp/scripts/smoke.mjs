@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// MCP smoke test: connect over the protocol, then add -> list -> delete a row (self-cleaning).
+// MCP smoke test: connect over the protocol, then add -> list -> delete a row, and a regions round-trip
+// (add_region -> add_stay in it -> overview tree -> purge), all self-cleaning.
 // Defaults to the local no-auth dev server (src/dev.js). To hit the deployed Worker behind
 // Cloudflare Access, set MCP_URL and a service token:
 //   MCP_URL=https://<worker>.<sub>.workers.dev/mcp \
@@ -24,7 +25,7 @@ function payload(res) {
 const transport = new StreamableHTTPClientTransport(new URL(URL_), { requestInit: { headers } });
 const client = new Client({ name: "travel-planner-smoke", version: "1.0.0" });
 
-let createdId = null;
+let createdId = null, regionId = null, stepId = null;
 try {
   await client.connect(transport);
   const tools = await client.listTools();
@@ -45,6 +46,25 @@ try {
   createdId = null;
   console.log("• deleted ✓");
 
+  // Regions round-trip (effort 0017), self-cleaning: add a region -> a stay inside it -> the overview
+  // tree groups it -> purge both (purge_region clears region_id; purge_step removes the stay).
+  const R = payload(await client.callTool({ name: "add_region", arguments: { slug: SPACE, title: "smoke-region", planned_nights: 2 } }));
+  regionId = R && R.row && R.row.id;
+  if (!regionId) throw new Error("add_region returned no id: " + JSON.stringify(R));
+  const st = payload(await client.callTool({ name: "add_stay", arguments: { slug: SPACE, place: "smoke-town", arrive: "2030-01-01", nights: 2, region_id: regionId } }));
+  stepId = st && st.row && st.row.id;
+  if (!stepId || st.row.region_id !== regionId) throw new Error("add_stay with region_id failed: " + JSON.stringify(st));
+  const ov = payload(await client.callTool({ name: "get_trip_overview", arguments: { slug: SPACE } }));
+  const g = ov && ov.tree && ov.tree.regions && ov.tree.regions[regionId];
+  if (!g || g.nights !== 2 || g.stays !== 1) throw new Error("overview tree missing the region: " + JSON.stringify(ov && ov.tree));
+  console.log("• regions: add_region + add_stay(region_id) + tree ✓");
+  const pr = payload(await client.callTool({ name: "purge_region", arguments: { slug: SPACE, id: regionId } }));
+  if (!pr || !pr.ok || pr.steps_cleared !== 1) throw new Error("purge_region failed: " + JSON.stringify(pr));
+  regionId = null;
+  payload(await client.callTool({ name: "purge_step", arguments: { slug: SPACE, id: stepId } }));
+  stepId = null;
+  console.log("• regions: purged (region + step) ✓");
+
   // get_budget (best-effort): the dev DB may have no trips, so a 404/422 tool-error is acceptable.
   // We only assert the tool RESPONDS with content, and never let it fail the smoke.
   try {
@@ -62,6 +82,8 @@ try {
 } catch (e) {
   console.error("\n✗ smoke failed:", e.message);
   if (createdId) console.error("  (leftover row may remain: " + createdId + ")");
+  if (regionId) console.error("  (leftover region may remain in '" + SPACE + "': " + regionId + ")");
+  if (stepId) console.error("  (leftover step may remain in '" + SPACE + "': " + stepId + ")");
   try { await client.close(); } catch {}
   process.exit(1);
 }

@@ -31,7 +31,7 @@ in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0014](0014-docs-per-effort-folders/) | Docs reorg — one folder per effort (record = folder `README.md`) + "## Later changes" post-ship log | 2026-07-11 | ✅ Shipped | #45 |
 | [0015](0015-trip-globe/) | Trip map — visual itinerary atlas (research + design → shipped: still backdrop + interactive Map view with clickable pins) | 2026-07-12 | ✅ Shipped | #47 |
 | [0016](0016-posthog-analytics/) | PostHog integration — product analytics, error tracking, session replay (Phase 1: research + decision; build planned, awaiting go-ahead) | 2026-07-16 | 🚧 Research done, build pending | — |
-| [0017](0017-trip-hierarchy/) | Trip hierarchy timeline — Trip › Region › Location › Step (regions as first-class rows, locations derived from stays, collapsible zoomable timeline) | 2026-10-13 | 🚧 In progress (M1–M2 done; migration 003 applied) | #51 |
+| [0017](0017-trip-hierarchy/) | Trip hierarchy timeline — Trip › Region › Location › Step (regions as first-class rows, locations derived from stays, collapsible zoomable timeline) | 2026-10-13 | 🚧 In progress (M1–M3 done; migration 003 applied) | #51, #52 |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
 

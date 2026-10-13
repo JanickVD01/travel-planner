@@ -8,6 +8,7 @@ import {
   ServiceError, listEntries, createEntry, patchEntry, deleteEntry,
   listTrips, createTrip, patchTrip, tripBySlug,
   listSteps, createStep, patchStep, deleteStep, restoreStep, purgeStepDeep, addStay, addTravel,
+  listRegions, createRegion, patchRegion, deleteRegion, restoreRegion, purgeRegionDeep, moveRegion, assignSteps,
   listActivities, createActivity, patchActivity, deleteActivity, restoreActivity, purgeActivity,
   listPacking, createPacking, patchPacking, deletePacking, restorePacking, purgePacking, filterPacking,
   listAttachments, patchAttachment, deleteAttachment, purgeAttachment, setPinned,
@@ -22,6 +23,9 @@ const CCY = z.enum(["THB", "EUR"]);
 const BOOKING = z.enum(["Idea", "Planned", "Booked", "Confirmed"]);
 const KIND = z.enum(["travel", "stay"]);
 const TRANSPORT = z.enum(["plane", "train", "bus", "ferry", "car", "other"]);
+// Region membership of a step (effort 0017). A region is the planning layer above steps (e.g. 'Provence',
+// 'Krabi'); locations (towns) are derived from stays, never stored.
+const REGION_ID = z.string().nullable().optional().describe("Region id (from list_regions / add_region) this step belongs to; null or '' = no region (e.g. a transfer between regions)");
 // Reusable optional step fields (used by add_step / edit_step).
 const STEP_FIELDS = {
   location: z.string().optional(), map_url: z.string().optional(),
@@ -32,7 +36,16 @@ const STEP_FIELDS = {
   cost_est: z.number().optional(), cost_actual: z.number().optional(), cost_ccy: CCY.optional(),
   booking_status: BOOKING.optional(), booking_url: z.string().optional(),
   included: z.boolean().optional().describe("Cost is covered by another ticket: hidden on the card + excluded from the budget"),
-  note: z.string().optional()
+  note: z.string().optional(),
+  region_id: REGION_ID
+};
+// Region fields (used by add_region / edit_region). Dates/nights are a PLAN; once the region has stays,
+// its real dates + nights are derived from them (see get_trip_overview -> tree.regions).
+const REGION_FIELDS = {
+  planned_nights: z.number().int().positive().nullable().optional().describe("Planned number of nights (used while the region has no stays yet)"),
+  start_date: z.string().nullable().optional().describe("Planned start, ISO YYYY-MM-DD"),
+  end_date: z.string().nullable().optional().describe("Planned end, ISO YYYY-MM-DD"),
+  note: z.string().nullable().optional()
 };
 const TARGET = z.enum(["step", "activity"]).describe("Which entity: a timeline 'step' or an 'activity'");
 // Reusable optional activity fields (used by add_activity / edit_activity).
@@ -99,16 +112,16 @@ export class AppMCP extends McpAgent {
       { description: "List a trip's steps in timeline order.", inputSchema: { slug: SLUG } },
       (a) => self.run(() => listSteps(env, { space: a.slug, list: "flow" }, self.actor)));
     this.server.registerTool("add_step",
-      { description: "Add a step (travel leg or stay) to a trip's timeline.", inputSchema: Object.assign({ slug: SLUG, kind: KIND, title: z.string() }, STEP_FIELDS) },
+      { description: "Add a step (travel leg or stay) to a trip's timeline. With region_id it is placed right after that region's last step (or in an empty region's slot); otherwise it's appended.", inputSchema: Object.assign({ slug: SLUG, kind: KIND, title: z.string() }, STEP_FIELDS) },
       (a) => self.run(() => createStep(env, Object.assign({}, a, { space: a.slug, list: "flow" }), self.actor)));
     this.server.registerTool("add_stay",
-      { description: "Add a STAY step. Give arrive + nights (depart is derived) or arrive + depart.", inputSchema: { slug: SLUG, place: z.string(), arrive: z.string().optional(), nights: z.number().optional(), depart: z.string().optional(), accom_name: z.string().optional(), lat: z.number().optional(), lng: z.number().optional(), map_url: z.string().optional(), cost_est: z.number().optional(), cost_actual: z.number().optional(), cost_ccy: CCY.optional(), booking_status: BOOKING.optional(), booking_url: z.string().optional(), note: z.string().optional() } },
+      { description: "Add a STAY step. Give arrive + nights (depart is derived) or arrive + depart. Pass region_id to put it in a region (placed at the end of that region).", inputSchema: { slug: SLUG, place: z.string(), region_id: REGION_ID, arrive: z.string().optional(), nights: z.number().optional(), depart: z.string().optional(), accom_name: z.string().optional(), lat: z.number().optional(), lng: z.number().optional(), map_url: z.string().optional(), cost_est: z.number().optional(), cost_actual: z.number().optional(), cost_ccy: CCY.optional(), booking_status: BOOKING.optional(), booking_url: z.string().optional(), note: z.string().optional() } },
       (a) => self.run(() => addStay(env, Object.assign({}, a, { space: a.slug, list: "flow" }), self.actor)));
     this.server.registerTool("add_travel",
-      { description: "Add a TRAVEL leg (A->B). title/location are derived from from/to.", inputSchema: { slug: SLUG, from: z.string(), to: z.string(), mode: TRANSPORT.optional(), carrier: z.string().optional(), arrive: z.string().optional(), arrive_time: z.string().optional(), depart: z.string().optional(), depart_time: z.string().optional(), cost_est: z.number().optional(), cost_actual: z.number().optional(), cost_ccy: CCY.optional(), booking_status: BOOKING.optional(), booking_url: z.string().optional(), note: z.string().optional() } },
+      { description: "Add a TRAVEL leg (A->B). title/location are derived from from/to. Give region_id only for a leg INSIDE a region (e.g. Ao Nang -> Railay); leave it out for a transfer between regions.", inputSchema: { slug: SLUG, from: z.string(), to: z.string(), region_id: REGION_ID, mode: TRANSPORT.optional(), carrier: z.string().optional(), arrive: z.string().optional(), arrive_time: z.string().optional(), depart: z.string().optional(), depart_time: z.string().optional(), cost_est: z.number().optional(), cost_actual: z.number().optional(), cost_ccy: CCY.optional(), booking_status: BOOKING.optional(), booking_url: z.string().optional(), note: z.string().optional() } },
       (a) => self.run(() => addTravel(env, Object.assign({}, a, { space: a.slug, list: "flow" }), self.actor)));
     this.server.registerTool("edit_step",
-      { description: "Edit a step by id (any field, incl. sort_order to reorder).", inputSchema: Object.assign({ slug: SLUG, id: z.string(), kind: KIND.optional(), title: z.string().optional(), sort_order: z.number().optional() }, STEP_FIELDS) },
+      { description: "Edit a step by id (any field, incl. region_id to change its region and sort_order to reorder). To move a whole region use move_region instead.", inputSchema: Object.assign({ slug: SLUG, id: z.string(), kind: KIND.optional(), title: z.string().optional(), sort_order: z.number().optional() }, STEP_FIELDS) },
       (a) => self.run(() => patchStep(env, Object.assign({}, a, { space: a.slug, list: "flow" }), self.actor)));
     this.server.registerTool("delete_step",
       { description: "Delete a step by id (soft-delete; recoverable via restore_step).", inputSchema: { slug: SLUG, id: z.string() } },
@@ -125,6 +138,37 @@ export class AppMCP extends McpAgent {
     this.server.registerTool("delete_step_deep",
       { description: "Permanently delete a step AND its activities/photos (cascade). Alias of purge_step.", inputSchema: { slug: SLUG, id: z.string() } },
       (a) => self.run(() => purgeStepDeep(env, { space: a.slug, list: "flow", id: a.id }, self.actor)));
+
+    // ---- regions (effort 0017): Trip > Region > Location (derived from stays) > Step ----
+    // Ordering rule: step sort_order is the only chronology; a region's position comes from its steps
+    // (an empty region uses its own slot). move_region is the only way to reorder a region.
+    this.server.registerTool("list_regions",
+      { description: "List a trip's regions (the planning layer above steps, e.g. 'Provence', 'Krabi'). For their derived dates/nights/order use get_trip_overview.", inputSchema: { slug: SLUG } },
+      (a) => self.run(() => listRegions(env, { space: a.slug }, self.actor)));
+    this.server.registerTool("add_region",
+      { description: "Add a region to a trip. It may stay empty (a plan, e.g. 'Krabi, 6 nights') until stays are added or assigned. Appended at the end of the timeline unless before_region_id/after_region_id is given.", inputSchema: Object.assign({ slug: SLUG, title: z.string().describe("Region name, e.g. 'Provence', 'North (Chiang Mai)'"), before_region_id: z.string().optional(), after_region_id: z.string().optional() }, REGION_FIELDS) },
+      (a) => self.run(() => createRegion(env, Object.assign({}, a, { space: a.slug }), self.actor)));
+    this.server.registerTool("edit_region",
+      { description: "Edit a region by id (title, planned_nights, start_date, end_date, note). Use move_region to reorder.", inputSchema: Object.assign({ slug: SLUG, id: z.string(), title: z.string().optional() }, REGION_FIELDS) },
+      (a) => self.run(() => patchRegion(env, Object.assign({}, a, { space: a.slug }), self.actor)));
+    this.server.registerTool("move_region",
+      { description: "Move a region (all its steps, as one block) before or after another region; give neither to move it to the end. Steps without a region stay where they are. Renumbers the timeline.", inputSchema: { slug: SLUG, id: z.string(), before_region_id: z.string().optional(), after_region_id: z.string().optional() } },
+      (a) => self.run(() => moveRegion(env, { space: a.slug, id: a.id, before_region_id: a.before_region_id, after_region_id: a.after_region_id }, self.actor)));
+    this.server.registerTool("assign_steps_to_region",
+      { description: "Put steps into a region (region_id null = take them out of any region). Membership only: it does NOT reorder. Returns missing ids and split_regions (regions whose steps are no longer contiguous; fix with move_region or edit_step sort_order).", inputSchema: { slug: SLUG, region_id: z.string().nullable(), step_ids: z.array(z.string()).min(1) } },
+      (a) => self.run(() => assignSteps(env, { space: a.slug, region_id: a.region_id, step_ids: a.step_ids }, self.actor)));
+    this.server.registerTool("delete_region",
+      { description: "Delete a region by id (soft-delete; recoverable via restore_region). Its steps are NOT deleted: they show at top level until the region is restored.", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => deleteRegion(env, { space: a.slug, id: a.id }, self.actor)));
+    this.server.registerTool("restore_region",
+      { description: "Restore a soft-deleted region by id (its steps regroup under it).", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => restoreRegion(env, { space: a.slug, id: a.id }, self.actor)));
+    this.server.registerTool("list_deleted_regions",
+      { description: "List a trip's soft-deleted (trashed) regions.", inputSchema: { slug: SLUG } },
+      (a) => self.run(() => listRegions(env, { space: a.slug, trash: true }, self.actor)));
+    this.server.registerTool("purge_region",
+      { description: "Permanently delete a region and clear region_id on its steps. The steps themselves are kept. Cannot be undone.", inputSchema: { slug: SLUG, id: z.string() } },
+      (a) => self.run(() => purgeRegionDeep(env, { space: a.slug, id: a.id }, self.actor)));
 
     // ---- activities (things to do, hung off a step) ----
     this.server.registerTool("list_activities",
@@ -225,10 +269,10 @@ export class AppMCP extends McpAgent {
       { description: "Mark whether a step/activity's cost is covered by another ticket. When true the cost is hidden on the card and excluded from the budget.", inputSchema: { slug: SLUG, target: TARGET, id: z.string(), included: z.boolean() } },
       (a) => self.run(() => setIncluded(env, { target: a.target, space: a.slug, list: a.target === "step" ? "flow" : "activities", id: a.id, included: a.included }, self.actor)));
     this.server.registerTool("get_trip_overview",
-      { description: "Read-only trip snapshot: config, steps in order, activities grouped by step, and unassigned activities. Each row carries maps_url + eur.", inputSchema: { slug: SLUG } },
+      { description: "Read-only trip snapshot: config, regions, steps in order, activities grouped by step, unassigned activities, and `tree`: the Trip > Region > Location > Step hierarchy (tree.items in timeline order; tree.regions = per-region derived dates/nights/planned gap/split flag/EUR subtotal; tree.strip; tree.totals). Each row carries maps_url + eur.", inputSchema: { slug: SLUG } },
       (a) => self.run(() => tripOverview(env, { space: a.slug }, self.actor)));
     this.server.registerTool("get_budget",
-      { description: "Computed budget snapshot for a trip (all figures in EUR): totals, projected spend vs target, remaining/projected, pct, over-budget flag, and estimated by-category breakdown. 422 no_rate if the trip has no FX rate.", inputSchema: { slug: SLUG } },
+      { description: "Computed budget snapshot for a trip (all figures in EUR): totals, projected spend vs target, remaining/projected, pct, over-budget flag, estimated by-category breakdown, and byRegion (EUR est/actual per region id; 'none' = no region). 422 no_rate if the trip has no FX rate.", inputSchema: { slug: SLUG } },
       (a) => self.run(() => getBudget(env, { space: a.slug }, self.actor)));
   }
 }
