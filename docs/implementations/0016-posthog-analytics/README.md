@@ -84,7 +84,11 @@ consent banner), `respect_dnt`, `identified_only`, and masked replay text.
      response), never bound to `#feedback-btn`, and the owner uses the tab. PostHog data showed zero clicks
      on `#feedback-btn` since launch, so the button + its CSS + its reveal in `boot()` were **removed**. The tab
      is the only feedback entry point; answers land as `survey sent` with the session replay linked.
-   - **Feature flags + manual usage events** — ⏳ pending (`Analytics.capture(...)` helper already in place).
+   - **Manual usage events** — ✅ 2026-10-13, shipped with [0017 M6](../0017-trip-hierarchy/) (they instrument the
+     hierarchy timeline): `timeline_depth_set`, `tree_node_toggled`, `tree_expand_all`, `nights_strip_jump`,
+     `step_opened` (`via` card / title / chevron / map / region), `step_created`, `region_created` / `_edited` /
+     `_moved` / `_deleted` — every event carries `trip` (the slug), via `track()` in `app.js` over `Analytics.capture`.
+   - **Feature flags** — ⏳ pending.
 9. **Verify + reconcile** — 🔧 partial (this PR: [`CLAUDE.md`](../../../CLAUDE.md) data map). Final reconcile
    (DESIGN.md, index status, `releases.json`, GitHub About) after the opt-ins settle.
 
