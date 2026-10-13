@@ -1,6 +1,6 @@
 # 0018 — Navigation menu + trip tabs at the top
 
-> **Status:** 🚧 In review — M1–M3 ✅ in `code/nav-menu` (awaiting merge). Front-end only (`public/index.html`,
+> **Status:** ✅ Shipped 2026-10-13 (PR #57, deployed 11:59 UTC). Front-end only (`public/index.html`,
 > `public/app.js`, `public/styles.css`, `public/tokens.css`) + docs — no schema/migration/worker/core change.
 > See [`README.md`](../README.md) for the index.
 
@@ -56,7 +56,11 @@ banner); `.nav a` min-height 40 → 44 px.
 
 ## Outcome
 
-*(to be written when the effort ships)*
+Shipped 2026-10-13 in PR #57 (merged after #55 + #56; the `releases.json` top-of-file conflict resolved by
+keeping both — v0.8.2 above v0.8.1). The hamburger is now a real menu on every width (Home + What's New);
+the permanent sidebar and the phone nav row are gone; the trip tabs lead every trip page at the same spot.
+What's New v0.8.2. Reconcile: `DESIGN.md` decision log (in the PR); `CLAUDE.md`, `README.md`,
+`public/data/app.json` and the GitHub About don't describe the sidebar, so no change; index row ✅.
 
 ## Later changes
 
