@@ -1,7 +1,7 @@
 # 0020 — Wide-screen workspace (laptop / desktop layout)
 
 > **Status:** 🚧 In progress — **M1** ✅ (the owner tried A / B / C and **picked B** with refinements, 2026-10-13);
-> **M2** (trip to-dos) 🔧; M3 (layout B) and M4 (reconcile) next. Build plan approved 2026-10-13. See the [index](../README.md).
+> **M2** (trip to-dos, PR #66) and **M3** (layout B) in review; M4 (reconcile) next. Build plan approved 2026-10-13. See the [index](../README.md).
 
 ## Context
 
@@ -42,7 +42,7 @@ the browser, which the real build would move into `shared/core.js` like every ot
 | `code/0020-prototype` *(throwaway, preview only — closed unmerged)* | **M1b — Clickable prototype** of A / B / C | — | — | — |
 | — | **Decision** — owner tries the prototype and picks (or mixes) a layout; logged here — ✅ B (see *Decision*) | — | — | — |
 | `code/todos` | **M2 — Trip to-dos, end to end**: `FLAT_SPECS.todos` + wrappers (core), `migrations/004_todos.sql` (applied to prod via `migrate` **before merge**) + `schema.sql`, `/api/todos`, demo mock, MCP `list_todos` / `add_todo` / `edit_todo` / `toggle_todo` / `delete_todo` / `restore_todo` / `list_deleted_todos` / `purge_todo` (+ smoke), a **To-do tab** on every screen (owner), Trash "To-dos" group — 🔧 | **004** | **y** | y |
-| `code/wide-workspace` | **M3 — Layout B in production** (≥ 1200 px): map pane + Regions panel (summary, regions, gaps) left · the timeline filling the middle · right pane At a glance (To-do · Unplanned · Packing) with step / region detail opening in it (condensed); map follows the scroll + pin hover; full-screen Map tab; **no notebook grid + no dashed underlines app-wide** (owner) | none | n | y |
+| `code/wide-workspace` | **M3 — Layout B in production** (≥ 1200 px): map pane + Regions panel (summary, regions, gaps) left · the timeline filling the middle · right pane At a glance (To-do · Unplanned · Packing) with step / region detail opening in it (condensed); map follows the scroll + pin hover; full-screen Map tab; **no notebook grid + no dashed underlines app-wide** (owner) — 🔧 (see *M3 notes*) | none | n | y |
 | `content/0020-reconcile` | **M4 — Reconcile**; close prototype #65 unmerged | none | n | n |
 
 ## Decision
@@ -64,6 +64,32 @@ refinements (all **≥ 1200 px only**; phones unchanged):
 Regenerated prototype: [PR #65](https://github.com/JanickVD01/travel-planner/pull/65) (B only; switcher
 Current · B). Settled for the build (owner, 2026-10-13): to-dos get **their own tab on every screen**; the notebook grid + the dashed
 underlines go **everywhere** (phones too); A's **map follows the timeline** stays in B.
+
+## M3 notes (2026-10-13)
+
+Production port of the prototype's B, minus its scaffolding (no switcher, no A / C, no `?layout`):
+- **Activation:** `matchMedia("(min-width: 1200px)")` → `body.ws` (+ `body.on-trip` from the router); flipping the
+  width re-routes. Static `aside#ws-left` / `aside#ws-pane` in `index.html`.
+- **No global render target:** `viewStep` / `viewRegion` / `viewActivity` take an optional `el`; the router
+  (`wsRoute`) renders them into the pane and keeps the timeline in `#view`, re-rendering the middle only when
+  its trip data changed (scroll kept). In the pane the detail `h1` carries **no** `view-transition-name` (it
+  would duplicate the card's and abort the transition).
+- **Map:** `map.js` `ensureSize()` / `needsResize()` (the container changes size between the pane and the
+  full-screen Map tab without a window resize) + `highlightStop()`; `syncTripMap` pads the pane and refits on
+  the way back from the Map tab.
+- **App-wide:** the `body::before` grid is removed; `.editable` has no dashed underline (hover / focus tint, a
+  real `:focus-visible` ring added); the notes box gets a solid hairline.
+- The To-do tab shows the list in the middle, so the pane's At a glance omits it there (no duplicate list).
+- Fixed on the way (PR 1): with 5 tabs the phone tab row scrolls — the current tab is now scrolled into view.
+
+**Verification** (headless Chrome, demo data): `ws-check` at 1600 px — 27 checks (panes + geometry, the
+middle fills its space, summary moved, At a glance sections, pane to-do add, a step opening in the pane with
+the timeline intact + no scroll jump + no duplicate transition name + the card marked, condensed rows, editing
+in the pane keeps the timeline's scroll, back → At a glance, Regions panel framing, follow-scroll, pin hover,
+full-screen Map tab with a full-size drawing and the pane redraw on return, To-do / Budget tabs keep the panes,
+a pin in the pane opens its stay in the pane, < 1200 px back to the column, phones without grid / dashes, no
+errors). Every earlier suite (quick fixes, menu, M6, map regions, pinned tabs, to-dos, tree links) passes at
+1100 + 390 px.
 
 ## Outcome
 

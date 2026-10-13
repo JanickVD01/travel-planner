@@ -353,3 +353,14 @@ Records the locked brand inputs and the final visual decision.
   region chips (the active one ringed in the rail blue) that frame and emphasise one region. The still
   backdrop shows the same subtle wash and never moves (0015 stands). See
   [`docs/implementations/0019-map-regions/`](docs/implementations/0019-map-regions/).
+- **2026-10-13 — Wide-screen workspace (layout B), plain paper, no dashed underlines.** Effort 0020, picked by the
+  owner from a 3-layout prototype. **≥ 1200 px on a trip:** the map leaves the faded backdrop for a vivid,
+  interactive **top-left pane** (it follows the timeline's scroll; a hovered card lights its pin), with the
+  **Regions panel** under it (trip summary, regions, unplanned gaps — the summary + nights strip leave the top
+  of the timeline); the **timeline fills the middle**; a **right pane** shows *At a glance* (To-do · Unplanned ·
+  Packing) or the selected step / region / activity in a **condensed** layout (≈ 34 px rows), so the timeline
+  never loses its place. The Map tab stays full-screen. Phones keep the single column. **App-wide** (owner):
+  the squared transit-grid background is gone (plain paper), and editable values lose their dashed underline —
+  a hover / focus tint + the `+ field` placeholders mark them instead (the notes box keeps a thin solid
+  outline). Trips also gain a **To-do** tab (a free-form list). See
+  [`docs/implementations/0020-wide-workspace/`](docs/implementations/0020-wide-workspace/).
