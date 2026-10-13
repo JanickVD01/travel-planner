@@ -1791,7 +1791,10 @@ window.addEventListener("resize", () => {
   $("#brand-title").textContent = (state.app && state.app.title) || "Travel Planner";
   document.title = $("#brand-title").textContent;
   await loadMe();
-  if (window.Analytics) Analytics.init(state.me);  // PostHog init + identify (real prod sessions only) (0016)
+  if (window.Analytics) {
+    Analytics.init(state.me);                      // PostHog init + identify (real prod sessions only) (0016)
+    if (Analytics.ready) { const fb = $("#feedback-btn"); if (fb) fb.hidden = false; }  // reveal feedback button (0016 M8)
+  }
   buildNav();
   bindEditable();
   bindPhotos();
