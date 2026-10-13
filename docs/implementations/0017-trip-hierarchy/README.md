@@ -1,7 +1,7 @@
 # 0017 — Trip hierarchy timeline (Trip › Region › Location › Step)
 
-> **Status:** 🚧 In progress — M1 ✅ + M2 ✅ (2026-10-13) on `code/trip-hierarchy-core` (PR 1, open);
-> **migration 003 must be applied to prod via the `migrate` workflow before PR 1 merges.** M3–M7 pending. This record carries the full milestone plan and is **updated in place** as
+> **Status:** 🚧 In progress — M1 ✅ + M2 ✅ (2026-10-13, PR #51). Migration 003 applied to prod D1 via the
+> `migrate` workflow before merge (run 38371496790: 5 queries, success). M3–M7 pending. This record carries the full milestone plan and is **updated in place** as
 > milestones land (like [0010](../0010-pinned-step-photo/)). See [`README.md`](../README.md) for the
 > index and [`research.md`](research.md) for the codebase findings that shaped the design.
 
