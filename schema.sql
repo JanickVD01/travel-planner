@@ -77,14 +77,37 @@ CREATE TABLE IF NOT EXISTS steps (
   booking_url    TEXT,
   included       TEXT NOT NULL DEFAULT '0',       -- '1' = cost covered by another ticket (hidden + excluded from budget)
   note           TEXT,
+  region_id      TEXT,                             -- parent region id (free-text, not an FK; NULL = no region) — see migrations/003
   deleted        TEXT,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT,
   PRIMARY KEY (space, list, step_id)
 );
 CREATE INDEX IF NOT EXISTS idx_steps ON steps (space, list, sort_order);
+CREATE INDEX IF NOT EXISTS idx_steps_region ON steps (space, list, region_id);
 CREATE TABLE IF NOT EXISTS steps_audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT, space TEXT NOT NULL, list TEXT NOT NULL, step_id TEXT,
+  op TEXT NOT NULL, detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
+);
+
+-- regions (effort 0017): the planning layer above steps. space=<slug>, list='regions'. A region can be
+-- EMPTY (planned before any stay). Its timeline position is derived from its member steps' sort_order;
+-- its own sort_order (same scale as steps) only places it while it has no live steps. Locations are NOT
+-- stored — they're derived from stays (shared/core.js buildTripTree).
+CREATE TABLE IF NOT EXISTS regions (
+  space TEXT NOT NULL, list TEXT NOT NULL, region_id TEXT NOT NULL,
+  title          TEXT NOT NULL DEFAULT '',
+  planned_nights TEXT,                              -- integer >= 1 or NULL (planned length before stays exist)
+  start_date     TEXT, end_date TEXT,               -- optional planned window (ISO dates)
+  note           TEXT,
+  deleted        TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT,
+  PRIMARY KEY (space, list, region_id)
+);
+CREATE INDEX IF NOT EXISTS idx_regions ON regions (space, list, sort_order);
+CREATE TABLE IF NOT EXISTS regions_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, space TEXT NOT NULL, list TEXT NOT NULL, region_id TEXT,
   op TEXT NOT NULL, detail TEXT, actor TEXT NOT NULL, at TEXT NOT NULL
 );
 

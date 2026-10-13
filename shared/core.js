@@ -2,7 +2,7 @@
 // re-exports it) and the MCP worker (worker-mcp/src/mcp.js). No Request/Response/env coupling:
 // every function is (env, args, actor) -> plain data | throw ServiceError.
 //
-// REAL ENTITIES: trips, steps (flow), activities, packing, attachments — see FLAT_SPECS below.
+// REAL ENTITIES: trips, regions, steps (flow), activities, packing, attachments — see FLAT_SPECS below.
 // `entries` (cols: title, note, status, due) is a leftover generic example, kept ONLY as the MCP
 // smoke-test fixture (worker-mcp `npm run smoke`); it is not part of the travel product.
 // To add a new list: add a FLAT_SPECS entry + named wrappers below, a route file under
@@ -121,6 +121,20 @@ const FLAT_SPECS = {
       { name: "booking_status", clean: cleanBooking },
       { name: "booking_url", nullable: true },
       { name: "included", clean: cleanBool },
+      { name: "note", nullable: true },
+      { name: "region_id", nullable: true }   // parent region id (free-text, not an FK; null = no region) — effort 0017
+    ]
+  },
+  // regions: the planning layer above steps (space=<slug>, list='regions') — effort 0017. A region can
+  // exist EMPTY (planned before any stay). Its position on the timeline is DERIVED from its member steps'
+  // sort_order; its own sort_order (same scale as steps) only places it while it has no live steps.
+  regions: {
+    table: "regions", audit: "regions_audit", idCol: "region_id", prefix: "rg", soft: true,
+    cols: [
+      { name: "title" },
+      { name: "planned_nights", clean: cleanQty, nullable: true },
+      { name: "start_date", clean: cleanDate, nullable: true },
+      { name: "end_date", clean: cleanDate, nullable: true },
       { name: "note", nullable: true }
     ]
   },
@@ -204,8 +218,12 @@ async function flatList(env, spec, { space, list, trash }, actor) {
 }
 async function flatCreate(env, spec, args, actor) {
   const { space, list } = args, now = new Date().toISOString(), id = mintId(spec.prefix);
-  const max = await env.DB.prepare("SELECT COALESCE(MAX(sort_order),0) AS m FROM " + spec.table + " WHERE space=? AND list=?").bind(space, list).first();
-  const sort = (max && max.m ? max.m : 0) + 10;
+  let sort;
+  if (Number.isFinite(args.sort_order)) sort = args.sort_order | 0;   // caller-placed (e.g. a step inside a region)
+  else {
+    const max = await env.DB.prepare("SELECT COALESCE(MAX(sort_order),0) AS m FROM " + spec.table + " WHERE space=? AND list=?").bind(space, list).first();
+    sort = (max && max.m ? max.m : 0) + 10;
+  }
   const names = spec.cols.map(c => c.name), vals = spec.cols.map(c => cleanCol(c, args[c.name]));
   const sql = "INSERT INTO " + spec.table + " (space,list," + spec.idCol + "," + names.join(",") +
     ",sort_order,created_by,created_at,updated_by,updated_at) VALUES (" + names.map(() => "?").join(",") + ",?,?,?,?,?,?,?,?)";
@@ -318,8 +336,29 @@ export const seedTrips     = (env, a, who) => flatSeed(env, FLAT_SPECS.trips, a,
 
 // steps (the timeline).
 export const listSteps     = (env, a, who) => flatList(env, FLAT_SPECS.steps, a, who);
-export const createStep    = (env, a, who) => flatCreate(env, FLAT_SPECS.steps, a, who);
-export const patchStep     = (env, a, who) => flatPatch(env, FLAT_SPECS.steps, a, who);
+// createStep places the new step on the timeline (effort 0017): an explicit numeric sort_order wins;
+// with a region_id it goes right after that region's last live step (or takes an empty region's slot);
+// otherwise it's appended after every step AND every planned (empty) region.
+export async function createStep(env, a, who) {
+  if (Number.isFinite(a.sort_order)) return flatCreate(env, FLAT_SPECS.steps, a, who);
+  const rid = regionIdOf(a.region_id);
+  if (rid) {
+    await assertLiveRegion(env, a.space, rid);
+    const sort = await regionInsertSlot(env, a.space, a.list || LIST_FLOW, rid, who);
+    return flatCreate(env, FLAT_SPECS.steps, Object.assign({}, a, { region_id: rid, sort_order: sort }), who);
+  }
+  const sort = await nextTimelineSlot(env, a.space, a.list || LIST_FLOW);
+  return flatCreate(env, FLAT_SPECS.steps, Object.assign({}, a, { sort_order: sort }), who);
+}
+// patchStep: a non-empty region_id must name a live region ("" / null clears the assignment).
+export async function patchStep(env, a, who) {
+  if (Object.prototype.hasOwnProperty.call(a, "region_id")) {
+    const rid = regionIdOf(a.region_id);
+    if (rid) await assertLiveRegion(env, a.space, rid);
+    a = Object.assign({}, a, { region_id: rid });
+  }
+  return flatPatch(env, FLAT_SPECS.steps, a, who);
+}
 export const deleteStep    = (env, a, who) => flatDelete(env, FLAT_SPECS.steps, a, who);
 export const restoreStep   = (env, a, who) => flatRestore(env, FLAT_SPECS.steps, a, who);
 export const purgeStep     = (env, a, who) => flatPurge(env, FLAT_SPECS.steps, a, who);
@@ -396,6 +435,183 @@ export async function purgeStepDeep(env, { space, list, id }, actor) {
   return { ok: true, purged: id, activities: childActs.length, attachments: childAtts.length };
 }
 
+// -- regions (effort 0017): Trip › Region › Location › Step -------------------
+// ORDERING RULE (one rule, so the views can never disagree): step sort_order is the ONLY record of
+// chronology. A region's position is derived from its member steps; a region's own sort_order (same
+// number scale as steps) only places it while it has no live steps. Steps without a region (e.g. a
+// transfer between regions) keep their place. A region whose steps aren't contiguous shows as several
+// blocks flagged `split` (allowed + surfaced). moveRegion is the only way to reorder a region.
+const LIST_FLOW = "flow", LIST_REGIONS = "regions";
+function regionIdOf(v) { const s = String(v == null ? "" : v).trim(); return s || null; }
+const sortNum = (x) => Number(x.sort_order) || 0;
+const byIdAsc = (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);          // matches SQLite's binary ORDER BY
+async function assertLiveRegion(env, space, id) {
+  const r = await env.DB.prepare("SELECT region_id FROM regions WHERE space=? AND list=? AND region_id=? AND deleted IS NULL").bind(space, LIST_REGIONS, id).first();
+  if (!r) throw new ServiceError(404, "region not found: " + id);
+}
+// PURE. The combined timeline sequence: live steps in (sort_order, id) order, with EMPTY live regions
+// merged in at their own sort_order (a region wins a tie, so "+ add stay" in an empty region lands first).
+// Each step item carries its EFFECTIVE region (null when unset or pointing at a deleted/missing region).
+export function timelineItems(regions, steps) {
+  const live = (regions || []).filter(r => !r.deleted), byId = new Map(live.map(r => [r.id, r]));
+  const ss = (steps || []).filter(s => !s.deleted).slice().sort((a, b) => sortNum(a) - sortNum(b) || byIdAsc(a, b));
+  const eff = (s) => (s.region_id && byId.has(s.region_id)) ? s.region_id : null;
+  const used = new Set(ss.map(eff).filter(Boolean));
+  const empties = live.filter(r => !used.has(r.id)).sort((a, b) => sortNum(a) - sortNum(b) || byIdAsc(a, b));
+  const out = []; let j = 0;
+  ss.forEach(s => {
+    while (j < empties.length && sortNum(empties[j]) <= sortNum(s)) { const r = empties[j++]; out.push({ type: "region", id: r.id, sort_order: sortNum(r), row: r }); }
+    out.push({ type: "step", id: s.id, sort_order: sortNum(s), region_id: eff(s), row: s });
+  });
+  while (j < empties.length) { const r = empties[j++]; out.push({ type: "region", id: r.id, sort_order: sortNum(r), row: r }); }
+  return out;
+}
+// Append slot: after every step AND every region (deleted rows included, like flatCreate's MAX).
+export async function nextTimelineSlot(env, space, list) {
+  const a = await env.DB.prepare("SELECT COALESCE(MAX(sort_order),0) AS m FROM steps WHERE space=? AND list=?").bind(space, list || LIST_FLOW).first();
+  const b = await env.DB.prepare("SELECT COALESCE(MAX(sort_order),0) AS m FROM regions WHERE space=? AND list=?").bind(space, LIST_REGIONS).first();
+  return Math.max((a && a.m) || 0, (b && b.m) || 0) + 10;
+}
+async function loadTimeline(env, space, list, actor) {
+  const { rows: regions } = await listRegions(env, { space }, actor);
+  const { rows: steps } = await listSteps(env, { space, list: list || LIST_FLOW }, actor);
+  return { regions, steps, items: timelineItems(regions, steps) };
+}
+// Renumber a timeline sequence to (i+1)*10. `ordered` may contain one {type:"new"} placeholder (a step
+// about to be created) whose slot is returned. Non-empty regions get their first member's number so
+// their own sort_order stays sensible if they're emptied later. Only CHANGED rows are written (+audit).
+function renumberStmts(env, space, list, ordered, regions, actor, now) {
+  const stmts = [], firstOf = {}; let slot = null;
+  const updStep = env.DB.prepare("UPDATE steps SET sort_order=?, updated_by=?, updated_at=? WHERE space=? AND list=? AND step_id=?");
+  const updReg = env.DB.prepare("UPDATE regions SET sort_order=?, updated_by=?, updated_at=? WHERE space=? AND list=? AND region_id=?");
+  const regionTo = {};
+  ordered.forEach((it, i) => {
+    const n = (i + 1) * 10;
+    if (it.type === "new") { slot = n; return; }
+    if (it.type === "step") {
+      if (it.region_id && firstOf[it.region_id] == null) firstOf[it.region_id] = n;
+      if (it.sort_order !== n) {
+        stmts.push(updStep.bind(n, actor, now, space, list, it.id));
+        stmts.push(auditStmt(env, FLAT_SPECS.steps, space, list, it.id, "update", { sort_order: n }, actor, now));
+      }
+    } else regionTo[it.id] = n;
+  });
+  Object.keys(firstOf).forEach(rid => { regionTo[rid] = firstOf[rid]; });
+  (regions || []).filter(r => !r.deleted).forEach(r => {
+    const n = regionTo[r.id];
+    if (n != null && sortNum(r) !== n) {
+      stmts.push(updReg.bind(n, actor, now, space, LIST_REGIONS, r.id));
+      stmts.push(auditStmt(env, FLAT_SPECS.regions, space, LIST_REGIONS, r.id, "update", { sort_order: n }, actor, now));
+    }
+  });
+  return { stmts, slot };
+}
+// Where a new step for region `rid` goes: right after the region's last live step (midpoint to the next
+// timeline item; renumber everything when there's no gap), or an empty region's own slot.
+async function regionInsertSlot(env, space, list, rid, actor) {
+  const { regions, items } = await loadTimeline(env, space, list, actor);
+  let last = -1;
+  items.forEach((it, i) => { if (it.type === "step" && it.region_id === rid) last = i; });
+  if (last < 0) {                                  // empty region -> take its slot
+    const r = items.find(it => it.type === "region" && it.id === rid);
+    return r ? r.sort_order : nextTimelineSlot(env, space, list);
+  }
+  const prev = items[last].sort_order, next = items[last + 1];
+  if (!next) return prev + 10;
+  if (next.sort_order - prev >= 2) return Math.floor((prev + next.sort_order) / 2);
+  const ordered = items.slice(0, last + 1).concat([{ type: "new" }], items.slice(last + 1));
+  const now = new Date().toISOString();
+  const { stmts, slot } = renumberStmts(env, space, list, ordered, regions, actor, now);
+  if (stmts.length) await env.DB.batch(stmts);
+  return slot;
+}
+
+export const listRegions    = (env, a, who) => flatList(env, FLAT_SPECS.regions, Object.assign({}, a, { list: LIST_REGIONS }), who);
+// createRegion: appended at the end of the timeline; optional before_region_id / after_region_id moves it.
+export async function createRegion(env, a, who) {
+  const space = a.space, sort = await nextTimelineSlot(env, space);
+  const res = await flatCreate(env, FLAT_SPECS.regions, Object.assign({}, a, { list: LIST_REGIONS, sort_order: sort }), who);
+  if (regionIdOf(a.before_region_id) || regionIdOf(a.after_region_id)) {
+    const mv = await moveRegion(env, { space, id: res.row.id, before_region_id: a.before_region_id, after_region_id: a.after_region_id }, who);
+    res.order = mv.order;
+  }
+  return res;
+}
+// sort_order is NOT patchable on a region (moveRegion owns ordering).
+export const patchRegion    = (env, a, who) => { const { sort_order, ...rest } = a; return flatPatch(env, FLAT_SPECS.regions, Object.assign(rest, { list: LIST_REGIONS }), who); };
+// Soft delete does NOT cascade: member steps keep their region_id and fall back to top level (the region
+// is no longer live); restoring the region regroups them.
+export const deleteRegion   = (env, a, who) => flatDelete(env, FLAT_SPECS.regions, Object.assign({}, a, { list: LIST_REGIONS }), who);
+export const restoreRegion  = (env, a, who) => flatRestore(env, FLAT_SPECS.regions, Object.assign({}, a, { list: LIST_REGIONS }), who);
+// Purge (live or trashed): delete the region row AND clear region_id on every step that pointed at it
+// (live or trashed) in ONE batch, with audits. Never deletes steps.
+export async function purgeRegionDeep(env, { space, id }, actor) {
+  const now = new Date().toISOString(), spec = FLAT_SPECS.regions, stepSpec = FLAT_SPECS.steps;
+  const row = await env.DB.prepare("SELECT * FROM regions WHERE space=? AND list=? AND region_id=?").bind(space, LIST_REGIONS, id).first();
+  if (!row) throw new ServiceError(404, "not found");
+  const { results } = await env.DB.prepare("SELECT step_id, list FROM steps WHERE space=? AND region_id=?").bind(space, id).all();
+  const members = results || [];
+  const clr = env.DB.prepare("UPDATE steps SET region_id=NULL, updated_by=?, updated_at=? WHERE space=? AND list=? AND step_id=?");
+  const stmts = [
+    env.DB.prepare("DELETE FROM regions WHERE space=? AND list=? AND region_id=?").bind(space, LIST_REGIONS, id),
+    auditStmt(env, spec, space, LIST_REGIONS, id, "purge", mapRow(spec, row), actor, now)
+  ];
+  members.forEach(m => {
+    stmts.push(clr.bind(actor, now, space, m.list, m.step_id));
+    stmts.push(auditStmt(env, stepSpec, space, m.list, m.step_id, "update", { region_id: null }, actor, now));
+  });
+  await env.DB.batch(stmts);
+  return { ok: true, purged: id, steps_cleared: members.length };
+}
+// Move a region (all its steps, as ONE block) before/after another region; neither = to the end. Steps
+// without a region keep their place; a split region is merged back into one block. Renumbers the whole
+// timeline in one batch (only changed rows are written + audited).
+export async function moveRegion(env, { space, list, id, before_region_id, after_region_id }, actor) {
+  list = list || LIST_FLOW;
+  const before = regionIdOf(before_region_id), after = regionIdOf(after_region_id);
+  if (before && after) throw new ServiceError(400, "give before_region_id OR after_region_id, not both");
+  if (before === id || after === id) throw new ServiceError(400, "a region can't move relative to itself");
+  const { regions, items } = await loadTimeline(env, space, list, actor);
+  if (!regions.some(r => r.id === id)) throw new ServiceError(404, "region not found: " + id);
+  const ref = before || after;
+  if (ref && !regions.some(r => r.id === ref)) throw new ServiceError(404, "region not found: " + ref);
+  const owns = (it, rid) => (it.type === "step" && it.region_id === rid) || (it.type === "region" && it.id === rid);
+  const block = items.filter(it => owns(it, id)), rest = items.filter(it => !owns(it, id));
+  let at = rest.length;
+  if (before) at = rest.findIndex(it => owns(it, before));
+  else if (after) { let k = -1; rest.forEach((it, i) => { if (owns(it, after)) k = i; }); at = k + 1; }
+  if (at < 0) at = rest.length;
+  const ordered = rest.slice(0, at).concat(block, rest.slice(at));
+  const now = new Date().toISOString();
+  const { stmts } = renumberStmts(env, space, list, ordered, regions, actor, now);
+  if (stmts.length) await env.DB.batch(stmts);
+  const order = [];
+  ordered.forEach(it => { const rid = it.type === "region" ? it.id : it.region_id; if (rid && order.indexOf(rid) < 0) order.push(rid); });
+  return { ok: true, id, order };
+}
+// Assign steps to a region (region_id null/"" = un-assign). Membership only — does NOT reorder; reports
+// any region that ends up split (non-contiguous) so the caller can follow up with moveRegion / edits.
+export async function assignSteps(env, { space, list, region_id, step_ids }, actor) {
+  list = list || LIST_FLOW;
+  const rid = regionIdOf(region_id), ids = jsonArray(step_ids);
+  if (!ids.length) throw new ServiceError(400, "step_ids required");
+  if (rid) await assertLiveRegion(env, space, rid);
+  const { regions, steps } = await loadTimeline(env, space, list, actor);
+  const live = new Map(steps.map(s => [s.id, s]));
+  const found = ids.filter(x => live.has(x)), missing = ids.filter(x => !live.has(x));
+  const now = new Date().toISOString(), spec = FLAT_SPECS.steps, stmts = [];
+  const upd = env.DB.prepare("UPDATE steps SET region_id=?, updated_by=?, updated_at=? WHERE space=? AND list=? AND step_id=?");
+  found.forEach(sid => {
+    stmts.push(upd.bind(rid, actor, now, space, list, sid));
+    stmts.push(auditStmt(env, spec, space, list, sid, "update", { region_id: rid }, actor, now));
+  });
+  if (stmts.length) await env.DB.batch(stmts);
+  const after = steps.map(s => found.indexOf(s.id) >= 0 ? Object.assign({}, s, { region_id: rid }) : s);
+  const tree = buildTripTree(null, regions, after, [], null);
+  const split_regions = Object.keys(tree.regions).filter(k => tree.regions[k].split);
+  return { ok: true, assigned: found.length, missing, split_regions };
+}
+
 export function filterPacking(rows, actor, scope) {
   const list = Array.isArray(rows) ? rows : [];
   const a = String(actor == null ? "" : actor).toLowerCase();
@@ -443,28 +659,168 @@ function rowMapsUrl(row) {
     return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(row.lat + "," + row.lng);
   return null;
 }
-// Read-only trip snapshot: the trip config, its steps (timeline order), activities grouped by
-// step_id, and an "unassigned" bucket for activities whose step_id matches no live step. Each step
-// and activity gains a `maps_url` (lat/lng -> OSM, else map_url) and an `eur` value (actual||est,
-// converted via the trip's thb_per_eur rate).
-export async function tripOverview(env, { space }, actor) {
-  const trip = await tripBySlug(env, space);
+// -- the trip tree (effort 0017): Trip › Region › Location › Step ------------
+// A location is DERIVED: a stay's town (location || title). normPlace is its grouping key — lower-case,
+// accents stripped, parentheses dropped ("Ko Lanta (via Krabi)" -> "ko lanta"); a name with no Latin
+// letters (e.g. Thai script) falls back to its trimmed lower-case form so it still groups.
+export function normPlace(s) {
+  const raw = String(s == null ? "" : s);
+  const k = raw.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[^a-z0-9]+/g, " ").trim();
+  return k || raw.trim().toLowerCase();
+}
+// Nights of a stay: whole UTC days arrive -> depart (never negative; 0 when either date is missing).
+export function stayNights(s) {
+  const a = cleanDate(s && s.arrive), d = cleanDate(s && s.depart);
+  if (!a || !d) return 0;
+  return Math.max(0, Math.round((Date.parse(d + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 864e5));
+}
+const minD = (x, y) => (!x ? (y || null) : !y ? x : (y < x ? y : x));
+const maxD = (x, y) => (!x ? (y || null) : !y ? x : (y > x ? y : x));
+const isTravel = (s) => s && s.kind === "travel";
+// Fold a region block's step nodes into locations: consecutive stays with the same place key become one
+// location node; a travel leg sits between locations (and breaks the fold).
+function foldLocations(rid, nodes, stepById) {
+  const out = []; let loc = null, locKey = null;
+  nodes.forEach(n => {
+    const s = stepById.get(n.id);
+    if (isTravel(s)) { out.push(n); loc = null; return; }
+    const key = normPlace(s.location || s.title);
+    if (loc && key && key === locKey) {
+      loc.children.push(n); loc.stay_ids.push(n.id); loc.nights += stayNights(s);
+      loc.arrive = minD(loc.arrive, s.arrive); loc.depart = maxD(loc.depart, s.depart);
+      return;
+    }
+    loc = { type: "location", key: "loc:" + rid + ":" + n.id, place: String(s.location || s.title || "").trim(),
+      stay_ids: [n.id], arrive: s.arrive || null, depart: s.depart || null, nights: stayNights(s), children: [n] };
+    locKey = key; out.push(loc);
+  });
+  return out;
+}
+// PURE. Group the trip's timeline into the hierarchy. Nodes reference rows by id (no data duplicated);
+// every step node carries its global `index` in the live, sorted step list (what the UI's inserters use),
+// and an empty region carries `insert_index` (where a first step would go). `budget` (computeBudget's
+// result, optional) supplies each region's EUR subtotal — money math never happens here.
+//   items:   [ {type:"region", region_id, segment, split, children:[location|step], insert_index?} | {type:"step", id, index} ]
+//   regions: { <id>: { title, arrive, depart, nights, stays, steps, locations, planned_nights, start_date,
+//                      end_date, nights_gap, dates_outside, empty, split, eur:{est,actual}|null } }
+//   strip:   [ {region_id|null, title, segment?, nights, planned} ]   (trip-level proportional strip)
+//   totals:  { nights, regions, locations, stays, travel, start, end }
+export function buildTripTree(trip, regions, steps, activities, budget) {
+  const live = (regions || []).filter(r => !r.deleted);
+  const seq = timelineItems(live, steps);
+  const stepById = new Map(seq.filter(x => x.type === "step").map(x => [x.id, x.row]));
+  const items = [], segs = {}; let cur = null, idx = 0;
+  seq.forEach(it => {
+    if (it.type === "region") {                    // an empty (planned) region
+      segs[it.id] = (segs[it.id] || 0) + 1;
+      items.push({ type: "region", region_id: it.id, segment: 1, split: false, children: [], insert_index: idx });
+      cur = null; return;
+    }
+    const node = { type: "step", id: it.id, index: idx++ };
+    if (!it.region_id) { items.push(node); cur = null; return; }
+    if (!cur || cur.region_id !== it.region_id) {
+      segs[it.region_id] = (segs[it.region_id] || 0) + 1;
+      cur = { type: "region", region_id: it.region_id, segment: segs[it.region_id], split: false, children: [] };
+      items.push(cur);
+    }
+    cur.children.push(node);
+  });
+  items.forEach(b => {
+    if (b.type !== "region") return;
+    b.split = segs[b.region_id] > 1;
+    b.children = foldLocations(b.region_id, b.children, stepById);
+  });
+
+  const byRegion = budget && budget.byRegion ? budget.byRegion : null;
+  const summary = {};
+  live.forEach(r => {
+    const planned = (r.planned_nights == null || r.planned_nights === "") ? null : Number(r.planned_nights);
+    summary[r.id] = {
+      title: r.title, arrive: null, depart: null, nights: 0, stays: 0, steps: 0, locations: 0,
+      planned_nights: planned, start_date: r.start_date || null, end_date: r.end_date || null,
+      nights_gap: null, dates_outside: false, empty: true, split: (segs[r.id] || 0) > 1,
+      eur: byRegion ? (byRegion[r.id] || { est: 0, actual: 0 }) : null
+    };
+  });
+  seq.forEach(it => {
+    if (it.type !== "step" || !it.region_id) return;
+    const s = it.row, g = summary[it.region_id];
+    g.steps++; g.empty = false;
+    if (!isTravel(s)) { g.stays++; g.nights += stayNights(s); g.arrive = minD(g.arrive, s.arrive); g.depart = maxD(g.depart, s.depart || s.arrive); }
+  });
+  seq.forEach(it => {                              // a travel-only region: dates span its legs
+    if (it.type !== "step" || !it.region_id) return;
+    const s = it.row, g = summary[it.region_id];
+    if (g.stays === 0) { g.arrive = minD(g.arrive, minD(s.depart, s.arrive)); g.depart = maxD(g.depart, maxD(s.arrive, s.depart)); }
+  });
+  items.forEach(b => { if (b.type === "region") summary[b.region_id].locations += b.children.filter(c => c.type === "location").length; });
+  Object.keys(summary).forEach(k => {
+    const g = summary[k];
+    if (g.planned_nights != null && g.stays > 0) g.nights_gap = g.planned_nights - g.nights;
+    if (g.stays > 0) g.dates_outside = !!((g.start_date && g.arrive && g.arrive < g.start_date) || (g.end_date && g.depart && g.depart > g.end_date));
+  });
+
+  const strip = []; let loose = null;
+  items.forEach(b => {
+    if (b.type === "region") {
+      loose = null;
+      const g = summary[b.region_id];
+      const n = b.children.reduce((t, c) => t + (c.type === "location" ? c.nights : 0), 0);
+      strip.push({ region_id: b.region_id, title: g.title, segment: b.segment, nights: g.stays > 0 ? n : (g.planned_nights || 0), planned: g.stays === 0 });
+      return;
+    }
+    const s = stepById.get(b.id);
+    if (isTravel(s)) return;
+    if (!loose) { loose = { region_id: null, title: "Unassigned", nights: 0, planned: false }; strip.push(loose); }
+    loose.nights += stayNights(s);
+  });
+
+  const all = Array.from(stepById.values());
+  const totals = { nights: 0, regions: live.length, locations: 0, stays: 0, travel: 0, start: null, end: null };
+  all.forEach(s => {
+    if (isTravel(s)) totals.travel++; else { totals.stays++; totals.nights += stayNights(s); }
+    totals.start = minD(totals.start, minD(s.arrive, s.depart));
+    totals.end = maxD(totals.end, maxD(s.arrive, s.depart));
+  });
+  Object.keys(summary).forEach(k => { totals.locations += summary[k].locations; });
+  if (!totals.start && trip) totals.start = trip.start_date || null;
+  if (!totals.end && trip) totals.end = trip.end_date || null;
+  return { items, regions: summary, strip, totals };
+}
+// PURE. The read-only trip snapshot from already-loaded rows (the DB wrapper below and the demo mock
+// both call this, so previews run the production logic). Each step/activity gains `maps_url` and `eur`
+// (actual||est in EUR; 0 when included). Activities whose step_id matches no live step -> `unassigned`.
+// `tree` is the region/location hierarchy; its EUR subtotals come from computeBudget (null without a rate).
+export function composeOverview(trip, regions, steps, acts) {
   const rate = trip ? trip.thb_per_eur : null;
-  const { rows: steps } = await listSteps(env, { space, list: "flow" }, actor);
-  const { rows: acts } = await listActivities(env, { space, list: "activities" }, actor);
+  const liveRegions = (regions || []).filter(r => !r.deleted);
+  const liveSteps = (steps || []).filter(s => !s.deleted).slice().sort((a, b) => sortNum(a) - sortNum(b) || byIdAsc(a, b));
+  const liveActs = (acts || []).filter(a => !a.deleted);
   const decorate = (r) => {
     const amt = (r.cost_actual != null && r.cost_actual !== "") ? r.cost_actual : r.cost_est;
     const eur = (r.included === "1" || r.included === 1) ? 0 : toEur(amt, r.cost_ccy, rate);   // included -> not counted
     return Object.assign({}, r, { maps_url: rowMapsUrl(r), eur });
   };
-  const liveIds = new Set(steps.map(s => s.id));
+  const liveIds = new Set(liveSteps.map(s => s.id));
   const activitiesByStep = {}, unassigned = [];
-  acts.forEach(a => {
+  liveActs.forEach(a => {
     const d = decorate(a);
     if (liveIds.has(a.step_id)) { (activitiesByStep[a.step_id] = activitiesByStep[a.step_id] || []).push(d); }
     else unassigned.push(d);
   });
-  return { trip, steps: steps.map(decorate), activitiesByStep, unassigned };
+  let budget = null;
+  try { budget = computeBudget(rate, trip ? trip.budget_target_eur : null, liveSteps, liveActs, liveRegions); }
+  catch (e) { if (!(e instanceof ServiceError)) throw e; }          // no FX rate -> tree without EUR subtotals
+  const tree = buildTripTree(trip, liveRegions, liveSteps, liveActs, budget);
+  return { trip, regions: liveRegions, steps: liveSteps.map(decorate), activitiesByStep, unassigned, tree };
+}
+// DB-backed trip snapshot: { trip, regions, steps, activitiesByStep, unassigned, tree }.
+export async function tripOverview(env, { space }, actor) {
+  const trip = await tripBySlug(env, space);
+  const { rows: regions } = await listRegions(env, { space }, actor);
+  const { rows: steps } = await listSteps(env, { space, list: LIST_FLOW }, actor);
+  const { rows: acts } = await listActivities(env, { space, list: "activities" }, actor);
+  return composeOverview(trip, regions, steps, acts);
 }
 // Coordinate/booking routers: `target` picks the step vs activity spec. Thin over flatPatch so the
 // UI and MCP share one code path. setCoordinate always sets both lat+lng.
@@ -523,7 +879,9 @@ export async function setPinned(env, { space, id, pinned }, actor) {
 // Default party size for the per-person figures. TEMPORARY hard-code — a real per-trip `travellers`
 // field is a future add; until then every total is split two ways.
 const PEOPLE = 2;
-export function computeBudget(rate, target, steps, activities) {
+// `regions` (optional, effort 0017) adds `byRegion: {<region id>|"none": {est, actual}}` — a step counts
+// toward its live region, an activity toward its step's region; anything else is "none".
+export function computeBudget(rate, target, steps, activities, regions) {
   const r = Number(rate);
   if (!isFinite(r) || r <= 0) throw new ServiceError(422, "no FX rate set", "no_rate");   // before any division
   const stepRows = Array.isArray(steps) ? steps : [];
@@ -531,6 +889,10 @@ export function computeBudget(rate, target, steps, activities) {
   let totalEst = 0, totalActual = 0, estOfUnspent = 0;      // running EUR sums (non-null only)
   const catEst = { accommodation: 0, transport: 0, activities: 0 };   // estimated EUR by category
   const catAct = { accommodation: 0, transport: 0, activities: 0 };   // actual EUR by category
+  const liveRegion = Array.isArray(regions) ? new Set(regions.filter(x => !x.deleted).map(x => x.id)) : null;
+  const regionOfStep = {}; stepRows.forEach(s => { regionOfStep[s.id] = s.region_id || null; });
+  const regKey = (rid) => (rid && (!liveRegion || liveRegion.has(rid))) ? rid : "none";
+  const reg = {};                                            // EUR {est, actual} by region
   const acc = (row, isStep) => {
     if (row.included === "1" || row.included === 1) return;  // "included in another cost" -> excluded entirely
     const est = toEur(row.cost_est, row.cost_ccy, r);        // null when the source amount is null/''
@@ -541,6 +903,12 @@ export function computeBudget(rate, target, steps, activities) {
     const bucket = isStep ? (row.kind === "travel" ? "transport" : "accommodation") : "activities";
     if (est != null) catEst[bucket] += est;
     if (act != null) catAct[bucket] += act;
+    if (est != null || act != null) {
+      const k = regKey(isStep ? row.region_id : regionOfStep[row.step_id]);
+      const g = reg[k] = reg[k] || { est: 0, actual: 0 };
+      if (est != null) g.est += est;
+      if (act != null) g.actual += act;
+    }
   };
   stepRows.forEach(row => acc(row, true));
   actRows.forEach(row => acc(row, false));
@@ -559,7 +927,8 @@ export function computeBudget(rate, target, steps, activities) {
     pct, over,
     people: PEOPLE,
     perPersonEst: r2(totalEst / PEOPLE), perPersonActual: r2(totalActual / PEOPLE), perPersonProjected: r2(projectedSpend / PEOPLE),
-    byCategory: cat(catEst), byCategoryActual: cat(catAct)
+    byCategory: cat(catEst), byCategoryActual: cat(catAct),
+    byRegion: Object.fromEntries(Object.keys(reg).map(k => [k, { est: r2(reg[k].est), actual: r2(reg[k].actual) }]))
   };
 }
 // DB-backed budget for a trip: resolve the trip config, read its steps + activities, run the pure
@@ -569,8 +938,9 @@ export async function getBudget(env, { space }, actor) {
   if (!trip) throw new ServiceError(404, "trip not found: " + space);
   const { rows: steps } = await listSteps(env, { space, list: "flow" }, actor);
   const { rows: activities } = await listActivities(env, { space, list: "activities" }, actor);
+  const { rows: regions } = await listRegions(env, { space }, actor);
   return Object.assign(
-    computeBudget(trip.thb_per_eur, trip.budget_target_eur, steps, activities),
+    computeBudget(trip.thb_per_eur, trip.budget_target_eur, steps, activities, regions),
     { home_ccy: trip.home_ccy }
   );
 }

@@ -1,8 +1,8 @@
 // In-memory, per-isolate demo store for previews / DB-less local dev. Mirrors the wire shapes of
 // the real adapters; self-seeds a realistic Thailand trip so previews aren't empty. Edits evaporate.
 // IMPORTANT: when you add an /api/* route, add a branch here too, or it 404s in previews.
-import { computeBudget } from "../../shared/core.js";
-const S = { entries: [], trips: [], steps: [], activities: [], packing: [], attachments: [] };
+import { computeBudget, composeOverview } from "../../shared/core.js";
+const S = { entries: [], trips: [], regions: [], steps: [], activities: [], packing: [], attachments: [] };
 function j(o, s) { return new Response(JSON.stringify(o), { status: s || 200, headers: { "content-type": "application/json; charset=utf-8" } }); }
 // A real (tiny) PNG so preview <img> tags served by /api/image resolve to actual bytes (no KV in previews).
 const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCAYAAAD5PA/NAAAAC0lEQVR4nGNgQAMAABEAAe4mBk8AAAAASUVORK5CYII="), c => c.charCodeAt(0));
@@ -15,23 +15,38 @@ const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCA
   S.trips.push(base({
     id: "tp-demo-1", title: "Thailand 2026", slug: "thailand-2026", home_ccy: "EUR",
     thb_per_eur: "39", budget_target_eur: "2000", start_date: "2026-11-03", end_date: "2026-11-24",
-    note: "Bangkok · Chiang Mai · Ko Lanta", sort_order: 10
+    note: "Bangkok · Chiang Mai · Krabi", sort_order: 10
   }));
 
-  const step = (i, o) => S.steps.push(base(Object.assign({ id: "st-demo-" + i, sort_order: i * 10, cost_ccy: "THB", booking_status: "Idea" }, o)));
+  // Regions (effort 0017): Bangkok (2 stays -> one location), North (planned 5 vs booked 4 -> gap hint),
+  // Krabi (Ao Nang -> ferry -> Railay: a travel leg INSIDE a region), and an empty planned return region.
+  const region = (i, o) => S.regions.push(base(Object.assign({ id: "rg-demo-" + i, planned_nights: null, start_date: null, end_date: null, note: null }, o)));
+  region(1, { title: "Bangkok", planned_nights: "4", sort_order: 20 });
+  region(2, { title: "North (Chiang Mai)", planned_nights: "5", sort_order: 40 });
+  region(3, { title: "Krabi", planned_nights: "6", note: "Start in Ao Nang, then Railay.", sort_order: 60 });
+  region(4, { title: "Bangkok (return)", planned_nights: "2", start_date: "2026-11-22", end_date: "2026-11-24", note: "Last nights before the flight home.", sort_order: 80 });
+
+  const step = (i, o) => S.steps.push(base(Object.assign({ id: "st-demo-" + i, sort_order: i * 10, cost_ccy: "THB", booking_status: "Idea", region_id: null }, o)));
   step(1, { kind: "travel", title: "Fly Brussels → Bangkok", location: "BRU → BKK", transport: "plane", carrier: "Thai Airways TG935",
     arrive: "2026-11-03", arrive_time: "15:40", cost_est: "620", cost_actual: "598", cost_ccy: "EUR", booking_status: "Confirmed", booking_url: "https://example.com/ticket" });
-  step(2, { kind: "stay", title: "Bangkok", location: "Bangkok", accom_name: "Riva Surya Bangkok",
+  step(2, { kind: "stay", title: "Bangkok", location: "Bangkok", accom_name: "Riva Surya Bangkok", region_id: "rg-demo-1",
     map_url: "https://www.google.com/maps/search/?api=1&query=Riva+Surya+Bangkok", lat: "13.7590", lng: "100.4940",
-    arrive: "2026-11-03", depart: "2026-11-07", cost_est: "12000", cost_actual: "11800", booking_status: "Booked", booking_url: "https://example.com/hotel" });
+    arrive: "2026-11-03", depart: "2026-11-05", cost_est: "6000", cost_actual: "5900", booking_status: "Booked", booking_url: "https://example.com/hotel" });
+  step(9, { sort_order: 25, kind: "stay", title: "Bangkok", location: "Bangkok", accom_name: "Ariyasom Villa", region_id: "rg-demo-1",
+    lat: "13.7445", lng: "100.5562", arrive: "2026-11-05", depart: "2026-11-07", cost_est: "7000", booking_status: "Planned" });
   step(3, { kind: "travel", title: "Overnight train Bangkok → Chiang Mai", location: "BKK → CNX", transport: "train", carrier: "SRT #13 Sleeper",
     depart: "2026-11-07", depart_time: "18:40", arrive: "2026-11-08", arrive_time: "07:15", cost_est: "1650", booking_status: "Booked", booking_url: "https://example.com/train" });
-  step(4, { kind: "stay", title: "Chiang Mai", location: "Chiang Mai", accom_name: "Tamarind Village", lat: "18.7877", lng: "98.9931",
+  step(4, { kind: "stay", title: "Chiang Mai", location: "Chiang Mai", accom_name: "Tamarind Village", lat: "18.7877", lng: "98.9931", region_id: "rg-demo-2",
     arrive: "2026-11-08", depart: "2026-11-12", cost_est: "8000", booking_status: "Planned" });
   step(5, { kind: "travel", title: "Fly Chiang Mai → Krabi", location: "CNX → KBV", transport: "plane", carrier: "AirAsia FD3446",
     depart: "2026-11-12", depart_time: "11:20", arrive: "2026-11-12", arrive_time: "13:15", cost_est: "55", cost_actual: "52", cost_ccy: "EUR", booking_status: "Booked", booking_url: "https://example.com/ticket2" });
-  step(6, { kind: "stay", title: "Ko Lanta", location: "Ko Lanta (via Krabi)", accom_name: "Pimalai Resort & Spa", lat: "7.6122", lng: "99.0405",
-    arrive: "2026-11-12", depart: "2026-11-18", cost_est: "24000", booking_status: "Idea" });
+  step(6, { kind: "stay", title: "Ao Nang", location: "Ao Nang", accom_name: "Ao Nang Villa Resort", lat: "8.0326", lng: "98.8236", region_id: "rg-demo-3",
+    arrive: "2026-11-12", depart: "2026-11-15", cost_est: "9000", booking_status: "Idea" });
+  step(7, { sort_order: 65, kind: "travel", title: "Longtail boat Ao Nang → Railay", location: "Ao Nang → Railay", transport: "ferry", region_id: "rg-demo-3",
+    depart: "2026-11-15", depart_time: "10:00", arrive: "2026-11-15", arrive_time: "10:20", cost_est: "200", booking_status: "Idea" });
+  step(8, { sort_order: 70, kind: "stay", title: "Railay", location: "Railay", accom_name: "Railay Bay Resort", lat: "8.0115", lng: "98.8378", region_id: "rg-demo-3",
+    arrive: "2026-11-15", depart: "2026-11-18", cost_est: "12000", booking_status: "Idea" });
+  S.steps.sort((a, b) => a.sort_order - b.sort_order);   // the API lists in timeline order
 
   const act = (i, o) => S.activities.push(base(Object.assign({ id: "ac-demo-" + i, sort_order: i * 10, cost_ccy: "THB", booking_status: "Idea", needs_advance: "no" }, o)));
   act(1, { step_id: "st-demo-2", title: "Grand Palace & Wat Phra Kaew", location: "Bangkok",
@@ -39,7 +54,7 @@ const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCA
     day: "2026-11-04", cost_est: "500", needs_advance: "no", booking_status: "Idea" });
   act(2, { step_id: "st-demo-4", title: "Elephant Nature Park day visit", location: "Chiang Mai", lat: "19.2100", lng: "98.8590",
     day: "2026-11-09", cost_est: "2500", needs_advance: "yes", booking_status: "Confirmed", booking_url: "https://example.com/elephants" });
-  act(3, { step_id: "st-demo-6", title: "Four Islands snorkel tour", location: "Ko Lanta", day: "2026-11-14",
+  act(3, { step_id: "st-demo-6", title: "Four Islands snorkel tour", location: "Ao Nang", day: "2026-11-14",
     cost_est: "1800", needs_advance: "yes", booking_status: "Idea" });
 
   const pack = (i, o) => S.packing.push(base(Object.assign({ id: "pk-demo-" + i, sort_order: i * 10, packed: "0", category: null, qty: null, note: null }, o)));
@@ -51,31 +66,16 @@ const PNG_PLACEHOLDER = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAQAAAABCA
   att(2, { parent_type: "activity", parent_id: "ac-demo-1", kv_key: "att/thailand-2026/at-demo-2", caption: "Grand Palace at golden hour", size: "205112" });
 })();
 
-// Mirror core.js decorate (maps_url + eur) so the demo /overview shape matches production.
-function mapsUrl(r) {
-  if (r.map_url) return r.map_url;                          // stored Google Maps link wins (mirrors core.js)
-  if (r.lat != null && r.lat !== "" && r.lng != null && r.lng !== "")
-    return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(r.lat + "," + r.lng);
-  return null;
-}
-function toEur(amt, ccy, rate) { return (amt == null || amt === "") ? null : (ccy === "EUR" ? Number(amt) : Number(amt) / Number(rate)); }
+// Run the SHARED composeOverview (decorate + grouping + the region/location tree) over the demo rows so
+// the preview /overview is exactly the production shape and logic.
 function mockOverview() {
-  const trip = S.trips[0] || null, rate = trip ? trip.thb_per_eur : null;
-  const decorate = (r) => { const amt = (r.cost_actual != null && r.cost_actual !== "") ? r.cost_actual : r.cost_est; return Object.assign({}, r, { maps_url: mapsUrl(r), eur: toEur(amt, r.cost_ccy, rate) }); };
-  const steps = S.steps.filter(s => !s.deleted), liveIds = new Set(steps.map(s => s.id));
-  const activitiesByStep = {}, unassigned = [];
-  S.activities.filter(a => !a.deleted).forEach(a => {
-    const d = decorate(a);
-    if (liveIds.has(a.step_id)) { (activitiesByStep[a.step_id] = activitiesByStep[a.step_id] || []).push(d); }
-    else unassigned.push(d);
-  });
-  return { trip, steps: steps.map(decorate), activitiesByStep, unassigned };
+  return composeOverview(S.trips[0] || null, S.regions, S.steps, S.activities);
 }
 // Run the SHARED computeBudget over the demo trip so previews prove the exact production math.
 function mockBudget() {
   const trip = S.trips[0] || {};
   return Object.assign(
-    computeBudget(trip.thb_per_eur, trip.budget_target_eur, S.steps, S.activities),
+    computeBudget(trip.thb_per_eur, trip.budget_target_eur, S.steps, S.activities, S.regions),
     { home_ccy: trip.home_ccy }
   );
 }
@@ -102,6 +102,7 @@ export async function handleMock(request, env) {
   if (parts[0] === "me") return j({ email: "demo@example.com", isSuperAdmin: false, mock: true });
   if (parts[0] === "entries") { if (request.method === "GET") return j({ rows: S.entries }); return j({ ok: true, demo: true }); }
   if (parts[0] === "trips")   { if (request.method === "GET") return j({ rows: isTrash ? [] : S.trips }); return j({ ok: true, demo: true }); }
+  if (parts[0] === "regions") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.regions.filter(r => !r.deleted) }); if (request.method === "POST" && last === "regions") return demoCreate(S.regions, "rg", request); return j({ ok: true, demo: true }); }
   if (parts[0] === "steps")   { if (request.method === "GET") return j({ rows: isTrash ? [] : S.steps }); if (request.method === "POST" && last === "flow") return demoCreate(S.steps, "st", request); return j({ ok: true, demo: true }); }
   if (parts[0] === "activities") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.activities }); if (request.method === "POST" && last === "activities") return demoCreate(S.activities, "ac", request); return j({ ok: true, demo: true }); }
   if (parts[0] === "packing") { if (request.method === "GET") return j({ rows: isTrash ? [] : S.packing }); return j({ ok: true, demo: true }); }
