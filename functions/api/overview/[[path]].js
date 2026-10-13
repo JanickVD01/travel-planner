@@ -1,5 +1,6 @@
 // Thin adapter over shared/core.js — a read-only trip snapshot for the frontend.
-//   GET /api/overview/<slug> -> { trip, steps, activitiesByStep, unassigned }
+//   GET /api/overview/<slug> -> { trip, regions, steps, activitiesByStep, unassigned, tree }
+//   `tree` = the Trip › Region › Location › Step hierarchy (core buildTripTree, effort 0017).
 import { json, userEmail, parsePath, fail } from "../_lib.js";
 import { tripOverview } from "../../../shared/core.js";
 

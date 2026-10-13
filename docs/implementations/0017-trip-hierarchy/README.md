@@ -1,7 +1,7 @@
 # 0017 — Trip hierarchy timeline (Trip › Region › Location › Step)
 
-> **Status:** 🚧 Planned 2026-10-13 — plan approved by the owner; M1 (this record) in progress on
-> `code/trip-hierarchy-core`. This record carries the full milestone plan and is **updated in place** as
+> **Status:** 🚧 In progress — M1 ✅ + M2 ✅ (2026-10-13) on `code/trip-hierarchy-core` (PR 1, open);
+> **migration 003 must be applied to prod via the `migrate` workflow before PR 1 merges.** M3–M7 pending. This record carries the full milestone plan and is **updated in place** as
 > milestones land (like [0010](../0010-pinned-step-photo/)). See [`README.md`](../README.md) for the
 > index and [`research.md`](research.md) for the codebase findings that shaped the design.
 
@@ -65,8 +65,8 @@ indexes first, the non-idempotent `ALTER TABLE steps ADD COLUMN region_id TEXT` 
 
 | PR | Milestone | Migration | Worker redeploy | What's New |
 |---|---|---|---|---|
-| 1 `code/trip-hierarchy-core` | **M1 — Record** *(this file)* + [`research.md`](research.md) + index row 🚧 — ⏳ | — | — | n |
-| 1 `code/trip-hierarchy-core` | **M2 — Core + schema**: `FLAT_SPECS.regions` + `steps.region_id`; `flatCreate` honours an explicit `sort_order`; `nextTimelineSlot`; region wrappers (`listRegions`, `createRegion`, `patchRegion`, `deleteRegion`, `restoreRegion`, `purgeRegionDeep`, `moveRegion`, `assignSteps`); pure `buildTripTree` + `composeOverview` (→ `tripOverview`); `computeBudget` `byRegion`; `schema.sql`; `migrations/003_region_id.sql`; `functions/api/regions/[[path]].js`; `_mock.js` uses `composeOverview` + demo regions (Bangkok ×2 stays, North, Krabi = Ao Nang → ferry → Railay, empty "Bangkok (return)") — ⏳ | **003, before merge** | y (auto) | n |
+| 1 `code/trip-hierarchy-core` | **M1 — Record** *(this file)* + [`research.md`](research.md) + index row 🚧 — ✅ 2026-10-13 | — | — | n |
+| 1 `code/trip-hierarchy-core` | **M2 — Core + schema**: `FLAT_SPECS.regions` + `steps.region_id`; `flatCreate` honours an explicit `sort_order`; `nextTimelineSlot`; region wrappers (`listRegions`, `createRegion`, `patchRegion`, `deleteRegion`, `restoreRegion`, `purgeRegionDeep`, `moveRegion`, `assignSteps`); pure `buildTripTree` + `composeOverview` (→ `tripOverview`); `computeBudget` `byRegion`; `schema.sql`; `migrations/003_region_id.sql`; `functions/api/regions/[[path]].js`; `_mock.js` uses `composeOverview` + demo regions (Bangkok ×2 stays, North, Krabi = Ao Nang → ferry → Railay, empty "Bangkok (return)") — ✅ 2026-10-13 (see *M2 verification* below) | **003, before merge** | y (auto) | n |
 | 2 `code/trip-hierarchy-mcp` | **M3 — MCP**: `list_regions`, `add_region`, `edit_region`, `move_region`, `delete_region`, `restore_region`, `list_deleted_regions`, `purge_region`, `assign_steps_to_region`; `region_id` on `add_step`/`edit_step`/`add_stay`/`add_travel`; updated `get_trip_overview`/`get_budget` descriptions; smoke round-trip — ⏳ | none | **y** | n |
 | (ops) | **M4 — Guided backfill on prod**: `list_trips` + `get_trip_overview` → proposal table per trip → **owner confirms** → `add_region` + `assign_steps_to_region` → re-check (no `split_regions`, no loose stays). Rollback = `assign_steps_to_region(null)` + `delete_region`. Outcome logged here — ⏳ | none | n | n |
 | 3 `code/trip-hierarchy-timeline` | **M5 — Timeline**: `loadTrip` → `/api/overview`; tree render (`regionGroupHTML`, `locationRowHTML`, existing `stepCardHTML`); "Expand to" control; trip summary + nights strip; collapse state + one delegated `bindTree()` (no re-render, keeps scroll); CSS — ⏳ | none | n | n |
@@ -94,6 +94,28 @@ Each PR description uses the four-line format (`what/why` · `What's New? y/n` �
    today.
 6. **Prod:** migrate run log green before PR 1 merges; timeline still flat after merge; then M4 and a
    visual check.
+
+## M2 verification (done 2026-10-13)
+
+- **Static:** `node --check` on `shared/core.js`, `functions/api/_mock.js`, `functions/api/regions/[[path]].js`;
+  `node scripts/validate-data.mjs` ✓; the MCP worker still bundles against the new core
+  (`wrangler deploy --dry-run`, no deploy).
+- **Pure tree on demo data** (`handleMock(.../api/overview/thailand-2026)`): Flight · **Bangkok** [one
+  location, 2 stays, 4n] · Train · **North (Chiang Mai)** [4n, planned 5 → gap 1] · Flight · **Krabi**
+  [Ao Nang 3n · ferry · Railay 3n] · **Bangkok (return)** [empty, planned 2, `insert_index` 9]; strip +
+  totals as expected; `byRegion` sums to `totalEst` (±0.01 per-bucket rounding).
+- **Migration 003 on a pre-0017 local DB** (scratch `--persist-to`): creates `regions`, `regions_audit`,
+  `idx_regions`, `steps.region_id`, `idx_steps_region`; re-applying the new `schema.sql` afterwards is
+  clean; a second run of 003 fails only on the `ALTER` (duplicate column) — as designed.
+- **Local e2e** (`wrangler pages dev` on a fresh scratch D1, 30 checks, all ✓): regions append after steps;
+  `PATCH region_id` to an unknown region → 404; a stay created with `region_id` lands right after the
+  region's last step and folds into the same location via `normPlace` ("bangkok (Sukhumvit)" ≡ "Bangkok");
+  an empty region shows `insert_index` + a planned strip segment, and its first stay takes its slot;
+  region-less steps append after planned regions; `move` (before / to end) renumbers to `(i+1)*10`, leaves
+  loose steps in place and merges a split region; moving relative to itself → 400; soft-delete → steps go
+  top level, restore regroups; a no-gap insert renumbers and lands between its neighbours with unique
+  `sort_order`s; `byRegion` = tree `eur` = hand-computed figure; `createRegion` with `before_region_id`
+  places it; `patchRegion` ignores `sort_order`; purge clears `region_id` on its steps and deletes none.
 
 ## Outcome
 
