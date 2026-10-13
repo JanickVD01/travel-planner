@@ -2,7 +2,7 @@
 
 > **Status:** 🚧 In progress — M1 ✅ + M2 ✅ (2026-10-13, PR #51). Migration 003 applied to prod D1 via the
 > `migrate` workflow before merge (run 38371496790: 5 queries, success). M3 ✅ (PR #52). M4 ✅ (prod
-> backfill of Thailand + France, owner-confirmed). M5 ✅ (PR 3, `code/trip-hierarchy-timeline`) + an M5 follow-up fix (`code/fix-tree-link-clicks`, see *M5 follow-up*). M6–M7 pending. This record carries the full milestone plan and is **updated in place** as
+> backfill of Thailand + France, owner-confirmed). M5 ✅ (PR 3, `code/trip-hierarchy-timeline`) + an M5 follow-up fix (`code/fix-tree-link-clicks`, see *M5 follow-up*) + owner feedback fixes (`code/feedback-quick-fixes`, see *Owner feedback fixes*). M6–M7 pending. This record carries the full milestone plan and is **updated in place** as
 > milestones land (like [0010](../0010-pinned-step-photo/)). See [`README.md`](../README.md) for the
 > index and [`research.md`](research.md) for the codebase findings that shaped the design.
 
@@ -193,6 +193,45 @@ Regions → open a region + location → click a step title → back → Steps �
 click the tree background. On `main`: the title/chevron don't navigate and the opened rows collapse. On the
 fix: all pass, the opened region + location stay open after returning, the chips still set depth. (The
 same PR removes the unused top-bar feedback button — see [0016](../0016-posthog-analytics/) M8.)
+
+## Owner feedback fixes (2026-10-13)
+
+The PostHog feedback tab collected seven notes in one session right after the M5 follow-up shipped
+(11:18–11:25 UTC, desktop 1600 px); each was matched to its replay, the code, and demo-mode screenshots at
+1600 and 390 px. Triage and the agreed split:
+
+| Feedback | Cause | Where |
+|---|---|---|
+| "Ugly white bar behind the menu items on Packing" | the built map was never hidden off the itinerary surfaces (see [0015 *Later changes*](../0015-trip-globe/)); the sub-nav's frosted backing then stood out over it | **this PR** |
+| "Clicking a region up top moves you to the first step" | `scrollIntoView` put the region header *under* the sticky top bar + sub-nav | **this PR** |
+| "Timeline / Map / Budget / Packing can stick to the top" | sticky, but at `top:56px` under a 63 px bar (7 px hidden) and `top:0` on phones — fully **under** the 67 px bar | **this PR** (offsets); moving the tabs up is `code/nav-menu` |
+| "The hamburger doesn't do anything" | `.side.collapsed` only hides the sidebar ≤ 720 px | `code/nav-menu` |
+| "Nothing is shown at the Trip level" / "Collapse & Expand all" | Trip depth hides the whole tree by design | **M6**: drop the Trip chip; add Expand all / Collapse all to the chip row |
+| "What's New is no longer populated" | newest entry is v0.7.0 (12 Jul); 0016/0017 never added theirs | `content/releases-v0.8` |
+| "Highlight the trip's regions on the map" | new feature | its own effort |
+
+Also from the replays: an uncaught `InvalidStateError: Transition was aborted… Viewport size changed` when
+opening Map (prod, 11:19), and a rage click on a one-place region that needed two taps to show its stay.
+
+**This PR (`code/feedback-quick-fixes`):**
+- `#trip-map` hidden unless `body.map-bg`/`body.map-view` (Packing, Budget, Home, What's New, Trash).
+- The sub-nav is frosted only while **stuck** over scrolled content (`.subnav.is-stuck`, toggled on scroll /
+  view swap); at rest the pills sit straight on the page — no bar.
+- `--topbar-h` is measured from the real top bar (`trackTopbar()`, ResizeObserver); `.subnav` and
+  `.sheet-head` stick at it on every width (the phone `top:0` rule is gone), and
+  `html { scroll-padding-top: --topbar-h + --subnav-h + 8px }` makes the strip jump (and focused inputs)
+  land clear of both bars.
+- `vt()` swallows the `ready` rejection of a skipped/aborted View Transition (the DOM update still runs;
+  render errors still reject `finished`).
+- `nodeOpen(…, parentKey)`: a region's **only** place follows a hand toggle of its region, so one tap shows
+  the stay; depth chips keep their meaning (Locations depth still shows places closed).
+
+**Verification** (headless Chrome, demo trip, 1600 + 390 px): the sub-nav sticks exactly under the bar
+(63/63, 67/67); the strip jump puts the region header 8 px below the sub-nav; a one-place region opens to its
+stay, a two-place region still opens to its places, Locations depth resets places to closed; the map is
+hidden on Packing/Budget/Home and visible on Timeline + Map view; no tab backing at rest on Packing, frosted
+once stuck on Budget and cleared again at the top; rapid route changes with motion on raise no uncaught
+errors; the M5 follow-up link checks still pass.
 
 ## Outcome
 

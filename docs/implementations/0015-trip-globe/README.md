@@ -99,3 +99,12 @@ theme-aware via CSS — no migration, no worker redeploy.
 
 **Follow-up (owner, when convenient):** authorize the `travel-planner` MCP connector and backfill
 coordinates for the real trips' stays so their maps populate (until then those trips show the plain timeline).
+
+## Later changes
+
+- **2026-10-13 — the map no longer lingers behind Packing / Budget / Home** (`code/feedback-quick-fixes`).
+  `route()` called `hideTripMap()` off the itinerary surfaces, but that only drops `map-bg`/`map-view`; no
+  CSS rule hid the already-built `#trip-map`, so the vivid map stayed behind those pages (owner feedback:
+  "an ugly white bar behind the menu items on Packing"). Added
+  `body:not(.map-bg):not(.map-view) #trip-map { visibility: hidden; }` — the behaviour this record always
+  described. Logged with the rest of that PR in [0017](../0017-trip-hierarchy/) (*Owner feedback fixes*).
