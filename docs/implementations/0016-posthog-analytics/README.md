@@ -1,14 +1,14 @@
 # 0016 — PostHog integration: product analytics, error tracking, session replay (research + plan)
 
-> **Status:** 🚧 In progress. **Phase 1** (this record + [`research.md`](research.md), 2026-07-16):
+> **Status:** ✅ Shipped — closed 2026-10-13 (feature flags dropped by the owner). **Phase 1** (this record + [`research.md`](research.md), 2026-07-16):
 > research complete, approach decided. **Phase 2 — core integration shipped in PR** (2026-07-16,
 > milestones 2–6): PostHog EU account created; `*.posthog.com` allow-listed in the CSP; the library +
 > `analytics.js` load; manual `$pageview` on the hash router; the two users identified from `/api/me`;
 > error tracking on. **Session replay added** (2026-07-16, M7): `worker-src 'self' blob:` added to the
 > CSP, recording on with form inputs masked (page text visible). **Feedback survey live** (M8): PostHog's
 > own floating **"Feedback" tab** (widget survey, shown every visit); the unused top-bar `#feedback-btn`
-> was removed on 2026-10-13. **Still open:** feature flags + manual usage events (M8) and
-> the final reconcile (M9). See the index — [`README.md`](../README.md) — and the data map in
+> was removed on 2026-10-13. **Usage events** shipped with 0017 M6; **feature flags dropped** (owner, 2026-10-13:
+> not needed at two-user scale); final reconcile (M9) ✅. See the index — [`README.md`](../README.md) — and the data map in
 > [`CLAUDE.md`](../../../CLAUDE.md).
 
 ## Context
@@ -73,7 +73,7 @@ consent banner), `respect_dnt`, `identified_only`, and masked replay text.
    **Masking posture:** form inputs masked (passwords always), **page text left visible** so the owners
    can see their own sessions when debugging — owner's choice for testing. Tighten later with
    `maskTextSelector:'*'` or `ph-no-capture` on sensitive nodes if desired.
-8. **(Opt-in) Surveys / feature flags / usage events** — 🔧 in progress.
+8. **(Opt-in) Surveys / feature flags / usage events** — ✅ done (flags dropped).
    - **Survey (feedback button)** — ✅ code 2026-07-16. Added a persistent, brand-matched `#feedback-btn`
      to the top bar ([`public/index.html`](../../../public/index.html) + [`styles.css`](../../../public/styles.css)),
      revealed only when analytics is ready ([`public/app.js`](../../../public/app.js)). **Owner (UI):** create
@@ -88,9 +88,11 @@ consent banner), `respect_dnt`, `identified_only`, and masked replay text.
      hierarchy timeline): `timeline_depth_set`, `tree_node_toggled`, `tree_expand_all`, `nights_strip_jump`,
      `step_opened` (`via` card / title / chevron / map / region), `step_created`, `region_created` / `_edited` /
      `_moved` / `_deleted` — every event carries `trip` (the slug), via `track()` in `app.js` over `Analytics.capture`.
-   - **Feature flags** — ⏳ pending.
-9. **Verify + reconcile** — 🔧 partial (this PR: [`CLAUDE.md`](../../../CLAUDE.md) data map). Final reconcile
-   (DESIGN.md, index status, `releases.json`, GitHub About) after the opt-ins settle.
+   - **Feature flags** — ❌ dropped 2026-10-13 (owner: not needed). Nothing to remove — none were ever created.
+9. **Verify + reconcile** — ✅ 2026-10-13. [`CLAUDE.md`](../../../CLAUDE.md) data map + status carry PostHog,
+   the Feedback tab and usage events (0017 M7 reconcile, #61); the user-facing piece (the Feedback tab) is in
+   What's New v0.8.0 (#56); DESIGN.md needs nothing new (the values tension is recorded above); index ✅;
+   the GitHub About doesn't advertise telemetry, on purpose.
 
 ## Verification
 
@@ -112,5 +114,12 @@ hash-route, identifies the two signed-in users (real prod sessions only — demo
 captures unhandled JS exceptions for error tracking — all with the CSP widened only by
 `https://*.posthog.com` on `script-src` + `connect-src` (no `'unsafe-inline'`). **Session replay** (M7)
 followed the same day — `worker-src 'self' blob:` added, recording on with form inputs masked and page
-text visible. Feature-flag/usage-event/survey wiring (M8) and the final doc reconcile (M9) remain
-deliberate follow-ups. This section will be finalised when the effort closes._
+text visible._
+
+**Closed 2026-10-13.** M8 landed as the PostHog **Feedback** side tab (a widget survey shown every visit;
+the unused top-bar button was removed in #54) and **usage events** via `track()` → `Analytics.capture`
+(shipped with 0017 M6, #59). **Feature flags were dropped** by the owner as unnecessary for a two-user app.
+In practice the effort paid for itself the same day: replays + the feedback tab surfaced the dead links in the
+new hierarchy timeline (#54), seven UI notes (#55, #57, #59, #60) and an uncaught View-Transition error in
+prod (fixed in #55). Working notes for querying it via the PostHog MCP live outside the repo (assistant
+memory); the PostHog project id and survey are not secrets.

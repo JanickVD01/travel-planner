@@ -30,7 +30,7 @@ in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0013](0013-step-duration-and-activity-back/) | Timeline step duration badges + activity "back" returns to its parent step | 2026-07-10 | ✅ Shipped | #44 |
 | [0014](0014-docs-per-effort-folders/) | Docs reorg — one folder per effort (record = folder `README.md`) + "## Later changes" post-ship log | 2026-07-11 | ✅ Shipped | #45 |
 | [0015](0015-trip-globe/) | Trip map — visual itinerary atlas (research + design → shipped: still backdrop + interactive Map view with clickable pins) | 2026-07-12 | ✅ Shipped | #47 |
-| [0016](0016-posthog-analytics/) | PostHog integration — product analytics, error tracking, session replay (Phase 1: research + decision; build planned, awaiting go-ahead) | 2026-07-16 | 🚧 Research done, build pending | — |
+| [0016](0016-posthog-analytics/) | PostHog integration — product analytics, error tracking, session replay (error tracking, session replay, Feedback tab, usage events; feature flags dropped) | 2026-07-16 | ✅ Shipped | #48, #49, #50, #54, #59 |
 | [0017](0017-trip-hierarchy/) | Trip hierarchy timeline — Trip › Region › Location › Step (regions as first-class rows, locations derived from stays, collapsible zoomable timeline) | 2026-10-13 | ✅ Shipped | #51, #52, #53, #54, #55, #59 |
 | [0018](0018-nav-menu/) | Navigation menu (hamburger houses Home + What's New; no permanent sidebar) + trip tabs first, at the top | 2026-10-13 | ✅ Shipped | #57 |
 | [0019](0019-map-regions/) | Trip regions on the map — the trip's provinces shaded in the region blue, a label per region, and region chips in the Map view to frame one | 2026-10-13 | ✅ Shipped | #60 |
