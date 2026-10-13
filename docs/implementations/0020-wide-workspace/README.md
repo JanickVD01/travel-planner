@@ -1,7 +1,7 @@
 # 0020 — Wide-screen workspace (laptop / desktop layout)
 
-> **Status:** 🚧 In progress — **M1** 🔧: the owner tried A / B / C and **picked B** (2026-10-13); the
-> prototype was regenerated as **B only, with the owner's refinements** for a second look. See the [index](../README.md).
+> **Status:** 🚧 In progress — **M1** ✅ (the owner tried A / B / C and **picked B** with refinements, 2026-10-13);
+> **M2** (trip to-dos) 🔧; M3 (layout B) and M4 (reconcile) next. Build plan approved 2026-10-13. See the [index](../README.md).
 
 ## Context
 
@@ -38,14 +38,12 @@ the browser, which the real build would move into `shared/core.js` like every ot
 
 | PR | Milestone | Migration | Worker redeploy | What's New |
 |---|---|---|---|---|
-| `content/0020-record` | **M1a — Record** (this file) + index row 🚧 | — | — | n |
+| `content/0020-record` | **M1a — Record** (this file) + index row 🚧 — ✅ #64 | — | — | n |
 | `code/0020-prototype` *(throwaway, preview only — closed unmerged)* | **M1b — Clickable prototype** of A / B / C | — | — | — |
-| — | **Decision** — owner tries the prototype and picks (or mixes) a layout; logged here | — | — | — |
-| tbd | **M2 — Layout shell** (≥ 1200 px panes; the map moves out of the backdrop) | none | n | y |
-| tbd | **M3 — Map follows the timeline** (region in view framed; hovered card → pin) | none | n | y |
-| tbd | **M4 — At a glance** (B only; computed in core) | none | n | y |
-| tbd | **M5 — Detail in the pane** (B / C) | none | n | y |
-| tbd | **M6 — Reconcile** | none | n | n |
+| — | **Decision** — owner tries the prototype and picks (or mixes) a layout; logged here — ✅ B (see *Decision*) | — | — | — |
+| `code/todos` | **M2 — Trip to-dos, end to end**: `FLAT_SPECS.todos` + wrappers (core), `migrations/004_todos.sql` (applied to prod via `migrate` **before merge**) + `schema.sql`, `/api/todos`, demo mock, MCP `list_todos` / `add_todo` / `edit_todo` / `toggle_todo` / `delete_todo` / `restore_todo` / `list_deleted_todos` / `purge_todo` (+ smoke), a **To-do tab** on every screen (owner), Trash "To-dos" group — 🔧 | **004** | **y** | y |
+| `code/wide-workspace` | **M3 — Layout B in production** (≥ 1200 px): map pane + Regions panel (summary, regions, gaps) left · the timeline filling the middle · right pane At a glance (To-do · Unplanned · Packing) with step / region detail opening in it (condensed); map follows the scroll + pin hover; full-screen Map tab; **no notebook grid + no dashed underlines app-wide** (owner) | none | n | y |
+| `content/0020-reconcile` | **M4 — Reconcile**; close prototype #65 unmerged | none | n | n |
 
 ## Decision
 
@@ -64,8 +62,8 @@ refinements (all **≥ 1200 px only**; phones unchanged):
 | **The Map tab stays full-screen** | Selecting Map still shows the full-screen interactive map (panes hidden) — the prototype first drew it at the side-pane size; fixed by redrawing when the map's container changes size. |
 
 Regenerated prototype: [PR #65](https://github.com/JanickVD01/travel-planner/pull/65) (B only; switcher
-Current · B). Open questions for the build: where the to-do list lives on phones (e.g. its own tab), whether the grid + dashes should also go on phones (the owner's
-notes were about the laptop view), and whether A's "map follows the timeline" stays (it is in the B prototype).
+Current · B). Settled for the build (owner, 2026-10-13): to-dos get **their own tab on every screen**; the notebook grid + the dashed
+underlines go **everywhere** (phones too); A's **map follows the timeline** stays in B.
 
 ## Outcome
 
