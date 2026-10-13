@@ -1,6 +1,15 @@
 {
   "releases": [
     {
+      "version": "v0.8.2",
+      "title": "A real menu, more room",
+      "date": "2026-10-13",
+      "notes": [
+        "The ☰ button now opens a small menu with Home and What’s New — the sidebar that used to hold them is gone, so the page gets the whole width (and phones lose a row).",
+        "On every trip page the Timeline · Map · Budget · Packing tabs now sit right at the top, in the same place on all four."
+      ]
+    },
+    {
       "version": "v0.8.1",
       "title": "Smoother timeline, fewer dead ends",
       "date": "2026-10-13",

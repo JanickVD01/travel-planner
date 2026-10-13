@@ -78,10 +78,18 @@ html { scroll-padding-top: calc(var(--topbar-h) + var(--subnav-h) + var(--space-
 
 /* ---- layout ---- */
 .layout { display: flex; gap: var(--space-4); max-width: var(--maxw); margin: 0 auto; padding: var(--space-4); }
-.side { width: 236px; flex: 0 0 236px; }
-.nav { position: sticky; top: 68px; display: flex; flex-direction: column; gap: 2px; }
+/* The hamburger's menu (0018): a small floating panel under the top bar on every width — no permanent
+   sidebar. Floating chrome, so it carries the one tuned shadow (DESIGN §8). */
+.side {
+  position: fixed; z-index: 45;
+  top: calc(var(--topbar-h, 63px) + 4px); left: max(var(--space-4), env(safe-area-inset-left));
+  min-width: 220px; padding: 6px;
+  background: var(--paper-1); border: 1px solid var(--line-hair); border-radius: var(--radius);
+  box-shadow: var(--shadow-float);
+}
+.nav { display: flex; flex-direction: column; gap: 2px; }
 .nav .section { color: var(--ink-3); font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .08em; margin: var(--space-4) var(--space-2) var(--space-1); }
-.nav a { display: flex; align-items: center; min-height: 40px; padding: 8px 10px; border-radius: var(--radius-sm); color: var(--ink-1); }
+.nav a { display: flex; align-items: center; min-height: 44px; padding: 8px 10px; border-radius: var(--radius-sm); color: var(--ink-1); }
 .nav a:hover { background: var(--paper-1); text-decoration: none; }
 .nav a.active { background: var(--accent-wash); color: var(--accent-ink); box-shadow: inset 3px 0 0 var(--accent); }
 .view { flex: 1; min-width: 0; }
@@ -131,10 +139,6 @@ a.card:hover { border-color: var(--accent); text-decoration: none; }
 
 @media (max-width: 720px) {
   .layout { flex-direction: column; gap: var(--space-3); padding: var(--space-3); }
-  .side { width: 100%; flex: none; }
-  .side.collapsed { display: none; }
-  .nav { position: static; flex-flow: row wrap; }
-  .nav .section { width: 100%; }
 }
 
 /* ---- icons ---- */
@@ -981,7 +985,8 @@ body.map-bg #trip-map::after { content: ""; position: absolute; inset: 0; pointe
 body.map-bg #view {
   background: color-mix(in srgb, var(--paper-1) 80%, transparent);
   border: 1px solid var(--line-hair); border-radius: var(--radius);
-  padding: var(--space-4) var(--space-4) var(--space-6);
+  /* No top padding: the tabs (first in the sheet, 0018) sit at the same y as on Budget / Packing / Map. */
+  padding: 0 var(--space-4) var(--space-6);
   box-shadow: var(--shadow-float);
 }
 /* On the sheet, travel legs read as cards too (matching the stay cards). */

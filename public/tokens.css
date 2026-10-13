@@ -55,7 +55,7 @@
   --text-lg: 1.15rem;  --text-xl: 1.4rem;  --text-2xl: 1.75rem; --text-3xl: 2.15rem;
 
   /* — layout — */
-  --maxw: 960px;
+  --maxw: 760px;   /* one centred column (0018: no sidebar) — ≈ the old content width */
   --rail-x: 34px;       /* x-position of the timeline transit line */
 
   /* — type families (self-hosted variable woff2, see public/fonts/) — */
