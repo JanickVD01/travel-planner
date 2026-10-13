@@ -2,7 +2,7 @@
 
 > **Status:** 🚧 In progress — M1 ✅ + M2 ✅ (2026-10-13, PR #51). Migration 003 applied to prod D1 via the
 > `migrate` workflow before merge (run 38371496790: 5 queries, success). M3 ✅ (PR #52). M4 ✅ (prod
-> backfill of Thailand + France, owner-confirmed). M5 ✅ (PR 3, `code/trip-hierarchy-timeline`) + an M5 follow-up fix (`code/fix-tree-link-clicks`, see *M5 follow-up*) + owner feedback fixes (`code/feedback-quick-fixes`, see *Owner feedback fixes*). M6–M7 pending. This record carries the full milestone plan and is **updated in place** as
+> backfill of Thailand + France, owner-confirmed). M5 ✅ (PR 3, `code/trip-hierarchy-timeline`) + an M5 follow-up fix (`code/fix-tree-link-clicks`, see *M5 follow-up*) + owner feedback fixes (`code/feedback-quick-fixes`, see *Owner feedback fixes*). M6 ✅ (`code/trip-hierarchy-editing`, see *M6 verification*), M7 pending. This record carries the full milestone plan and is **updated in place** as
 > milestones land (like [0010](../0010-pinned-step-photo/)). See [`README.md`](../README.md) for the
 > index and [`research.md`](research.md) for the codebase findings that shaped the design.
 
@@ -37,7 +37,7 @@ data, the API, the MCP worker or the UI (see [`research.md`](research.md)).
 | Money | Per-region subtotals come from **`computeBudget`** (new `byRegion`), the only place money math lives. Existing callers unaffected. |
 | Where the tree is built | A pure **`buildTripTree`** in `shared/core.js`, surfaced through `/api/overview/<slug>` (`composeOverview`). The browser can't import `shared/core.js` (Pages serves only `public/`), so the timeline switches to the overview endpoint; the demo mock runs the same core function. |
 | Delete semantics | **Soft-deleting a region doesn't cascade** — its steps fall back to top level (like a deleted step's activities → Unassigned); restoring regroups them. **Purging a region** clears `region_id` on its steps in the same batch (audited) and **never deletes steps**. |
-| UX | **Collapsible nested list** (owner's choice) on the existing metro rail: region headers and location rows expand/collapse in place. An **"Expand to"** control (Trip · Regions · Locations · Steps) sets every group to one depth in a tap — the four zoom views the owner asked for. **Trip** depth = a summary (total nights, regions, stays, dates) + a strip of regions sized by nights. A trip with no regions renders exactly as today. |
+| UX | **Collapsible nested list** (owner's choice) on the existing metro rail: region headers and location rows expand/collapse in place. An **"Expand to"** control (Trip · Regions · Locations · Steps) sets every group to one depth in a tap — the four zoom views the owner asked for. **Trip** depth = a summary (total nights, regions, stays, dates) + a strip of regions sized by nights. *Revised in M6 (owner feedback):* the summary + strip show at every depth, so the **Trip chip is dropped** (it read as an empty page) — Show: Regions · Locations · Steps, plus **Expand all / Collapse all** on the same row. A trip with no regions renders exactly as today. |
 | Design contract | Region headers are a tonal `--paper-2` band with an **interchange-capsule marker** in the existing `--rail` blue; location rows use a ring marker. The zoom chips' active state is **tonal, not accent** (the subnav and stay markers already use the one accent per view). Taps ≥ 44 px, `aria-expanded` on toggles, motion = transform/opacity behind reduced-motion. |
 | Unplanned gaps | **A gap in time is shown as a gap** (owner, 2026-10-13, during M4): when nothing is planned between the end of one plan and the start of the next, the timeline shows its own marker, e.g. "4 nights unplanned · 12 → 16 Dec", rather than hiding it inside a region's planned window. Computed in core (`buildTripTree`) from coverage: a stay covers arrive → depart, a travel leg covers depart → arrive, so an overnight train or flight is **not** a gap. A gap node sits between the items it separates (top level, or inside a region when both sides are in it), also appears in the trip strip, and adds to `totals.unplanned_nights`. Built in M5. |
 | Map | **The map never re-frames on collapse/expand.** The 0015 decision stands (still backdrop; interactivity only in Map view). |
@@ -72,7 +72,7 @@ indexes first, the non-idempotent `ALTER TABLE steps ADD COLUMN region_id TEXT` 
 | 2 `code/trip-hierarchy-mcp` | **M3 — MCP**: `list_regions`, `add_region`, `edit_region`, `move_region`, `delete_region`, `restore_region`, `list_deleted_regions`, `purge_region`, `assign_steps_to_region`; `region_id` on `add_step`/`edit_step`/`add_stay`/`add_travel`; updated `get_trip_overview`/`get_budget` descriptions; smoke round-trip — ✅ 2026-10-13 (see *M3 verification*) | none | **y** | n |
 | (ops) | **M4 — Guided backfill on prod**: `list_trips` + `get_trip_overview` → proposal table per trip → **owner confirms** → `add_region` + `assign_steps_to_region` → re-check (no `split_regions`, no loose stays). Rollback = `assign_steps_to_region(null)` + `delete_region`. Outcome logged here — ✅ 2026-10-13 (see *M4 outcome*) | none | n | n |
 | 3 `code/trip-hierarchy-timeline` | **M5 — Timeline**: unplanned-gap nodes in core `buildTripTree` (+ strip + `totals.unplanned_nights`); `loadTrip` → `/api/overview`; tree render (`regionGroupHTML`, `locationRowHTML`, existing `stepCardHTML`); "Expand to" control; trip summary + nights strip; collapse state + one delegated `bindTree()` (no re-render, keeps scroll); CSS; inserters inside a region create the step there (`data-region` → `region_id`) — ✅ 2026-10-13 (see *M5 verification*) | none | n | n |
-| 4 `code/trip-hierarchy-editing` | **M6 — Editing**: region sheet `#/trip/<slug>/region/<id>` (edit, member list, move earlier/later, delete); "Add region" wizard; region picker in step detail; step-wizard region default (tapped "+" → previous step's region); Trash "Regions" group; Budget "By region" — ⏳ | none | n | n |
+| 4 `code/trip-hierarchy-editing` | **M6 — Editing**: region sheet `#/trip/<slug>/region/<id>` (edit, member list, move earlier/later, delete), opened from a "›" on each region header; "Add region" wizard; region picker in step detail; step-wizard region field (default: the inserter's region, else the previous step's); Trash "Regions" group; Budget "By region". **Plus owner feedback (2026-10-13):** drop the **Trip** chip (Show: Regions · Locations · Steps) and add **Expand all / Collapse all** to the chip row; **usage events** via `Analytics.capture` (`timeline_depth_set`, `tree_node_toggled`, `tree_expand_all`, `nights_strip_jump`, `step_opened`, `step_created`, `region_created` / `region_edited` / `region_moved` / `region_deleted`) — folded here from 0016 M8 — ✅ 2026-10-13 (see *M6 verification*) | none | n | y |
 | 5 `content/trip-hierarchy-reconcile` | **M7 — Reconcile**: `CLAUDE.md` (data model, scoping, MCP list), `DESIGN.md` (hierarchy timeline, interchange marker, tonal chips), `README.md`, `public/data/app.json`, `releases.json` v0.8.0, index ✅, MEMORY, GitHub About — ⏳ | none | n | **y** |
 
 Each PR description uses the four-line format (`what/why` · `What's New? y/n` · `migration none/NNN` ·
@@ -193,6 +193,42 @@ Regions → open a region + location → click a step title → back → Steps �
 click the tree background. On `main`: the title/chevron don't navigate and the opened rows collapse. On the
 fix: all pass, the opened region + location stay open after returning, the chips still set depth. (The
 same PR removes the unused top-bar feedback button — see [0016](../0016-posthog-analytics/) M8.)
+
+## M6 verification (done 2026-10-13)
+
+**What shipped (`public/app.js`, `public/styles.css`; no backend change — M2's core + `/api/regions` already
+carried every rule):**
+- **Region sheet** `#/trip/<slug>/region/<id>` (a map-backdrop surface like step detail), opened from a "›"
+  on each region header: editable title, planned nights, planned from/to, note; facts from the core tree
+  (dates · nights · places · ≈ €) + the mismatch / split hints; **In this region** = its steps in timeline order
+  (links) + "add to <region>"; **Move earlier / later** (`POST …/move` with `before_region_id` /
+  `after_region_id` of the neighbouring region in timeline order; disabled at the ends); **Delete region**
+  (soft-delete, confirm says its steps stay on the timeline without a region → back to the timeline).
+- **Add region** wizard from an "add region" row at the end of the timeline (shown at every depth): name
+  (required), planned nights, from/to, note → `POST regions/<slug>/regions` (appended at the end).
+- **Region picker** in step detail (`region_id` select: "No region" + live regions; `editable` options now
+  accept `value::label` so titles show while ids are stored) and a **Region** field in the step wizard
+  (default: the inserter's region, else the previous step's), shown in the review.
+- **Trash** gets a **Regions** group (first); purge warns that the steps stay, without a region.
+- **Budget** gets **By region** bars (timeline order + "No region" when > 0) from `computeBudget.byRegion`,
+  following the Estimated / Actual toggle.
+- **Show** is Regions · Locations · Steps; a saved Trip depth opens at Regions. **Expand all / Collapse all**
+  sits on the chip row (icon-only below 640 px, ≥ 44 px): Expand all = Steps depth, Collapse all = Regions
+  depth; it offers Collapse all only when everything is open, and updates in place (focus kept).
+- **Usage events** through `track()` (→ `Analytics.capture`, guarded; no-op in demo/preview), each with `trip`.
+
+**Verification** (headless Chrome, demo trip, 1600 + 390 px, `m6-check` — 44 checks, each API write
+captured and asserted, analytics stubbed to record events): the chips + a saved Trip depth; Expand/Collapse
+all (depths, aria, focus, label flip after a hand-closed node); the region "›" (≥ 44 px) → sheet route,
+facts, planned rows, member links, move-button states, map backdrop; title / planned-nights edits →
+`PATCH regions/<slug>/regions/<id>`; Move later → `POST …/rg-demo-1/move {after_region_id: "rg-demo-2"}`;
+member link → step + `step_opened{via:region}`; step picker options (`""=No region`, `rg-demo-3=Krabi`) →
+`PATCH steps/…/flow/<id> {region_id}` incl. clearing; the wizard (name required) → `POST` with title +
+planned nights, the new empty region appears; region inserter → wizard defaults to that region, review
+shows it, the stay is created with `region_id`, `step_created{in_region, via:region_inserter}`; a plain
+inserter defaults to the previous step's region; Trash Regions group first; Budget By region bars in
+timeline order; tree links still navigate; every event fires; no uncaught errors. The quick-fix, menu and
+tree-link suites still pass at both widths.
 
 ## Owner feedback fixes (2026-10-13)
 

@@ -1,6 +1,18 @@
 {
   "releases": [
     {
+      "version": "v0.9.0",
+      "title": "Plan by region",
+      "date": "2026-10-13",
+      "notes": [
+        "Every region now has its own page — tap the › on a region to rename it, set planned nights or dates, add a note, see all its steps, move it earlier or later, or delete it.",
+        "Add a region straight from the timeline (“add region” at the bottom) — handy for sketching “Bangkok 4 nights → North 5 nights” before anything is booked.",
+        "Move a step into a region from its details, and new steps can be added into a region directly.",
+        "Budget now breaks your costs down by region, and deleted regions show up in Trash so you can bring them back.",
+        "The timeline’s Show control is simpler: Regions · Locations · Steps, plus a one-tap Expand all / Collapse all."
+      ]
+    },
+    {
       "version": "v0.8.2",
       "title": "A real menu, more room",
       "date": "2026-10-13",

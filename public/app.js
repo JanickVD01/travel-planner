@@ -62,7 +62,9 @@ const ICONS = {
   image: '<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="8.8" cy="10" r="1.5"/><path d="M4 17l4.3-4.3a1.8 1.8 0 0 1 2.5 0L15 17M13.5 14.2l1.6-1.6a1.8 1.8 0 0 1 2.5 0L20.5 14.2"/>',
   trash: '<path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M6.5 7l.9 12.1a2 2 0 0 0 2 1.9h5.2a2 2 0 0 0 2-1.9L19.5 7M10 11v6M14 11v6"/>',
   undo:  '<path d="M9 7 4.5 11.5 9 16M4.5 11.5H14a5 5 0 0 1 0 10h-2.5"/>',
-  plus:  '<path d="M12 5v14M5 12h14"/>'
+  plus:  '<path d="M12 5v14M5 12h14"/>',
+  unfold: '<path d="M7 9l5-5 5 5M7 15l5 5 5-5"/>',
+  fold:   '<path d="M7 4l5 5 5-5M7 20l5-5 5 5"/>'
 };
 function icon(name, cls) {
   const p = ICONS[name] || ICONS.pin;
@@ -228,7 +230,7 @@ function ensureMap() {
     _mapReady = window.TripMap.setup(document.getElementById("trip-map"), {
       onSelect: (stop) => {
         const slug = tripSlugFromHash();
-        if (slug && stop && stop.stepId != null) location.hash = "#/trip/" + encodeURIComponent(slug) + "/step/" + encodeURIComponent(stop.stepId);
+        if (slug && stop && stop.stepId != null) { track("step_opened", { via: "map" }); location.hash = "#/trip/" + encodeURIComponent(slug) + "/step/" + encodeURIComponent(stop.stepId); }
       }
     }).then(c => (_mapCtl = c)).catch(() => { _mapReady = null; return null; });   // allow a retry on the next navigation
   }
@@ -289,6 +291,11 @@ function editable(displayHTML, o) {
     (o.options ? ' data-options="' + esc(Array.isArray(o.options) ? o.options.join("|") : o.options) + '"' : "") +
     ' aria-label="Edit ' + esc(o.field || "value") + '">' + displayHTML + "</span>";
 }
+// Deliberate usage events (0017 M6; helper from 0016). Every event carries the trip slug. No-op in demo /
+// preview and when the SDK is blocked (Analytics.capture is guarded).
+function track(event, props) {
+  if (window.Analytics) Analytics.capture(event, Object.assign({ trip: tripSlugFromHash() || null }, props || {}));
+}
 function tripSlugFromHash() {
   const parts = (location.hash.replace(/^#/, "") || "/").split("/").filter(Boolean);
   return (parts[0] === "trip" && parts[1]) ? decodeURIComponent(parts[1]) : "";
@@ -303,18 +310,20 @@ function openEditor(btn) {
   if (d.input === "select") {
     ctrl = document.createElement("select");
     ctrl.className = "edit-select";
-    const opts = (d.options || "").split("|").filter(Boolean);
+    // An option is "value" or "value::label" (the region picker shows titles but stores ids; "" = none).
+    const opts = (d.options || "").split("|").filter(Boolean)
+      .map(o => { const i = o.indexOf("::"); return i >= 0 ? [o.slice(0, i), o.slice(i + 2)] : [o, o]; });
     // If the stored value isn't one of the options (e.g. an unset field like transport), prepend a
     // neutral placeholder so the browser doesn't auto-select option[0] — otherwise picking that first
     // option fires no `change` event and the edit is silently dropped (select commits on change only).
-    if (opts.indexOf(cur) < 0) {
+    if (opts.map(o => o[0]).indexOf(cur) < 0) {
       const ph = document.createElement("option");
       ph.value = cur; ph.textContent = "—"; ph.disabled = true; ph.selected = true;
       ctrl.appendChild(ph);
     }
-    opts.forEach(o => {
+    opts.forEach(([v, l]) => {
       const op = document.createElement("option");
-      op.value = o; op.textContent = o; if (o === cur) op.selected = true;
+      op.value = v; op.textContent = l; if (v === cur) op.selected = true;
       ctrl.appendChild(op);
     });
   } else if (d.input === "textarea") {                 // multiline (e.g. notes)
@@ -351,6 +360,7 @@ function openEditor(btn) {
     try {
       await api(d.entity + "/" + encodeURIComponent(pathSpace) + "/" + d.list + "/" + encodeURIComponent(d.id),
         { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ [field]: val }) });
+      if (d.entity === "regions") track("region_edited", { fields: [field] });
       invalidateTrip(slug);
       vt(route);                                                       // full re-render with new value
     } catch {
@@ -742,12 +752,15 @@ function renderSubnav(slug, active) {
 // (Trip · Regions · Locations · Steps) and per-node toggles override it. Collapse state is a per-viewer
 // convenience in localStorage (never data). Toggling flips `hidden`/aria-expanded on the existing DOM —
 // no re-render (scroll is kept) and no map call (the backdrop stays still, per 0015).
-const DEPTHS = ["trip", "regions", "locations", "steps"];
-const DEPTH_LABEL = { trip: "Trip", regions: "Regions", locations: "Locations", steps: "Steps" };
+// No "Trip" depth (owner feedback, 2026-10-13): it hid the whole tree and read as an empty page; the
+// summary + nights strip above the tree already are the trip-level view at every depth.
+const DEPTHS = ["regions", "locations", "steps"];
+const DEPTH_LABEL = { regions: "Regions", locations: "Locations", steps: "Steps" };
 function treeStateKey(slug) { return "tp.tree." + slug; }
 function loadTreeState(slug) {
   let s = null;
   try { s = JSON.parse(localStorage.getItem(treeStateKey(slug)) || "null"); } catch {}
+  if (s && s.depth === "trip") s.depth = "regions";       // a saved Trip depth (removed) opens at Regions
   if (!s || typeof s !== "object" || DEPTHS.indexOf(s.depth) < 0) s = { depth: "steps", open: {} };
   if (!s.open || typeof s.open !== "object") s.open = {};
   return s;
@@ -827,7 +840,8 @@ function regionGroupHTML(n, c) {
       '<h2 class="rg-h"><button type="button" class="tree-toggle rg-toggle" data-toggle="' + esc(key) + '" data-level="region" aria-expanded="' + open + '" aria-controls="' + id + '">' +
         CHEVRON + '<span class="tt-text"><span class="rg-title">' + esc(g.title || "Region") + '</span><span class="tt-meta mono">' + meta + "</span>" +
         (hints.length ? '<span class="rg-hint">' + esc(hints.join(" · ")) + "</span>" : "") + "</span>" +
-      "</button></h2></div>" +
+      "</button></h2>" +
+      '<a class="rg-open" href="#/trip/' + encodeURIComponent(c.slug) + "/region/" + encodeURIComponent(rid) + '" aria-label="Open ' + esc(g.title || "region") + ' details">›</a></div>' +
     '<ol class="tl-sub" id="' + id + '"' + (open ? "" : " hidden") + ">" + treeNodesHTML(n.children, sub, true) +
       (endIdx != null && endIdx >= 0 ? stepInserterHTML(endIdx, rid, addLabel, !n.children.length) : "") + "</ol></li>";
 }
@@ -849,11 +863,18 @@ function tripSummaryHTML(tree) {
   }).join("") + "</div>" : "";
   return '<section class="trip-sum" aria-label="Trip overview"><div class="sum-facts mono">' + facts + "</div>" + strip + "</section>";
 }
-function zoomBarHTML(depth) {                            // full-width, no visible label (it costs a row)
+// "Everything open" = the Steps depth with no node closed by hand; the button then offers Collapse all.
+function treeAllOpen(ts) { return ts.depth === "steps" && !Object.keys(ts.open).some(k => ts.open[k] === false); }
+function expandAllHTML(ts) {
+  const all = treeAllOpen(ts), label = all ? "Collapse all" : "Expand all";
+  return '<button type="button" class="expand-all" data-expand-all="' + (all ? "collapse" : "expand") + '" aria-label="' + label + '" title="' + label + '">' +
+    icon(all ? "fold" : "unfold") + '<span class="ea-text">' + label + "</span></button>";
+}
+function zoomBarHTML(ts) {                               // one row: depth chips + Expand/Collapse all (no label row)
   return '<div class="zoom-row">' +
     '<div class="basis-toggle zoom-bar" role="group" aria-label="Show the timeline by">' +
-    DEPTHS.map(d => '<button type="button" class="basis-chip zoom-chip" data-depth="' + d + '" aria-pressed="' + (d === depth) + '">' + esc(DEPTH_LABEL[d]) + "</button>").join("") +
-    "</div></div>";
+    DEPTHS.map(d => '<button type="button" class="basis-chip zoom-chip" data-depth="' + d + '" aria-pressed="' + (d === ts.depth) + '">' + esc(DEPTH_LABEL[d]) + "</button>").join("") +
+    "</div>" + expandAllHTML(ts) + "</div>";
 }
 // Re-apply collapse state to the rendered tree in place (no re-render).
 function applyTree(slug, ts, animateKey) {
@@ -862,6 +883,12 @@ function applyTree(slug, ts, animateKey) {
   root.setAttribute("data-depth", ts.depth);
   root.hidden = ts.depth === "trip";
   document.querySelectorAll(".zoom-chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.depth === ts.depth)));
+  const ea = document.querySelector("[data-expand-all]");
+  if (ea) {                                              // update in place so keyboard focus stays on it
+    const all = treeAllOpen(ts), label = all ? "Collapse all" : "Expand all";
+    ea.dataset.expandAll = all ? "collapse" : "expand"; ea.setAttribute("aria-label", label); ea.title = label;
+    ea.innerHTML = icon(all ? "fold" : "unfold") + '<span class="ea-text">' + label + "</span>";
+  }
   root.querySelectorAll("[data-toggle]").forEach(btn => {
     const key = btn.dataset.toggle, open = nodeOpen(ts, key, btn.dataset.level, btn.dataset.parent);
     const list = document.getElementById(btn.getAttribute("aria-controls"));
@@ -877,19 +904,35 @@ function bindTree() {                                     // one delegated liste
   if (_treeBound) return; _treeBound = true;
   document.addEventListener("click", (e) => {
     const slug = tripSlugFromHash();
+    const sl = e.target.closest("#tl-tree a.step-title, #tl-tree a.leg-title, #tl-tree a.step-open");
+    if (sl && slug) {                                      // a link into a step: let it navigate, just count it
+      track("step_opened", { via: sl.classList.contains("step-open") ? "chevron" : "title", depth: loadTreeState(slug).depth });
+      return;
+    }
     const tg = e.target.closest("[data-toggle]");
     if (tg && slug) {
       e.preventDefault();
       const ts = loadTreeState(slug), key = tg.dataset.toggle;
       ts.open[key] = !nodeOpen(ts, key, tg.dataset.level, tg.dataset.parent);
       saveTreeState(slug, ts); applyTree(slug, ts, key);
+      track("tree_node_toggled", { level: tg.dataset.level, open: ts.open[key] });
+      return;
+    }
+    const ea = e.target.closest("[data-expand-all]");
+    if (ea && slug) {                                      // Expand all = Steps depth; Collapse all = Regions depth
+      e.preventDefault();
+      const ts = loadTreeState(slug), action = ea.dataset.expandAll;
+      ts.depth = action === "collapse" ? "regions" : "steps"; ts.open = {};
+      saveTreeState(slug, ts); applyTree(slug, ts);
+      track("tree_expand_all", { action });
       return;
     }
     const dp = e.target.closest(".zoom-chip[data-depth]");   // not "[data-depth]": #tl-tree carries one too
     if (dp && slug) {
       e.preventDefault();
-      const ts = loadTreeState(slug);
+      const ts = loadTreeState(slug), from = ts.depth;
       ts.depth = dp.dataset.depth; ts.open = {};           // choosing a depth resets per-node overrides
+      track("timeline_depth_set", { depth: ts.depth, from_depth: from });
       saveTreeState(slug, ts); applyTree(slug, ts);
       const root = document.getElementById("tl-tree");
       if (root && !root.hidden) motion(a => a.animate(root.querySelectorAll(":scope > li"), { opacity: [0, 1], translateY: [6, 0], delay: a.stagger(30), duration: 260, ease: "out(3)" }));
@@ -899,7 +942,7 @@ function bindTree() {                                     // one delegated liste
     if (jp && slug) {                                      // strip segment -> open that region and go to it
       e.preventDefault();
       const ts = loadTreeState(slug), key = jp.dataset.jump;
-      if (ts.depth === "trip") ts.depth = "regions";
+      track("nights_strip_jump", { depth_before: ts.depth });
       ts.open[key] = true;
       saveTreeState(slug, ts); applyTree(slug, ts, key);
       const li = document.querySelector('li[data-node="' + (window.CSS && CSS.escape ? CSS.escape(key) : key) + '"]');
@@ -926,10 +969,10 @@ async function viewTimeline(slug) {
   const items = (tree && tree.items) || steps.map((s, i) => ({ type: "step", id: s.id, index: i }));
   const body = steps.length || hasRegions
     ? '<ol class="tl' + (hasRegions ? ' tl-tree" id="tl-tree" data-depth="' + esc(ts.depth) + '"' + (ts.depth === "trip" ? " hidden" : "") : '"') + ">" +
-        treeNodesHTML(items, ctx) + stepInserterHTML(steps.length) + "</ol>"
+        treeNodesHTML(items, ctx) + stepInserterHTML(steps.length) + regionInserterHTML() + "</ol>"
     : '<div class="tl-empty"><p class="muted">No steps yet — start building your trip.</p>' +
       '<button type="button" class="btn insert-btn-lg" data-insert-step="0">' + icon("plus") + "Add your first step</button></div>";
-  const overview = hasRegions ? tripSummaryHTML(tree) + zoomBarHTML(ts.depth) : "";
+  const overview = hasRegions ? tripSummaryHTML(tree) + zoomBarHTML(ts) : "";
   // Activities whose parent step no longer exists get their own group so they're never dropped.
   const unassignedHTML = (unassigned && unassigned.length)
     ? '<section class="unassigned"><h2 class="unassigned-title">Unassigned</h2>' +
@@ -989,7 +1032,7 @@ let budgetBasis = "est";   // "Where it goes" breakdown basis: 'est' | 'actual' 
 async function viewBudget(slug) {
   markActive(null);
   view().innerHTML = '<div class="panel"><p class="muted">Loading budget…</p></div>';
-  const { trip } = await loadTrip(slug);
+  const { trip, regions: tripRegions, tree: tripTree } = await loadTrip(slug);
   if (!trip) { view().innerHTML = '<div class="panel"><h1>Trip not found</h1><p class="muted"><a href="#/">← All trips</a></p></div>'; return; }
 
   const title = trip.title || slug;
@@ -1094,6 +1137,7 @@ async function viewBudget(slug) {
       totals + meter +
       insights +
       '<div class="cat-h-row"><h2 class="cat-h">Where it goes</h2>' + basisToggle + "</div>" + catbars +
+      regionBarsHTML(b.byRegion, basis, tripRegions, tripTree, homeC) +
       config +
     "</div>";
 
@@ -1205,7 +1249,7 @@ async function viewActivity(slug, id) {
 async function viewStep(slug, id) {
   markActive(null);
   view().innerHTML = '<div class="panel"><p class="muted">Loading…</p></div>';
-  const { trip, steps, activities } = await loadTrip(slug);
+  const { trip, steps, activities, regions } = await loadTrip(slug);
   const back = "#/trip/" + encodeURIComponent(slug);
   const tripTitle = (trip && (trip.title || trip.slug)) || slug;
   const head = '<div class="sheet-head"><a class="back" href="' + esc(back) + '">' +
@@ -1261,7 +1305,16 @@ async function viewStep(slug, id) {
       '<div class="mrow"><span class="mlabel">Check-in</span><span class="mval">' + eDate("arrive", s.arrive, "+ date") + " " + eTime("arrive_time", s.arrive_time, "+ time") + "</span></div>" +
       '<div class="mrow"><span class="mlabel">Check-out</span><span class="mval">' + eDate("depart", s.depart, "+ date") + " " + eTime("depart_time", s.depart_time, "+ time") + "</span></div>";
   }
-  const meta = '<div class="detail-meta">' + rows +
+  // Region picker (0017 M6): which region this step belongs to ("" = none). Moving a step to another
+  // region keeps its place in time — a region whose steps end up apart is flagged "split" on the timeline.
+  const liveRegions = (regions || []).filter(r => !r.deleted);
+  const curRegion = liveRegions.find(r => String(r.id) === String(s.region_id || ""));
+  const regionCtrl = liveRegions.length ? E("region_id",
+      curRegion ? esc(curRegion.title || "Region") : '<span class="add-actual">+ region</span>',
+      { input: "select", value: curRegion ? curRegion.id : "", options: ["::No region"].concat(liveRegions.map(r => r.id + "::" + String(r.title || "Region").replace(/\|/g, "/"))) })
+    : "";
+  const regionRow = regionCtrl ? '<div class="mrow"><span class="mlabel">Region</span><span class="mval">' + regionCtrl + "</span></div>" : "";
+  const meta = '<div class="detail-meta">' + regionRow + rows +
     '<div class="mrow"><span class="mlabel">Status</span><span class="mval">' + statusCtrl + "</span></div>" +
     '<div class="mrow"><span class="mlabel">Included</span><span class="mval">' + incCtrl + "</span></div>" +
     costRows + actionsHTML + "</div>";
@@ -1465,6 +1518,7 @@ async function viewPacking(slug) {
 // a row; "Delete forever" hard-purges it (steps cascade to their activities + photos — extra confirm).
 // All mutations invalidate the trip cache so the timeline reflects a restore. Everything esc'd.
 const TRASH_GROUPS = [
+  { key: "regions",    label: "Regions",    entity: "regions",    list: "regions" },
   { key: "steps",      label: "Steps",      entity: "steps",      list: "flow" },
   { key: "activities", label: "Activities", entity: "activities", list: "activities" },
   { key: "packing",    label: "Packing",    entity: "packing",    list: "packing" }
@@ -1539,7 +1593,9 @@ async function viewTrash(slug) {
     } else if (act === "purge") {
       const msg = g.key === "steps"
         ? "Delete this step forever?\n\nThis also permanently removes its activities and photos. This cannot be undone."
-        : "Delete this item forever?\n\nThis cannot be undone.";
+        : g.key === "regions"
+          ? "Delete this region forever?\n\nIts steps stay on the timeline, just without a region. This cannot be undone."
+          : "Delete this item forever?\n\nThis cannot be undone.";
       if (!confirm(msg)) return;
       btn.disabled = true;
       try {
@@ -1691,9 +1747,15 @@ function openStepWizard(slug, insertIndex, steps, regionId) {
     mount: (el, w) => el.querySelectorAll(".kind-opt").forEach(b => b.addEventListener("click", () => { w.state.kind = b.dataset.kind; w.advance(); })),
     read: (el, st) => st.kind ? null : "Pick Stay or Travel."
   };
+  // Region field (0017 M6): defaults to the inserter's region, else the previous step's region.
+  const bundle0 = state.trip[slug], liveRegs = ((bundle0 && bundle0.regions) || []).filter(r => !r.deleted);
+  const regionField = (st) => liveRegs.length ? wzField("Region",
+    '<select class="wz-in" name="region_id"><option value="">No region</option>' +
+      liveRegs.map(r => '<option value="' + esc(r.id) + '"' + (String(r.id) === String(st.region_id || "") ? " selected" : "") + ">" + esc(r.title || "Region") + "</option>").join("") +
+    "</select>") : "";
   const corePane = {
     title: "Details",
-    html: (st) => st.kind === "stay"
+    html: (st) => regionField(st) + (st.kind === "stay"
       ? wzField("Place *", wzText("place", st.place, "e.g. Paris")) +
         wzField("Check-in", wzDate("arrive", st.arrive), hintEnd) +
         wzField("Check-out", wzDate("depart", st.depart), hintStart) +
@@ -1703,7 +1765,7 @@ function openStepWizard(slug, insertIndex, steps, regionId) {
         wzField("Transport", selIn("transport", TRANSPORTS_UI, st.transport || "plane")) +
         wzField("Carrier", wzText("carrier", st.carrier, "airline / operator (optional)")) +
         wzField("Depart", wzDate("depart", st.depart) + wzTime("depart_time", st.depart_time), hintEnd) +
-        wzField("Arrive", wzDate("arrive", st.arrive) + wzTime("arrive_time", st.arrive_time), hintStart),
+        wzField("Arrive", wzDate("arrive", st.arrive) + wzTime("arrive_time", st.arrive_time), hintStart)),
     read: (el, st) => {
       readInputs(el, st);
       if (st.kind === "stay" && !(st.place || "").trim()) return "A place name is required.";
@@ -1727,6 +1789,8 @@ function openStepWizard(slug, insertIndex, steps, regionId) {
       const rows = [];
       const add = (k, v) => { if (v) rows.push('<div class="rev-row"><span class="rev-k">' + esc(k) + '</span><span class="rev-v">' + esc(v) + "</span></div>"); };
       add("Type", st.kind === "stay" ? "Stay" : "Travel");
+      const rg = liveRegs.find(r => String(r.id) === String(st.region_id || ""));
+      if (rg) add("Region", rg.title || "Region");
       if (st.kind === "stay") { add("Place", st.place); add("Check-in", st.arrive); add("Check-out", st.depart); add("Lodging", st.accom_name); }
       else {
         add("From", st.from); add("To", st.to); add("Transport", st.transport); add("Carrier", st.carrier);
@@ -1743,6 +1807,7 @@ function openStepWizard(slug, insertIndex, steps, regionId) {
   const bundle = state.trip[slug], reg = regionId && bundle && bundle.regionById ? bundle.regionById[regionId] : null;
   openWizard({
     title: reg ? ("Add to " + (reg.title || "region")) : (insertIndex >= steps.length ? "Add a step" : "Insert a step"),
+    state: { region_id: regionId || (prev && prev.region_id) || "" },
     panes: [kindPane, corePane, optPane, reviewPane],
     createLabel: "Add step",
     onCreate: (st) => createStepFromWizard(slug, insertIndex, steps, st, regionId)
@@ -1751,7 +1816,8 @@ function openStepWizard(slug, insertIndex, steps, regionId) {
 
 async function createStepFromWizard(slug, insertIndex, steps, st, regionId) {
   const body = { kind: st.kind, cost_ccy: st.cost_ccy || "EUR", booking_status: st.booking_status || "Idea" };
-  if (regionId) body.region_id = regionId;                  // added from inside a region (0017): core places it there
+  const rid = (st.region_id != null) ? st.region_id : regionId;   // the wizard's Region field (0017 M6)
+  if (rid) body.region_id = rid;
   if (st.kind === "stay") {
     const place = (st.place || "").trim();
     body.title = place; body.location = place;
@@ -1784,6 +1850,7 @@ async function createStepFromWizard(slug, insertIndex, steps, st, regionId) {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
     });
     st._createdId = res && res.row && res.row.id;
+    track("step_created", { kind: st.kind, in_region: !!rid, via: regionId ? "region_inserter" : "inserter" });
   }
   // Reposition only when inserting before the end. New row appended at MAX+10; slot it between neighbors
   // with an integer midpoint, re-spacing the whole list if the gap is exhausted. (In demo the PATCH is a
@@ -1810,6 +1877,181 @@ async function createStepFromWizard(slug, insertIndex, steps, st, regionId) {
 function stepInserterHTML(index, regionId, label, keep) {
   return '<li class="tl-insert' + (keep ? " keep" : "") + '"><button type="button" class="insert-btn" data-insert-step="' + index + '"' +
     (regionId ? ' data-region="' + esc(regionId) + '"' : "") + ">" + icon("plus") + esc(label || "add step") + "</button></li>";
+}
+
+// ---- regions (0017 M6): add / edit / reorder / delete in the app --------------------------------
+// A region's place in time comes from its steps; the region's own order (moveRegion) is the only
+// reorder. All writes go through /api/regions (shared/core.js), the same rules Claude's MCP tools use.
+function regionInserterHTML() {
+  return '<li class="tl-insert keep"><button type="button" class="insert-btn" data-add-region>' + icon("plus") + "add region</button></li>";
+}
+// Live regions in timeline order (first block of each), from the core-built tree; empty regions included.
+function regionOrder(tree, regions) {
+  const seen = [], live = (regions || []).filter(r => !r.deleted);
+  ((tree && tree.items) || []).forEach(n => { if (n.type === "region" && seen.indexOf(n.region_id) < 0) seen.push(n.region_id); });
+  live.forEach(r => { if (seen.indexOf(r.id) < 0) seen.push(r.id); });
+  return seen.filter(id => live.some(r => r.id === id));
+}
+function openRegionWizard(slug) {
+  const pane = {
+    title: "New region",
+    html: (st) => wzField("Name *", wzText("title", st.title, "e.g. North, Provence, Krabi")) +
+      wzField("Planned nights", wzText("planned_nights", st.planned_nights, "optional")) +
+      wzField("From", wzDate("start_date", st.start_date), '<span class="field-hint"> · optional</span>') +
+      wzField("To", wzDate("end_date", st.end_date), '<span class="field-hint"> · optional</span>') +
+      wzField("Note", '<textarea class="wz-in" name="note" rows="3">' + esc(st.note || "") + "</textarea>"),
+    read: (el, st) => {
+      readInputs(el, st);
+      if (!(st.title || "").trim()) return "A name is required.";
+      const n = String(st.planned_nights || "").trim();
+      if (n && !(isFinite(Number(n)) && Number(n) >= 0)) return "Planned nights must be a number.";
+      return null;
+    }
+  };
+  openWizard({
+    title: "Add a region", panes: [pane], createLabel: "Add region",
+    onCreate: async (st) => {
+      const body = { title: st.title.trim() };
+      ["planned_nights", "start_date", "end_date", "note"].forEach(k => { const v = String(st[k] || "").trim(); if (v) body[k] = v; });
+      await api("regions/" + encodeURIComponent(slug) + "/regions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      track("region_created", { planned: !!body.planned_nights });
+      invalidateTrip(slug);
+      vt(route);
+    }
+  });
+}
+async function viewRegion(slug, id) {
+  markActive(null);
+  view().innerHTML = '<div class="panel"><p class="muted">Loading…</p></div>';
+  const { trip, steps, regions, tree } = await loadTrip(slug);
+  const back = "#/trip/" + encodeURIComponent(slug);
+  const tripTitle = (trip && (trip.title || trip.slug)) || slug;
+  const head = '<div class="sheet-head"><a class="back" href="' + esc(back) + '">' +
+    '<span class="chev" aria-hidden="true">‹</span> ' + esc(tripTitle) + "</a></div>";
+  const r = (regions || []).find(x => String(x.id) === String(id) && !x.deleted);
+  if (!r) {
+    view().innerHTML = '<div class="sheet">' + head + '<div class="panel detail"><h1>Region not found</h1>' +
+      '<p class="muted"><a href="' + esc(back) + '">← Back to ' + esc(tripTitle) + "</a></p></div></div>";
+    return;
+  }
+  const g = (tree && tree.regions && tree.regions[r.id]) || {};
+  const E = (field, disp, opts) => editable(disp, Object.assign({ entity: "regions", list: "regions", id: r.id, field: field }, opts || {}));
+  const add = (t) => '<span class="add-actual">' + t + "</span>";
+
+  const has = g.stays > 0;
+  const facts = metaJoin(["Region",
+    esc(has || g.arrive ? dateSpan(g.arrive, g.depart) : dateSpan(g.start_date, g.end_date)),
+    has ? esc(nightsLabel(g.nights)) : "",
+    g.locations ? esc(g.locations + " place" + (g.locations === 1 ? "" : "s")) : "",
+    g.eur && g.eur.est > 0 ? esc("≈ " + eurShort(g.eur.est)) : ""]);
+  const hints = [];
+  if (g.nights_gap) hints.push("planned " + g.planned_nights + " · booked " + g.nights);
+  if (g.dates_outside) hints.push("stays fall outside the planned dates");
+  if (g.split) hints.push("this region’s stays aren’t together on the timeline");
+
+  const meta = '<div class="detail-meta rg-plan">' +
+    '<div class="mrow"><span class="mlabel">Planned nights</span><span class="mval">' +
+      E("planned_nights", (r.planned_nights != null && r.planned_nights !== "") ? esc(nightsLabel(r.planned_nights)) : add("+ nights"), { input: "decimal", value: r.planned_nights }) + "</span></div>" +
+    '<div class="mrow"><span class="mlabel">Planned from</span><span class="mval">' +
+      E("start_date", r.start_date ? esc(fmtDate(r.start_date)) : add("+ date"), { input: "date", value: r.start_date }) + "</span></div>" +
+    '<div class="mrow"><span class="mlabel">Planned to</span><span class="mval">' +
+      E("end_date", r.end_date ? esc(fmtDate(r.end_date)) : add("+ date"), { input: "date", value: r.end_date }) + "</span></div>" +
+    "</div>";
+
+  // Its steps in timeline order (links into each step) + "add to <region>".
+  const members = (steps || []).map((s, i) => ({ s, i })).filter(x => String(x.s.region_id || "") === String(r.id));
+  const node = ((tree && tree.items) || []).find(n => n.type === "region" && n.region_id === r.id);
+  const endIdx = members.length ? members[members.length - 1].i + 1 : (node && node.insert_index != null ? node.insert_index : (steps || []).length);
+  const memberHTML = members.length
+    ? '<ul class="rg-members">' + members.map(({ s }) => {
+        const isT = s.kind === "travel", dur = stepDuration(s);
+        return '<li><a class="rg-member" href="#/trip/' + encodeURIComponent(slug) + "/step/" + encodeURIComponent(s.id) + '" data-via="region">' +
+          icon(isT ? (ICONS[s.transport] ? s.transport : "plane") : "stay") +
+          '<span class="rgm-title">' + esc(s.title || s.location || "Step") + "</span>" +
+          '<span class="rgm-meta mono">' + metaJoin([esc(dateSpan(isT ? s.depart : s.arrive, isT ? s.arrive : s.depart)), dur ? esc(dur) : ""]) + "</span>" +
+          '<span class="rgm-chev" aria-hidden="true">›</span></a></li>';
+      }).join("") + "</ul>"
+    : '<p class="muted">No steps yet — plan it first, then add stays as you book them.</p>';
+  const addBtn = '<button type="button" class="insert-btn" data-insert-step="' + esc(String(endIdx)) + '" data-region="' + esc(r.id) + '">' +
+    icon("plus") + "add to " + esc(r.title || "region") + "</button>";
+
+  const order = regionOrder(tree, regions), pos = order.indexOf(r.id);
+  const moveBtn = (dir, ref, label) => '<button type="button" class="btn ghost rg-move" data-region-move="' + dir + '" data-id="' + esc(r.id) + '"' +
+    (ref ? ' data-ref="' + esc(ref) + '"' : " disabled") + ">" + label + "</button>";
+  const moves = order.length > 1 ? '<div class="rg-moves">' +
+    moveBtn("earlier", pos > 0 ? order[pos - 1] : "", "Move earlier") +
+    moveBtn("later", pos >= 0 && pos < order.length - 1 ? order[pos + 1] : "", "Move later") + "</div>" : "";
+
+  const noteVal = r.note;
+  const noteCtrl = E("note", (noteVal != null && String(noteVal).trim() !== "")
+    ? '<span class="note-text">' + esc(noteVal).replace(/\n/g, "<br>") + "</span>" : '<span class="note-empty muted">Add notes…</span>',
+    { input: "textarea", value: noteVal });
+  const danger = '<div class="detail-danger"><button type="button" class="danger-btn" data-region-del="' + esc(r.id) + '" data-steps="' + members.length + '">' +
+    icon("trash") + "Delete region</button></div>";
+
+  view().innerHTML = '<div class="sheet">' + head +
+    '<div class="panel detail">' +
+      '<h1 class="detail-title">' + E("title", esc(r.title || "Region"), { input: "text", value: r.title }) + "</h1>" +
+      '<div class="detail-context muted rg-facts">' + facts + "</div>" +
+      (hints.length ? '<p class="rg-hint">' + esc(hints.join(" · ")) + "</p>" : "") +
+      meta +
+      '<section class="rg-steps"><h2>In this region</h2>' + memberHTML + addBtn + "</section>" +
+      '<section class="notes"><h2>Notes</h2><div class="notes-body">' + noteCtrl + "</div></section>" +
+      moves + danger +
+    "</div></div>";
+  motion(an => an.animate(".detail-meta, .rg-steps, .notes, .rg-moves", { opacity: [0, 1], translateY: [8, 0], delay: an.stagger(60), duration: 340, ease: "out(3)" }));
+  syncTripMap(slug);
+}
+let _regionsBound = false;
+function bindRegions() {                                  // add-region, move earlier/later, delete, member opens
+  if (_regionsBound) return; _regionsBound = true;
+  document.addEventListener("click", async (e) => {
+    const slug = tripSlugFromHash(); if (!slug) return;
+    if (e.target.closest("[data-add-region]")) { e.preventDefault(); openRegionWizard(slug); return; }
+    if (e.target.closest("a.rg-member")) { track("step_opened", { via: "region" }); return; }
+    const mv = e.target.closest("[data-region-move]");
+    if (mv && mv.dataset.ref) {
+      mv.disabled = true;
+      const dir = mv.dataset.regionMove, body = dir === "earlier" ? { before_region_id: mv.dataset.ref } : { after_region_id: mv.dataset.ref };
+      try {
+        await api("regions/" + encodeURIComponent(slug) + "/regions/" + encodeURIComponent(mv.dataset.id) + "/move",
+          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+        track("region_moved", { direction: dir });
+        invalidateTrip(slug); vt(route);
+      } catch { mv.disabled = false; }
+      return;
+    }
+    const del = e.target.closest("[data-region-del]");
+    if (del) {
+      const n = Number(del.dataset.steps) || 0;
+      const msg = "Delete this region?\n\n" + (n ? "Its " + n + " step" + (n === 1 ? "" : "s") + " stay on the timeline, just without a region. " : "") +
+        "You can restore it from Trash.";
+      if (!confirm(msg)) return;
+      del.disabled = true;
+      try {
+        await api("regions/" + encodeURIComponent(slug) + "/regions/" + encodeURIComponent(del.dataset.regionDel), { method: "DELETE" });
+        track("region_deleted", { steps: n });
+        invalidateTrip(slug);
+        location.hash = "#/trip/" + encodeURIComponent(slug);
+      } catch { del.disabled = false; }
+    }
+  });
+}
+// Budget "By region" (0017 M6): bars from computeBudget.byRegion (EUR; the only money math is in core).
+function regionBarsHTML(byRegion, basis, regions, tree, homeC) {
+  if (!byRegion || !(regions || []).some(r => !r.deleted)) return "";
+  const key = basis === "actual" ? "actual" : "est", byId = {};
+  (regions || []).forEach(r => { byId[r.id] = r; });
+  const rows = regionOrder(tree, regions).map(id => [(byId[id] && byId[id].title) || "Region", Number((byRegion[id] || {})[key]) || 0]);
+  const none = Number((byRegion.none || {})[key]) || 0;
+  if (none > 0) rows.push(["No region", none]);
+  const max = Math.max.apply(null, rows.map(x => x[1]).concat([0])) || 1, denom = rows.reduce((t, x) => t + x[1], 0) || 1;
+  return '<h2 class="cat-h rg-budget-h">By region</h2><div class="catbars">' + rows.map(x => {
+    const w = Math.round(x[1] / max * 100), share = Math.round(x[1] / denom * 100);
+    return '<div class="catbar"><div class="catbar-label">' + esc(x[0]) + "</div>" +
+      '<div class="catbar-track"><div class="catbar-fill" data-w="' + esc(String(w)) + '"></div></div>' +
+      '<div class="catbar-val mono">' + esc(money(x[1], homeC)) + ' <span class="muted">' + esc(String(share)) + "%</span></div></div>";
+  }).join("") + "</div>";
 }
 
 function openActivityWizard(slug, stepId) {
@@ -1907,7 +2149,7 @@ function route() {
   // views drive it themselves via syncTripMap. Everywhere else (Home, What's New, Budget, Packing, Trash)
   // it's hidden so the plain paper look is untouched.
   const mapSurface = parts[0] === "trip" && parts[1] &&
-    (parts.length === 2 || parts[2] === "step" || parts[2] === "activity" || parts[2] === "map");
+    (parts.length === 2 || parts[2] === "step" || parts[2] === "activity" || parts[2] === "region" || parts[2] === "map");
   if (!mapSurface) hideTripMap();
   // Leave Map view whenever we navigate off the /map route (viewMap re-adds it if the trip has stops).
   if (!(parts[0] === "trip" && parts[2] === "map")) document.body.classList.remove("map-view");
@@ -1916,6 +2158,7 @@ function route() {
   if (parts[0] === "trip" && parts[1]) {
     if (parts[2] === "activity" && parts[3]) return viewActivity(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
     if (parts[2] === "step" && parts[3]) return viewStep(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
+    if (parts[2] === "region" && parts[3]) return viewRegion(decodeURIComponent(parts[1]), decodeURIComponent(parts[3]));
     if (parts[2] === "map") return viewMap(decodeURIComponent(parts[1]));
     if (parts[2] === "budget") return viewBudget(decodeURIComponent(parts[1]));
     if (parts[2] === "packing") return viewPacking(decodeURIComponent(parts[1]));
@@ -1934,7 +2177,7 @@ function bindStepNav() {                                  // tap a timeline card
     const sel = window.getSelection && window.getSelection();
     if (sel && !sel.isCollapsed) return;                  // don't hijack a long-press text selection
     const li = e.target.closest("li.step[data-href]");
-    if (li) location.hash = li.getAttribute("data-href");
+    if (li) { if (li.closest("#tl-tree, .tl")) track("step_opened", { via: "card" }); location.hash = li.getAttribute("data-href"); }
   });
 }
 let _stepDelBound = false;
@@ -2028,5 +2271,6 @@ function trackTopbar() {
   bindActivityDelete();
   bindWizards();
   bindTree();
+  bindRegions();
   route();
 })();
