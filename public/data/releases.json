@@ -1,6 +1,14 @@
 {
   "releases": [
     {
+      "version": "v0.11.1",
+      "title": "A tidier map",
+      "date": "2026-10-13",
+      "notes": [
+        "Map labels no longer pile on top of each other: your stays and regions always get their names, and province names only show where there’s room — zoom in to see more."
+      ]
+    },
+    {
       "version": "v0.11.0",
       "title": "A workspace for big screens",
       "date": "2026-10-13",

@@ -8,6 +8,14 @@
  *
  * No build, no framework — classic <script>, exposes window.TripMap. Idle until setup().
  * Ported from docs/implementations/0015-trip-globe/design/prototypes/atlas.js. */
+// Label sizes (px, mirrors styles.css .atlas-label.*) + placement priority: lower = placed first.
+// cw = average glyph width as a share of the font size (uppercase + letter-spacing for countries).
+var LABEL_METRICS = {
+  stop:    { fs: 12,   cw: 0.62, pri: 0 },
+  trip:    { fs: 13,   cw: 0.68, pri: 1 },
+  country: { fs: 12,   cw: 0.86, pri: 2 },
+  region:  { fs: 10.5, cw: 0.56, pri: 3 }
+};
 window.TripMap = {
   async setup(mapEl, opts) {
     opts = opts || {};
@@ -109,32 +117,71 @@ window.TripMap = {
       function addLabel(text, base, kind) {
         if (!text || !base || isNaN(base[0])) return;
         var t = el(labelsG, "text", { class: "atlas-label " + kind }); t.textContent = text;
-        labelDefs.push({ el: t, bx: base[0], by: base[1], kind: kind });
+        // Approximate on-screen box (labels are constant-size px, see styles.css .atlas-label.*), measured
+        // once here so the per-frame collision pass in applyZoom stays cheap (no getBBox while panning).
+        var m = LABEL_METRICS[kind] || LABEL_METRICS.region;
+        labelDefs.push({ el: t, bx: base[0], by: base[1], kind: kind, w: text.length * m.fs * m.cw, fs: m.fs, pri: m.pri });
       }
       countriesFC.features.forEach(function (f) { addLabel(f.properties.name, path.centroid(f), "country"); });
       regionsFC.features.forEach(function (f) { addLabel(f.properties.name, path.centroid(f), "region"); });
       stays.forEach(function (s) { addLabel(s.title, xy(s), "stop"); });
+      labelDefs.sort(function (a, b) { return a.pri - b.pri; });   // placement priority (see LABEL_METRICS)
       tripLabels.forEach(function (t) {                         // just below the middle of the region's stays
         var pts = t.stays.map(xy), x = 0, y = 0;
         pts.forEach(function (p) { x += p[0]; y += p[1]; });
         addLabel(t.text, [x / pts.length, y / pts.length], "trip");
         labelDefs[labelDefs.length - 1].regions = t.regions;
       });
+      labelDefs.sort(function (a, b) { return a.pri - b.pri; });
       applyFocus();
 
       applyZoom(curT);
     }
 
+    // Labels never overlap (owner, 2026-10-13: "all this text is way too crowded"): a greedy pass places them
+    // in priority order — stay names, then trip regions, then countries, then provinces — and skips any whose
+    // box would hit one already placed (or a pin). Provinces only show where there is room; zoom in for more.
     function applyZoom(t) {
       curT = t; scene.setAttribute("transform", t.toString());
-      var k = t.k;
-      dots.forEach(function (c) { c.setAttribute("r", 6.5 / k); });   // constant ~6.5px on screen
+      var k = t.k, placed = [], said = [], PAD = 2;
+      // Region names win over a stay named the same ("Bangkok" stay in the "Bangkok" region): collect them first.
       labelDefs.forEach(function (d) {
-        var x = t.x + d.bx * k, y = t.y + d.by * k;
-        d.el.setAttribute("x", x); d.el.setAttribute("y", y - (d.kind === "stop" ? 13 : 0) + (d.kind === "trip" ? 24 : 0));
-        if (d.kind === "stop" || d.kind === "trip") return; // always drawn (stop-label visibility is mode-driven via CSS)
-        var vis = d.kind === "country" ? (k >= 2.2 && k < 16) : (k >= 15);
-        d.el.style.display = (vis && x > -60 && x < W + 60 && y > -30 && y < H + 30) ? "" : "none";
+        if (d.kind !== "trip") return;
+        var ax = t.x + d.bx * k, ay = t.y + d.by * k;
+        (d.el.textContent || "").toLowerCase().split(" · ").forEach(function (part) { said.push({ t: part, x: ax, y: ay, region: true }); });
+      });
+      dots.forEach(function (c, i) {
+        c.setAttribute("r", 6.5 / k);                                  // constant ~6.5px on screen
+        var p = xy(stays[i]), sx = t.x + p[0] * k, sy = t.y + p[1] * k;
+        placed.push([sx - 6, sy - 6, sx + 6, sy + 6]);                 // pins stay readable: nothing sits on them (r 6.5)
+      });
+      var free = function (b) {
+        for (var i = 0; i < placed.length; i++) { var q = placed[i]; if (b[0] < q[2] && b[2] > q[0] && b[1] < q[3] && b[3] > q[1]) return false; }
+        return true;
+      };
+      labelDefs.forEach(function (d) {
+        var ax = t.x + d.bx * k, ay = t.y + d.by * k;
+        var vis = d.kind === "stop" || d.kind === "trip" ? true : d.kind === "country" ? (k >= 2.2 && k < 16) : (k >= 15);
+        if (!vis || ax < -60 || ax > W + 60 || ay < -40 || ay > H + 60) { d.el.style.display = "none"; return; }
+        // A stay / region name tries a few spots around its anchor before giving up (close pins block the first).
+        // The same name already shown close by (two "Bangkok" stays, or a stay named like its region) says nothing new.
+        var txt = (d.el.textContent || "").toLowerCase();
+        if (d.kind === "stop") {
+          var dup = said.some(function (q) { return q.t === txt && Math.abs(q.x - ax) < 90 && Math.abs(q.y - ay) < 60; });
+          if (dup) { d.el.style.display = "none"; return; }
+        }
+        var spots = d.kind === "stop" ? [[0, -13], [0, 20], [d.w / 2 + 10, 4], [-d.w / 2 - 10, 4]]
+          : d.kind === "trip" ? [[0, 24], [0, -30], [0, 40], [0, -46]] : [[0, 0]];
+        for (var i = 0; i < spots.length; i++) {
+          var x = ax + spots[i][0], y = ay + spots[i][1];
+          var b = [x - d.w / 2 - PAD, y - d.fs * 0.95 - PAD, x + d.w / 2 + PAD, y + d.fs * 0.25 + PAD];   // text-anchor:middle, y = baseline
+          if (free(b)) {
+            placed.push(b); if (d.kind === "stop") said.push({ t: txt, x: ax, y: ay }); d.el.setAttribute("x", x); d.el.setAttribute("y", y);
+            d.el.style.display = "";                                   // "" = CSS decides (stop labels: Map view / workspace only)
+            return;
+          }
+        }
+        d.el.style.display = "none";
       });
     }
 
