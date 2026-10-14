@@ -34,7 +34,7 @@ in [`CLAUDE.md`](../../CLAUDE.md) for where this folder fits.
 | [0017](0017-trip-hierarchy/) | Trip hierarchy timeline — Trip › Region › Location › Step (regions as first-class rows, locations derived from stays, collapsible zoomable timeline) | 2026-10-13 | ✅ Shipped | #51, #52, #53, #54, #55, #59 |
 | [0018](0018-nav-menu/) | Navigation menu (hamburger houses Home + What's New; no permanent sidebar) + trip tabs first, at the top | 2026-10-13 | ✅ Shipped | #57 |
 | [0019](0019-map-regions/) | Trip regions on the map — the trip's provinces shaded in the region blue, a label per region, and region chips in the Map view to frame one | 2026-10-13 | ✅ Shipped | #60 |
-| [0020](0020-wide-workspace/) | Wide-screen workspace — use a laptop's full width (≥ 1200 px): map pane / planner workspace / timeline + detail; M1 = clickable prototype of three layouts for the owner to try | 2026-10-13 | 🚧 In progress (M1: prototype) | — |
+| [0020](0020-wide-workspace/) | Wide-screen workspace — use a laptop's full width (≥ 1200 px): map pane / planner workspace / timeline + detail; M1 = clickable prototype of three layouts for the owner to try | 2026-10-13 | ✅ Shipped | #64, #65 (prototype, closed), #66, #67 |
 
 Status legend: ✅ shipped/decided · 🚧 in progress · 🅿️ paused · ❌ abandoned.
 
