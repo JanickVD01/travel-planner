@@ -1,6 +1,15 @@
 {
   "releases": [
     {
+      "version": "v0.12.0",
+      "title": "Hide transport",
+      "date": "2026-10-25",
+      "notes": [
+        "Once your flights, trains and boats are sorted, tap Transport above the timeline to hide every travel leg — just your stays, nothing in between. Tap it again to bring them back.",
+        "The choice is remembered per trip on your device. Nothing is deleted, and your budget and map stay exactly the same."
+      ]
+    },
+    {
       "version": "v0.11.1",
       "title": "A tidier map",
       "date": "2026-10-13",

@@ -364,3 +364,9 @@ Records the locked brand inputs and the final visual decision.
   a hover / focus tint + the `+ field` placeholders mark them instead (the notes box keeps a thin solid
   outline). Trips also gain a **To-do** tab (a free-form list). See
   [`docs/implementations/0020-wide-workspace/`](docs/implementations/0020-wide-workspace/).
+- **2026-10-25 — Show / hide transport.** Effort 0021, owner request. A **Transport** pill on the timeline's
+  control row (after Expand / Collapse all; icon-only on phones; only when the trip has a travel leg) hides
+  every travel leg and the inserter before it, so the timeline reads as just the stays once transport is
+  settled. Off = a muted, dashed pill with a slashed plane (never colour alone). A per-viewer, per-trip view
+  filter in `localStorage` — never data; budget, totals and the map are unchanged. See
+  [`docs/implementations/0021-transport-toggle/`](docs/implementations/0021-transport-toggle/).
