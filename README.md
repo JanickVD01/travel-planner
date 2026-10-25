@@ -43,7 +43,7 @@ node scripts/validate-data.mjs
 
 ## Status
 
-Live (v0.11) and in active use. The whole stack is deployed — Pages + D1 + Workers KV + Cloudflare
+Live (v0.12) and in active use. The whole stack is deployed — Pages + D1 + Workers KV + Cloudflare
 Access + the MCP worker + CI — and the product has shipped across efforts recorded in
 `docs/implementations/` (trips → metro timeline, activities, budget, packing, photo attachments,
 step/activity detail pages, in-app creation wizards, an "included in another ticket" cost flag, a

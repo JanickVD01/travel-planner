@@ -5,11 +5,11 @@ no-build static SPA + `/api/*` Pages Functions + a shared domain core + a D1 dat
 MCP server, all fronted by Cloudflare Access and shipped through a hardened GitHub flow built for
 **safe parallel sessions**. Full rationale lives in `ai-first_project_initialisation.md`.
 
-> **Status:** live (v0.11), in active use. The data model is real (see **Data model** below): a **trip**
+> **Status:** live (v0.12), in active use. The data model is real (see **Data model** below): a **trip**
 > owns a metro **timeline** of `steps` (travel legs + stays), each stay nests `activities`, plus a
 > `packing` list and photo `attachments`. Steps group into **regions** (effort 0017): the timeline is a
 > collapsible **Trip › Region › Location › Step** tree (locations are derived from stays; unplanned nights
-> show as gaps), built ONLY by `buildTripTree` in core and served by `/api/overview`; regions are edited in
+> show as gaps; a per-trip **Transport** toggle hides travel legs, 0021), built ONLY by `buildTripTree` in core and served by `/api/overview`; regions are edited in
 > the app (region sheet, wizard, pickers) and by Claude (MCP region tools). A stay's `lat`/`lng` drive a
 > **visual trip map** (self-hosted vector atlas, 0015): a still backdrop behind the timeline + an
 > interactive **Map view** whose pins open a stay; the trip's regions are shaded + labelled on it and

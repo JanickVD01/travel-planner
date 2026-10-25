@@ -64,7 +64,8 @@ const ICONS = {
   undo:  '<path d="M9 7 4.5 11.5 9 16M4.5 11.5H14a5 5 0 0 1 0 10h-2.5"/>',
   plus:  '<path d="M12 5v14M5 12h14"/>',
   unfold: '<path d="M7 9l5-5 5 5M7 15l5 5 5-5"/>',
-  fold:   '<path d="M7 4l5 5 5-5M7 20l5-5 5 5"/>'
+  fold:   '<path d="M7 4l5 5 5-5M7 20l5-5 5 5"/>',
+  noplane: '<path d="M17.8 19.2 16 11l3.5-3.5a2.1 2.1 0 0 0-3-3L13 8 4.8 6.2a.5.5 0 0 0-.5.8L9 11l-2 2-2.5-.5a.5.5 0 0 0-.4.9L7 16l1.7 2.8a.5.5 0 0 0 .9-.4L9 16l2-2 3.9 4.7a.5.5 0 0 0 .9-.5zM3 3l18 18"/>'
 };
 function icon(name, cls) {
   const p = ICONS[name] || ICONS.pin;
@@ -878,11 +879,30 @@ function expandAllHTML(ts) {
   return '<button type="button" class="expand-all" data-expand-all="' + (all ? "collapse" : "expand") + '" aria-label="' + label + '" title="' + label + '">' +
     icon(all ? "fold" : "unfold") + '<span class="ea-text">' + label + "</span></button>";
 }
-function zoomBarHTML(ts) {                               // one row: depth chips + Expand/Collapse all (no label row)
+function zoomBarHTML(ts, transport) {                    // one row: depth chips + Expand/Collapse all (no label row)
   return '<div class="zoom-row">' +
     '<div class="basis-toggle zoom-bar" role="group" aria-label="Show the timeline by">' +
     DEPTHS.map(d => '<button type="button" class="basis-chip zoom-chip" data-depth="' + d + '" aria-pressed="' + (d === ts.depth) + '">' + esc(DEPTH_LABEL[d]) + "</button>").join("") +
-    "</div>" + expandAllHTML(ts) + "</div>";
+    "</div>" + expandAllHTML(ts) + transport + "</div>";
+}
+// Show / hide transport (0021): hides every travel leg so the timeline is just the stays once transport is
+// settled. A per-viewer, per-trip view filter in localStorage (never data); flipped in place via data-transport.
+function transportKey(slug) { return "tp.transport." + slug; }
+function transportShown(slug) { try { return localStorage.getItem(transportKey(slug)) !== "hide"; } catch { return true; } }
+function transportToggleHTML(shown) {
+  const label = shown ? "Hide transport" : "Show transport";
+  return '<button type="button" class="expand-all transport-toggle" data-transport-toggle aria-pressed="' + shown + '" aria-label="' + label + '" title="' + label + '">' +
+    icon(shown ? "plane" : "noplane") + '<span class="ea-text">Transport</span></button>';
+}
+function applyTransport(slug, shown) {
+  const list = document.querySelector(".tl-panel ol.tl");
+  if (list) list.setAttribute("data-transport", shown ? "show" : "hide");
+  const b = document.querySelector("[data-transport-toggle]");
+  if (b) {                                               // update in place so keyboard focus stays on it
+    const label = shown ? "Hide transport" : "Show transport";
+    b.setAttribute("aria-pressed", String(shown)); b.setAttribute("aria-label", label); b.title = label;
+    b.innerHTML = icon(shown ? "plane" : "noplane") + '<span class="ea-text">Transport</span>';
+  }
 }
 // Re-apply collapse state to the rendered tree in place (no re-render).
 function applyTree(slug, ts, animateKey) {
@@ -915,6 +935,15 @@ function bindTree() {                                     // one delegated liste
     const sl = e.target.closest("#tl-tree a.step-title, #tl-tree a.leg-title, #tl-tree a.step-open");
     if (sl && slug) {                                      // a link into a step: let it navigate, just count it
       track("step_opened", { via: sl.classList.contains("step-open") ? "chevron" : "title", depth: loadTreeState(slug).depth });
+      return;
+    }
+    const tt = e.target.closest("[data-transport-toggle]");
+    if (tt && slug) {
+      e.preventDefault();
+      const shown = !transportShown(slug);
+      try { if (shown) localStorage.removeItem(transportKey(slug)); else localStorage.setItem(transportKey(slug), "hide"); } catch {}
+      applyTransport(slug, shown);
+      track("transport_toggled", { shown });
       return;
     }
     const tg = e.target.closest("[data-toggle]");
@@ -975,12 +1004,16 @@ async function viewTimeline(slug) {
   const ctx = { rate, byStep, slug, stepById, tree, ts, regionId: null };
   // The tree (regions › locations › steps, plus unplanned gaps) when core built one; else the flat list.
   const items = (tree && tree.items) || steps.map((s, i) => ({ type: "step", id: s.id, index: i }));
+  const shown = transportShown(slug);
+  const transport = steps.some(s => s.kind === "travel") ? transportToggleHTML(shown) : "";
   const body = steps.length || hasRegions
-    ? '<ol class="tl' + (hasRegions ? ' tl-tree" id="tl-tree" data-depth="' + esc(ts.depth) + '"' + (ts.depth === "trip" ? " hidden" : "") : '"') + ">" +
+    ? '<ol class="tl' + (hasRegions ? ' tl-tree" id="tl-tree" data-depth="' + esc(ts.depth) + '"' + (ts.depth === "trip" ? " hidden" : "") : '"') +
+        ' data-transport="' + (shown ? "show" : "hide") + '">' +
         treeNodesHTML(items, ctx) + stepInserterHTML(steps.length) + regionInserterHTML() + "</ol>"
     : '<div class="tl-empty"><p class="muted">No steps yet — start building your trip.</p>' +
       '<button type="button" class="btn insert-btn-lg" data-insert-step="0">' + icon("plus") + "Add your first step</button></div>";
-  const overview = hasRegions ? tripSummaryHTML(tree) + zoomBarHTML(ts) : "";
+  const overview = hasRegions ? tripSummaryHTML(tree) + zoomBarHTML(ts, transport)
+    : (transport ? '<div class="zoom-row zoom-row-end">' + transport + "</div>" : "");
   // Activities whose parent step no longer exists get their own group so they're never dropped.
   const unassignedHTML = (unassigned && unassigned.length)
     ? '<section class="unassigned"><h2 class="unassigned-title">Unassigned</h2>' +
